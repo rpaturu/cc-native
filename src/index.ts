@@ -10,11 +10,6 @@
  * - AgentCore Runtime (decision agent)
  */
 
-import { config } from 'dotenv';
-
-// Load environment variables
-config();
-
 async function main() {
   try {
     console.log('🚀 Autonomous Revenue Decision Loop');
