@@ -1,0 +1,100 @@
+{
+  "assessment_id": "assessment-stale-789",
+  "tenant_id": "tenant:test",
+  "opportunity_id": "opportunity:test-789",
+  "methodology_id": "meth:meddicc",
+  "methodology_version": "2026-01-v1",
+  "status": "ACTIVE",
+  "dimensions": {
+    "metrics": {
+      "value": {
+        "defined": true
+      },
+      "confidence": 0.75,
+      "freshness": 50,
+      "contradiction": 0,
+      "provenanceTrust": "PRIMARY",
+      "lastUpdated": "2026-01-19T00:00:00Z",
+      "evidenceRefs": [
+        {"type": "crm", "location": "opportunity:test-789:metrics", "timestamp": "2026-01-19T00:00:00Z"}
+      ]
+    },
+    "economic_buyer": {
+      "value": {"contact_id": "contact:buyer-999"},
+      "confidence": 0.85,
+      "freshness": 35,
+      "contradiction": 0,
+      "provenanceTrust": "PRIMARY",
+      "lastUpdated": "2026-01-18T00:00:00Z",
+      "evidenceRefs": [
+        {"type": "crm", "location": "contact_role:buyer-999", "timestamp": "2026-01-18T00:00:00Z"}
+      ]
+    },
+    "decision_criteria": {
+      "value": {
+        "technical": ["security"]
+      },
+      "confidence": 0.80,
+      "freshness": 25,
+      "contradiction": 0,
+      "provenanceTrust": "VERIFIED",
+      "lastUpdated": "2026-01-20T00:00:00Z",
+      "evidenceRefs": [
+        {"type": "transcript", "location": "s3://.../transcript-2026-01-20.json", "timestamp": "2026-01-20T00:00:00Z"}
+      ]
+    },
+    "decision_process": {
+      "value": {
+        "steps": ["evaluation"]
+      },
+      "confidence": 0.70,
+      "freshness": 25,
+      "contradiction": 0,
+      "provenanceTrust": "VERIFIED",
+      "lastUpdated": "2026-01-20T00:00:00Z",
+      "evidenceRefs": [
+        {"type": "transcript", "location": "s3://.../transcript-2026-01-20.json", "timestamp": "2026-01-20T00:00:00Z"}
+      ]
+    },
+    "identify_pain": {
+      "value": {
+        "primary_pain": "Manual processes"
+      },
+      "confidence": 0.75,
+      "freshness": 50,
+      "contradiction": 0,
+      "provenanceTrust": "PRIMARY",
+      "lastUpdated": "2026-01-19T00:00:00Z",
+      "evidenceRefs": [
+        {"type": "crm", "location": "opportunity:test-789:pain_points", "timestamp": "2026-01-19T00:00:00Z"}
+      ]
+    },
+    "champion": {
+      "value": {"contact_id": "contact:champion-888"},
+      "confidence": 0.75,
+      "freshness": 35,
+      "contradiction": 0,
+      "provenanceTrust": "VERIFIED",
+      "lastUpdated": "2026-01-18T00:00:00Z",
+      "evidenceRefs": [
+        {"type": "crm", "location": "contact_role:champion-888", "timestamp": "2026-01-18T00:00:00Z"}
+      ]
+    }
+  },
+  "computed": {
+    "completeness": 0.86,
+    "quality_score": 0.76,
+    "critical_dimensions_complete": true,
+    "fails_due_to_freshness": true,
+    "fails_due_to_provenance": false,
+    "recommended_autonomy_tier_cap": "TIER_B",
+    "reasons": [
+      "DIM_STALE_metrics",
+      "DIM_STALE_economic_buyer",
+      "DIM_STALE_identify_pain",
+      "DIM_STALE_champion"
+    ]
+  },
+  "created_at": "2026-01-18T00:00:00Z",
+  "updated_at": "2026-01-21T17:00:00Z"
+}

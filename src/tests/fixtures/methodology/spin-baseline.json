@@ -1,0 +1,95 @@
+{
+  "methodology_id": "meth:spin",
+  "name": "SPIN Selling",
+  "version": "2026-01-v1",
+  "tenant_id": "tenant:global",
+  "status": "ACTIVE",
+  "description": "SPIN baseline: Situation, Problem, Implication, Need-Payoff.",
+  "dimensions": [
+    {
+      "dimension_key": "situation",
+      "label": "Situation",
+      "description": "Current environment is understood (stack, workflows, constraints).",
+      "critical": true,
+      "required": true,
+      "field_type": "object",
+      "min_confidence_autonomous": 0.70,
+      "ttl_days": 60,
+      "allowed_provenance": ["PRIMARY", "VERIFIED", "DERIVED"],
+      "completion_rule": {"type": "non_null"},
+      "score_rule": {"type": "weighted", "weight": 0.25}
+    },
+    {
+      "dimension_key": "problem",
+      "label": "Problem",
+      "description": "Pain points / problems are explicit.",
+      "critical": true,
+      "required": true,
+      "field_type": "object",
+      "min_confidence_autonomous": 0.75,
+      "ttl_days": 45,
+      "allowed_provenance": ["PRIMARY", "VERIFIED", "DERIVED"],
+      "completion_rule": {"type": "non_null"},
+      "score_rule": {"type": "weighted", "weight": 0.25}
+    },
+    {
+      "dimension_key": "implication",
+      "label": "Implication",
+      "description": "Consequences of the problem are understood (risk/cost).",
+      "critical": false,
+      "required": true,
+      "field_type": "object",
+      "min_confidence_autonomous": 0.70,
+      "ttl_days": 45,
+      "allowed_provenance": ["PRIMARY", "VERIFIED", "DERIVED"],
+      "completion_rule": {"type": "non_null"},
+      "score_rule": {"type": "weighted", "weight": 0.25}
+    },
+    {
+      "dimension_key": "need_payoff",
+      "label": "Need-Payoff",
+      "description": "Value hypothesis / desired outcomes are explicit.",
+      "critical": true,
+      "required": true,
+      "field_type": "object",
+      "min_confidence_autonomous": 0.75,
+      "ttl_days": 45,
+      "allowed_provenance": ["PRIMARY", "VERIFIED", "DERIVED"],
+      "completion_rule": {"type": "non_null"},
+      "score_rule": {"type": "weighted", "weight": 0.25}
+    }
+  ],
+  "scoring_model": {
+    "completeness_formula": "count_required",
+    "quality_formula": "weighted_sum",
+    "freshness_decay": {
+      "within_ttl": 1.0,
+      "one_x_ttl": 0.5,
+      "two_x_ttl": 0.25,
+      "beyond_two_x_ttl": 0.1
+    },
+    "provenance_multipliers": {
+      "PRIMARY": 1.0,
+      "VERIFIED": 0.95,
+      "DERIVED": 0.85,
+      "AGENT_INFERENCE": 0.60,
+      "UNTRUSTED": 0.30
+    }
+  },
+  "autonomy_gates": {
+    "tier_a": {
+      "min_completeness": 0.85,
+      "min_quality_score": 0.75,
+      "required_critical_dimensions_complete": true,
+      "disallow_inference_only_for_critical": true
+    },
+    "tier_b": {
+      "min_completeness": 0.55
+    },
+    "tier_c": {
+      "min_completeness": 0.30
+    }
+  },
+  "created_at": "2026-01-22T00:00:00Z",
+  "updated_at": "2026-01-22T00:00:00Z"
+}

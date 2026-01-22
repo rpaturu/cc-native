@@ -1,0 +1,108 @@
+{
+  "assessment_id": "assessment-inference-999",
+  "tenant_id": "tenant:test",
+  "opportunity_id": "opportunity:test-999",
+  "methodology_id": "meth:meddicc",
+  "methodology_version": "2026-01-v1",
+  "status": "ACTIVE",
+  "dimensions": {
+    "metrics": {
+      "value": {
+        "defined": true,
+        "baseline": "estimated 1000 users"
+      },
+      "confidence": 0.60,
+      "freshness": 5,
+      "contradiction": 0,
+      "provenanceTrust": "AGENT_INFERENCE",
+      "lastUpdated": "2026-01-21T12:00:00Z",
+      "evidenceRefs": [
+        {"type": "external", "location": "agent_inference:meeting_prep_v1", "timestamp": "2026-01-21T12:00:00Z"}
+      ]
+    },
+    "economic_buyer": {
+      "value": {"contact_id": "contact:buyer-inferred"},
+      "confidence": 0.60,
+      "freshness": 3,
+      "contradiction": 0,
+      "provenanceTrust": "AGENT_INFERENCE",
+      "lastUpdated": "2026-01-21T14:00:00Z",
+      "evidenceRefs": [
+        {"type": "external", "location": "agent_inference:org_chart_analysis", "timestamp": "2026-01-21T14:00:00Z"}
+      ]
+    },
+    "decision_criteria": {
+      "value": {
+        "technical": ["inferred from similar deals"]
+      },
+      "confidence": 0.60,
+      "freshness": 2,
+      "contradiction": 0,
+      "provenanceTrust": "AGENT_INFERENCE",
+      "lastUpdated": "2026-01-21T15:00:00Z",
+      "evidenceRefs": [
+        {"type": "external", "location": "agent_inference:pattern_matching", "timestamp": "2026-01-21T15:00:00Z"}
+      ]
+    },
+    "decision_process": {
+      "value": {
+        "steps": ["estimated standard process"]
+      },
+      "confidence": 0.60,
+      "freshness": 1,
+      "contradiction": 0,
+      "provenanceTrust": "AGENT_INFERENCE",
+      "lastUpdated": "2026-01-21T16:00:00Z",
+      "evidenceRefs": [
+        {"type": "external", "location": "agent_inference:process_template", "timestamp": "2026-01-21T16:00:00Z"}
+      ]
+    },
+    "identify_pain": {
+      "value": {
+        "primary_pain": "inferred from industry patterns"
+      },
+      "confidence": 0.60,
+      "freshness": 4,
+      "contradiction": 0,
+      "provenanceTrust": "AGENT_INFERENCE",
+      "lastUpdated": "2026-01-21T13:00:00Z",
+      "evidenceRefs": [
+        {"type": "external", "location": "agent_inference:industry_analysis", "timestamp": "2026-01-21T13:00:00Z"}
+      ]
+    },
+    "champion": {
+      "value": {"contact_id": "contact:champion-inferred"},
+      "confidence": 0.60,
+      "freshness": 6,
+      "contradiction": 0,
+      "provenanceTrust": "AGENT_INFERENCE",
+      "lastUpdated": "2026-01-21T11:00:00Z",
+      "evidenceRefs": [
+        {"type": "external", "location": "agent_inference:engagement_analysis", "timestamp": "2026-01-21T11:00:00Z"}
+      ]
+    }
+  },
+  "computed": {
+    "completeness": 0.86,
+    "quality_score": 0.36,
+    "critical_dimensions_complete": false,
+    "fails_due_to_freshness": false,
+    "fails_due_to_provenance": true,
+    "recommended_autonomy_tier_cap": "TIER_C",
+    "reasons": [
+      "CRITICAL_DIM_INFERENCE_ONLY_metrics",
+      "CRITICAL_DIM_INFERENCE_ONLY_economic_buyer",
+      "CRITICAL_DIM_INFERENCE_ONLY_decision_criteria",
+      "CRITICAL_DIM_INFERENCE_ONLY_decision_process",
+      "CRITICAL_DIM_INFERENCE_ONLY_identify_pain",
+      "DIM_LOW_CONFIDENCE_metrics",
+      "DIM_LOW_CONFIDENCE_economic_buyer",
+      "DIM_LOW_CONFIDENCE_decision_criteria",
+      "DIM_LOW_CONFIDENCE_decision_process",
+      "DIM_LOW_CONFIDENCE_identify_pain",
+      "DIM_LOW_CONFIDENCE_champion"
+    ]
+  },
+  "created_at": "2026-01-21T00:00:00Z",
+  "updated_at": "2026-01-21T16:00:00Z"
+}
