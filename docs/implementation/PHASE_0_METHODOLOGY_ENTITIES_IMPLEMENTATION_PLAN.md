@@ -701,14 +701,9 @@ import { Logger } from '../core/Logger';
 export class AssessmentComputationService implements IAssessmentComputationService {
   private logger: Logger;
 
-  // Provenance multipliers (from World Model Contract)
-  private readonly PROVENANCE_MULTIPLIERS: Record<TrustClass, number> = {
-    PRIMARY: 1.0,
-    VERIFIED: 0.95,
-    DERIVED: 0.85,
-    AGENT_INFERENCE: 0.60,
-    UNTRUSTED: 0.30,
-  };
+  // NOTE: Provenance multipliers are now sourced from methodology.scoring_model.provenance_multipliers
+  // This allows tenant-specific customization and methodology-specific trust models.
+  // No hardcoded constants - all multipliers come from methodology configuration.
 
   constructor(logger: Logger) {
     this.logger = logger;
