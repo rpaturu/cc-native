@@ -160,6 +160,7 @@ export interface CreateMethodologyInput {
   scoring_model: MethodologyScoringModel;
   autonomy_gates: MethodologyAutonomyGates;
   tenant_id: string;
+  // NOTE: version is NOT in input - always generated internally for immutability
 }
 
 export interface UpdateMethodologyInput {
@@ -349,7 +350,8 @@ export class MethodologyService implements IMethodologyService {
    */
   async createMethodology(input: CreateMethodologyInput): Promise<SalesMethodology> {
     const now = new Date().toISOString();
-    const version = input.version || this.generateVersion(input.methodology_id, input.tenant_id);
+    // Always generate version internally - never accept from input (immutability guarantee)
+    const version = this.generateVersion(input.methodology_id, input.tenant_id);
     
     const methodology: SalesMethodology = {
       methodology_id: input.methodology_id,
@@ -433,6 +435,9 @@ export class MethodologyService implements IMethodologyService {
 
   /**
    * Get methodology by ID and version
+   * 
+   * CRITICAL: Version alone is not unique across methodologies.
+   * We must verify methodology_id matches to prevent cross-methodology resolution.
    */
   async getMethodology(
     methodologyId: string,
@@ -441,6 +446,7 @@ export class MethodologyService implements IMethodologyService {
   ): Promise<SalesMethodology | null> {
     try {
       // Try Schema Registry first (authoritative)
+      // NOTE: Schema Registry lookup by (entityType, version) requires methodologyId verification
       const schema = await this.schemaRegistryService.getSchema(
         'SalesMethodology',
         version,
@@ -452,6 +458,16 @@ export class MethodologyService implements IMethodologyService {
       }
 
       const methodology = schema as any as SalesMethodology;
+
+      // CRITICAL: Verify methodology_id matches (prevents version collision across methodologies)
+      if (methodology.methodology_id !== methodologyId) {
+        this.logger.warn('Methodology ID mismatch', {
+          requested_methodology_id: methodologyId,
+          actual_methodology_id: methodology.methodology_id,
+          version,
+        });
+        return null;
+      }
 
       // Verify tenant isolation
       if (methodology.tenant_id !== tenantId) {
@@ -570,12 +586,10 @@ export class MethodologyService implements IMethodologyService {
         ExpressionAttributeNames: {
           '#status': 'status',
         },
+        ConditionExpression: 'tenant_id = :tenantId',
         ExpressionAttributeValues: {
           ':status': 'DEPRECATED',
           ':updatedAt': new Date().toISOString(),
-        },
-        ConditionExpression: 'tenant_id = :tenantId',
-        ExpressionAttributeValues: {
           ':tenantId': tenantId,
         },
       }));
@@ -604,10 +618,49 @@ export class MethodologyService implements IMethodologyService {
 
   /**
    * Compute schema hash (SHA-256)
+   * 
+   * CRITICAL: Hash must be stable across semantically identical schemas.
+   * We create a canonical payload by:
+   * 1. Excluding metadata (schema_hash, schema_s3_key, createdAt, updatedAt, status)
+   * 2. Sorting dimension arrays by dimension_key
+   * 3. Using deterministic JSON serialization (sorted keys)
    */
   private computeSchemaHash(methodology: SalesMethodology): string {
-    const { schema_hash, schema_s3_key, ...methodologyWithoutHash } = methodology;
-    const jsonString = JSON.stringify(methodologyWithoutHash, null, 0);
+    // Exclude metadata fields that don't affect schema semantics
+    const {
+      schema_hash,
+      schema_s3_key,
+      createdAt,
+      updatedAt,
+      status,
+      ...schemaPayload
+    } = methodology;
+
+    // Sort dimensions by dimension_key for deterministic ordering
+    const sortedDimensions = [...(schemaPayload.dimensions || [])].sort(
+      (a, b) => a.dimension_key.localeCompare(b.dimension_key)
+    );
+
+    // Create canonical payload with sorted dimensions
+    const canonicalPayload = {
+      ...schemaPayload,
+      dimensions: sortedDimensions,
+    };
+
+    // Use deterministic JSON serialization (sorted keys via replacer)
+    const jsonString = JSON.stringify(canonicalPayload, (key, value) => {
+      if (value && typeof value === 'object' && !Array.isArray(value)) {
+        // Sort object keys for deterministic ordering
+        return Object.keys(value)
+          .sort()
+          .reduce((sorted: Record<string, any>, k) => {
+            sorted[k] = value[k];
+            return sorted;
+          }, {});
+      }
+      return value;
+    });
+
     const hash = createHash('sha256').update(jsonString).digest('hex');
     return `sha256:${hash}`;
   }
@@ -768,9 +821,10 @@ export class AssessmentComputationService implements IAssessmentComputationServi
       const weight = dimension.score_rule.weight || 1.0;
       const freshnessMultiplier = this.computeFreshnessMultiplier(
         dimensionValue.freshness,
-        dimension.ttl_days
+        dimension.ttl_days,
+        methodology.scoring_model.freshness_decay
       );
-      const provenanceMultiplier = this.PROVENANCE_MULTIPLIERS[dimensionValue.provenanceTrust];
+      const provenanceMultiplier = methodology.scoring_model.provenance_multipliers[dimensionValue.provenanceTrust] || 0;
 
       const dimensionScore = 
         dimensionValue.confidence * 
@@ -868,16 +922,19 @@ export class AssessmentComputationService implements IAssessmentComputationServi
   }
 
   /**
-   * Compute freshness multiplier
+   * Compute freshness multiplier using methodology's freshness_decay configuration
+   * 
+   * Uses the methodology's scoring_model.freshness_decay values, not hardcoded defaults.
    */
-  private computeFreshnessMultiplier(freshnessHours: number, ttlDays: number): number {
+  private computeFreshnessMultiplier(
+    freshnessHours: number,
+    ttlDays: number,
+    freshnessDecay: MethodologyScoringModel['freshness_decay']
+  ): number {
     const ttlHours = ttlDays * 24;
-    const model = {
-      within_ttl: 1.0,
-      one_x_ttl: 0.5,
-      two_x_ttl: 0.25,
-      beyond_two_x_ttl: 0.1,
-    };
+    
+    // Use methodology's freshness_decay configuration
+    const model = freshnessDecay;
 
     if (freshnessHours <= ttlHours) {
       return model.within_ttl;
@@ -946,15 +1003,12 @@ export class AssessmentComputationService implements IAssessmentComputationServi
       const dimensionValue = dimensions[dimension.dimension_key];
       
       if (dimensionValue) {
-        // Check if all provenance is inference-only
-        const allInference = dimensionValue.evidenceRefs.every(ref => {
-          // This would need to check evidence trust class
-          // For now, check if provenanceTrust is AGENT_INFERENCE
-          return dimensionValue.provenanceTrust === 'AGENT_INFERENCE';
-        });
-
-        if (allInference && dimensionValue.provenanceTrust === 'AGENT_INFERENCE') {
-          return true;
+        // NOTE: provenanceTrust is already an aggregated summary of all evidenceRefs.
+        // It represents the highest-trust provenance class present in the evidence.
+        // If provenanceTrust is AGENT_INFERENCE, it means ALL evidence is inference-only.
+        // This is deterministic and correct for the current data model.
+        if (dimensionValue.provenanceTrust === 'AGENT_INFERENCE') {
+          return true;  // Critical dimension has only inference-based evidence
         }
       }
     }
@@ -1300,9 +1354,26 @@ export class AssessmentService implements IAssessmentService {
       methodology
     );
 
-    // Update status to ACTIVE if was DRAFT
+    // Deterministic status transition rules:
+    // 1. If transitioning from DRAFT to ACTIVE, auto-SUPERSEDE any existing ACTIVE assessment
+    // 2. This ensures getActiveAssessment() is deterministic (one ACTIVE per methodology/opportunity)
     if (updated.status === 'DRAFT' && Object.keys(updatedDimensions).length > 0) {
       updated.status = 'ACTIVE';
+      
+      // Find and supersede any existing ACTIVE assessment for same opportunity/methodology
+      const existingActive = await this.getActiveAssessment(
+        updated.opportunity_id,
+        updated.methodology_id,
+        updated.tenant_id
+      );
+      
+      if (existingActive && existingActive.assessment_id !== updated.assessment_id) {
+        await this.supersedeAssessment(
+          existingActive.assessment_id,
+          updated.assessment_id,
+          updated.tenant_id
+        );
+      }
     }
 
     // Store updated assessment
@@ -1488,6 +1559,22 @@ async registerSchema(input: {
 ```
 
 ### 6.2 World State Integration
+
+**CRITICAL ARCHITECTURAL CONSTRAINT:**
+
+> **WorldStateService is READ-ONLY with respect to assessments.**
+> 
+> Assessments are **derived from** World State (opportunity, evidence, etc.), but WorldStateService **MUST NEVER write back into assessments**.
+> 
+> This maintains the separation:
+> - **World State** = ground truth (evidence, entities)
+> - **Assessments** = deterministic projections of world state
+> 
+> If you need to "update" an assessment, you must:
+> 1. Recompute it from current world state
+> 2. Store it via AssessmentService
+> 
+> **DO NOT** add methods like `WorldStateService.updateAssessment()` or allow assessment mutation through world state APIs.
 
 Assessments are stored as entity state:
 
