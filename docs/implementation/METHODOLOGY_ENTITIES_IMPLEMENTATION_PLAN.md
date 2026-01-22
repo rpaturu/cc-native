@@ -1566,9 +1566,21 @@ const snapshot = await snapshotService.createSnapshot(
 **File:** `src/tests/fixtures/methodology/`
 
 Create deterministic test fixtures for:
-- Methodology definitions (MEDDICC baseline)
+- Methodology definitions (MEDDICC, SPIN, Challenger baselines)
 - Assessment scenarios (complete, incomplete, stale, inference-only)
 - Expected computed outputs
+
+**Fixture Files:**
+- `meddicc-baseline.json` - MEDDICC baseline methodology
+- `spin-baseline.json` - SPIN Selling baseline methodology
+- `challenger-baseline.json` - Challenger Sale baseline methodology
+- `meddicc-acme-custom.json` - Tenant customization example
+- `assessment-complete.json` - Complete assessment example
+- `assessment-incomplete.json` - Incomplete assessment example
+- `assessment-stale.json` - Stale dimension assessment example
+- `assessment-inference-only.json` - Inference-only critical dimensions example
+
+**Reference:** See `METHODOLOGY_BUNDLES_EXAMPLES.md` for full examples.
 
 ---
 
