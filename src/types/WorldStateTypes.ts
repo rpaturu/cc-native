@@ -22,7 +22,9 @@ export type EntityType =
   | 'AuditEvent'
   | 'Run'
   | 'QualityCheck'
-  | 'RelationshipEdge';
+  | 'RelationshipEdge'
+  | 'SalesMethodology'
+  | 'MethodologyAssessment';
 
 /**
  * Field state (concrete, not abstract)

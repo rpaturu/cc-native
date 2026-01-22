@@ -97,6 +97,8 @@ interface FieldMetadata {
 8. **SupportCase** - Support tickets and escalations
 9. **UsageSignal** - Product usage signals
 10. **TelemetryAggregate** - Aggregated telemetry data
+11. **SalesMethodology** - Sales methodology definitions (MEDDICC, SPIN, etc.)
+12. **MethodologyAssessment** - Opportunity assessments against methodologies
 
 ### 4.3 Tier C: Intelligence & Signals (Medium Value)
 
