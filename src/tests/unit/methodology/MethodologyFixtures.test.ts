@@ -113,7 +113,7 @@ describe('Methodology Fixtures Validation', () => {
 
     it('should have normalized dimension weights', () => {
       const totalWeight = methodology.dimensions.reduce(
-        (sum, dim) => sum + (dim.score_rule.weight || 0),
+        (sum: number, dim: any) => sum + (dim.score_rule.weight || 0),
         0
       );
 
@@ -167,7 +167,7 @@ describe('Methodology Fixtures Validation', () => {
       const assessment: MethodologyAssessment = JSON.parse(content);
 
       expect(assessment.computed.fails_due_to_freshness).toBe(true);
-      expect(assessment.computed.reasons.some(r => r.includes('STALE'))).toBe(true);
+      expect(assessment.computed.reasons.some((r: string) => r.includes('STALE'))).toBe(true);
     });
 
     it('should validate inference-only assessment', () => {
@@ -179,7 +179,7 @@ describe('Methodology Fixtures Validation', () => {
 
       expect(assessment.computed.fails_due_to_provenance).toBe(true);
       expect(assessment.computed.recommended_autonomy_tier_cap).toBe('TIER_C');
-      expect(assessment.computed.reasons.some(r => r.includes('INFERENCE_ONLY'))).toBe(true);
+      expect(assessment.computed.reasons.some((r: string) => r.includes('INFERENCE_ONLY'))).toBe(true);
     });
   });
 
