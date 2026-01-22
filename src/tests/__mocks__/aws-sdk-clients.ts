@@ -12,6 +12,14 @@ export const mockS3Client = {
   send: jest.fn(),
 };
 
+// Helper to create successful S3 PutObject responses
+export function createS3PutObjectSuccessResponse() {
+  return {
+    ETag: 'etag-123',
+    VersionId: 'version-123',
+  };
+}
+
 // Mock EventBridge Client
 export const mockEventBridgeClient = {
   send: jest.fn(),
