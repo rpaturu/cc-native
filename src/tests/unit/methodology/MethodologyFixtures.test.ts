@@ -1,14 +1,16 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { SalesMethodology } from '../../../types/MethodologyTypes';
-import { MethodologyAssessment } from '../../../types/AssessmentTypes';
-import { TrustClass, AutonomyTier } from '../../../types/CommonTypes';
+import { TrustClass } from '../../../types/CommonTypes';
+
+// TODO: Import these types when MethodologyTypes and AssessmentTypes are implemented
+// import { SalesMethodology } from '../../../types/MethodologyTypes';
+// import { MethodologyAssessment } from '../../../types/AssessmentTypes';
 
 const FIXTURES_DIR = path.join(__dirname, '../../fixtures/methodology');
 
 describe('Methodology Fixtures Validation', () => {
   describe('MEDDICC Baseline', () => {
-    let methodology: SalesMethodology;
+    let methodology: any; // TODO: Use SalesMethodology type when implemented
 
     beforeAll(() => {
       const content = fs.readFileSync(
@@ -129,7 +131,7 @@ describe('Methodology Fixtures Validation', () => {
         path.join(FIXTURES_DIR, 'assessment-complete.json'),
         'utf-8'
       );
-      const assessment: MethodologyAssessment = JSON.parse(content);
+      const assessment: any = JSON.parse(content); // TODO: Use MethodologyAssessment type when implemented
 
       expect(assessment.assessment_id).toBeDefined();
       expect(assessment.opportunity_id).toBeDefined();
@@ -152,7 +154,7 @@ describe('Methodology Fixtures Validation', () => {
         path.join(FIXTURES_DIR, 'assessment-incomplete.json'),
         'utf-8'
       );
-      const assessment: MethodologyAssessment = JSON.parse(content);
+      const assessment: any = JSON.parse(content); // TODO: Use MethodologyAssessment type when implemented
 
       expect(assessment.computed.completeness).toBeLessThan(1.0);
       expect(assessment.computed.critical_dimensions_complete).toBe(false);
@@ -164,7 +166,7 @@ describe('Methodology Fixtures Validation', () => {
         path.join(FIXTURES_DIR, 'assessment-stale.json'),
         'utf-8'
       );
-      const assessment: MethodologyAssessment = JSON.parse(content);
+      const assessment: any = JSON.parse(content); // TODO: Use MethodologyAssessment type when implemented
 
       expect(assessment.computed.fails_due_to_freshness).toBe(true);
       expect(assessment.computed.reasons.some((r: string) => r.includes('STALE'))).toBe(true);
@@ -175,7 +177,7 @@ describe('Methodology Fixtures Validation', () => {
         path.join(FIXTURES_DIR, 'assessment-inference-only.json'),
         'utf-8'
       );
-      const assessment: MethodologyAssessment = JSON.parse(content);
+      const assessment: any = JSON.parse(content); // TODO: Use MethodologyAssessment type when implemented
 
       expect(assessment.computed.fails_due_to_provenance).toBe(true);
       expect(assessment.computed.recommended_autonomy_tier_cap).toBe('TIER_C');
@@ -189,7 +191,7 @@ describe('Methodology Fixtures Validation', () => {
         path.join(FIXTURES_DIR, 'assessment-complete.json'),
         'utf-8'
       );
-      const assessment: MethodologyAssessment = JSON.parse(content);
+      const assessment: any = JSON.parse(content); // TODO: Use MethodologyAssessment type when implemented
 
       for (const [dimensionKey, dimensionValue] of Object.entries(assessment.dimensions)) {
         const dim = dimensionValue as any; // Type assertion for test
