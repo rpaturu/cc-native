@@ -58,25 +58,35 @@ This plan implements an AI-native autonomous revenue decision loop system built 
 Deliverable:** Core service classes and type definitions
 
 #### 0.2 CDK Infrastructure Stack
-- [ ] Create `AutonomousRevenueStack` in `src/stacks/`
-- [ ] Define S3 buckets:
-  - [ ] `raw-snapshots-bucket` (with versioning)
+- [ ] Create `CCNativeStack` in `src/stacks/`
+- [ ] Define S3 buckets (World Model architecture):
+  - [ ] `evidence-ledger-bucket` (immutable evidence, Object Lock for WORM)
+  - [ ] `world-state-snapshots-bucket` (immutable snapshots, Object Lock)
+  - [ ] `schema-registry-bucket` (schema definitions, Object Lock)
   - [ ] `artifacts-bucket` (with versioning)
-  - [ ] `ledger-archives-bucket` (with Object Lock for WORM)
+  - [ ] `ledger-archives-bucket` (execution ledger archives, Object Lock for WORM)
 - [ ] Define DynamoDB tables:
+  - [ ] `WorldState` table (PK: entity_id, SK: computed_at, GSI: entity_type)
+  - [ ] `EvidenceIndex` table (PK: entity_id, SK: evidence_id, GSI: timestamp)
+  - [ ] `SnapshotsIndex` table (PK: entity_id, SK: snapshot_id, GSI: timestamp)
+  - [ ] `SchemaRegistry` table (PK: SCHEMA#{entityType}, SK: VERSION#{version}#{hash})
+  - [ ] `CriticalFieldRegistry` table (PK: entityType, SK: fieldName)
   - [ ] `Accounts` table (PK: tenant_id, SK: account_id)
   - [ ] `Signals` table (PK: tenant_id, SK: signal_id, GSI: account_id)
   - [ ] `ToolRuns` table (PK: trace_id, SK: tool_run_id)
   - [ ] `ApprovalRequests` table (PK: tenant_id, SK: request_id)
   - [ ] `ActionQueue` table (PK: tenant_id, SK: action_id)
   - [ ] `PolicyConfig` table (PK: tenant_id, SK: policy_id)
+  - [ ] `Ledger` table (PK: pk, SK: sk, GSI1: traceId, GSI2: time-range)
+  - [ ] `Cache` table (PK: cacheKey, TTL)
+  - [ ] `Tenants` table (PK: tenantId)
 - [ ] Define EventBridge custom bus
 - [ ] Define KMS keys (per-tenant encryption)
-- [ ] Define IAM roles and policies
+- [ ] Define IAM roles and policies (read-only for agents)
 - [ ] Output stack outputs (bucket names, table names, etc.)
 
 **Dependencies:** 0.1 (types needed for stack)  
-**Deliverable:** Deployable CDK stack with all storage resources
+**Deliverable:** Deployable CDK stack with World Model storage architecture (S3 as truth, DynamoDB as belief)
 
 #### 0.3 Identity & Tenancy
 - [ ] Set up Cognito User Pool (or IAM Identity Center integration)
@@ -112,27 +122,65 @@ Deliverable:** Core service classes and type definitions
 **Dependencies:** 0.1 (TraceService), 0.2 (EventBridge)  
 **Deliverable:** Event-driven architecture foundation
 
-#### 0.5 Audit Ledger
+#### 0.5 World Model Foundation (Evidence + State + Snapshots)
+- [ ] Create `EvidenceService`:
+  - [ ] Store immutable evidence in S3 (append-only)
+  - [ ] Evidence metadata in DynamoDB index
+  - [ ] Evidence types: CRM, scrape, transcript, agent_inference, user_input
+  - [ ] Provenance tracking and trust classification
+- [ ] Create `WorldStateService`:
+  - [ ] Compute state from evidence (deterministic)
+  - [ ] Store computed state in DynamoDB
+  - [ ] Confidence calculation (field-level)
+  - [ ] Freshness tracking
+  - [ ] Contradiction detection
+- [ ] Create `SnapshotService`:
+  - [ ] Create immutable snapshots of world state
+  - [ ] Store snapshots in S3 (Object Lock)
+  - [ ] Index snapshots in DynamoDB
+  - [ ] Time-travel queries (point-in-time retrieval)
+  - [ ] Snapshot validation (critical fields check)
+- [ ] Create `SchemaRegistryService`:
+  - [ ] Schema resolution (entityType + version + hash)
+  - [ ] Hash verification (fail-closed on mismatch)
+  - [ ] Critical field registry lookup
+  - [ ] Schema validation for entity state
+- [ ] Create World Model types:
+  - [ ] `EvidenceTypes.ts` - Evidence record types
+  - [ ] `WorldStateTypes.ts` - Entity state types
+  - [ ] `SnapshotTypes.ts` - Snapshot types
+  - [ ] `SchemaTypes.ts` - Schema registry types
+
+**Dependencies:** 0.2 (Storage), 0.4 (Events)  
+**Deliverable:** World Model foundation (evidence ledger, state computation, snapshots, schema registry)
+
+#### 0.6 Audit Ledger (Execution Ledger)
 - [ ] Evaluate QLDB vs DynamoDB append-only approach
 - [ ] Implement ledger service:
   - [ ] `LedgerService` class
-  - [ ] Ledger event types: INTENT, SIGNAL, TOOL_CALL, VALIDATION, ACTION, APPROVAL
+  - [ ] Ledger event types: INTENT, SIGNAL, TOOL_CALL, VALIDATION, ACTION, APPROVAL, DECISION
   - [ ] Write-only ledger interface
   - [ ] Query interface for audit trails
+  - [ ] Snapshot binding in ledger entries
 - [ ] If using DynamoDB: implement append-only pattern + S3 WORM archive
 - [ ] Create ledger query service for UI
 
-**Dependencies:** 0.2 (Storage), 0.4 (Events)  
-**Deliverable:** Tamper-evident execution ledger
+**Dependencies:** 0.2 (Storage), 0.4 (Events), 0.5 (Snapshots for binding)  
+**Deliverable:** Tamper-evident execution ledger with snapshot binding
 
 ### Definition of Done (Phase 0)
 
 - [ ] Every request has `trace_id`
 - [ ] Every event and tool call is recorded in ledger
 - [ ] Multi-tenant isolation enforced at API + storage layer
-- [ ] All storage resources deployed via CDK
+- [ ] All storage resources deployed via CDK (World Model architecture: S3 as truth, DynamoDB as belief)
+- [ ] Evidence can be stored immutably in S3
+- [ ] World state can be computed from evidence (deterministic)
+- [ ] Snapshots can be created and retrieved (immutable, time-travelable)
+- [ ] Schema registry enforces validation (fail-closed on missing/mismatch)
+- [ ] Critical field registry supports tier calculation
 - [ ] Core services unit tested
-- [ ] Integration test: create tenant → emit event → verify ledger entry
+- [ ] Integration test: create tenant → store evidence → compute state → create snapshot → verify ledger entry
 
 ---
 
@@ -648,7 +696,16 @@ Deliverable:** Core service classes and type definitions
 
 ## References
 
-- [Autonomous Revenue Decision Loop](./strategy/AUTONOMOUS_REVENUE_DECISION_LOOP.md)
-- [AWS Architecture](./strategy/AWS_ARCHITECTURE.md)
-- [Implementation Approach](./strategy/IMPLEMENTATION_APPROACH.md)
-- [Deal Lifecycle Action Map](./strategy/DEAL_LIFECYCLE_ACTION_MAP.md)
+### Core Strategy
+- [Autonomous Revenue Decision Loop](../strategy/AUTONOMOUS_REVENUE_DECISION_LOOP.md)
+- [AWS Architecture](../strategy/AWS_ARCHITECTURE.md)
+- [Implementation Approach](../strategy/IMPLEMENTATION_APPROACH.md)
+- [Deal Lifecycle Action Map](../strategy/DEAL_LIFECYCLE_ACTION_MAP.md)
+
+### World Model Strategy
+- [World Model Contract](../strategy/WORLD_MODEL_CONTRACT.md)
+- [World Model AWS Realization](../strategy/WORLD_MODEL_AWS_REALIZATION.md)
+- [Agent Read Policy](../strategy/AGENT_READ_POLICY.md)
+- [World Snapshot Contract](../strategy/WORLD_SNAPSHOT_CONTRACT.md)
+- [World State Schema v1](../strategy/WORLD_STATE_SCHEMA_V1.md)
+- [Schema Registry Implementation](../strategy/SCHEMA_REGISTRY_IMPLEMENTATION.md)

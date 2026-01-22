@@ -1,7 +1,7 @@
 {
-  "name": "autonomous-revenue-decision-loop",
+  "name": "cc-native",
   "version": "0.1.0",
-  "description": "AI-native autonomous revenue decision loop - policy-governed decision and execution system",
+  "description": "CC Native - AI-native autonomous revenue decision loop - policy-governed decision and execution system",
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",

@@ -1,0 +1,195 @@
+#!/bin/bash
+
+set -e;
+
+# Load environment variables from .env.local if it exists
+if [ -f .env.local ]; then
+  source .env.local
+fi
+
+# Parse arguments
+CDK_PROFILE=${AWS_PROFILE:-default}
+CDK_REGION=${AWS_REGION:-us-west-2}
+DEPLOYMENT_ENV=${NODE_ENV:-development}
+while [[ "$#" -gt 0 ]]; do case $1 in
+  --profile) CDK_PROFILE="$2"; shift;;
+  --region) AWS_REGION="$2"; shift;;
+  --env) DEPLOYMENT_ENV="$2"; shift;;
+esac; shift; done
+
+# Check if region is set
+if [ -z "$AWS_REGION" ]; then
+  # Try to get region from AWS config
+  AWS_REGION=$(aws configure get region --profile $CDK_PROFILE 2>/dev/null)
+  
+  if [ -z "$AWS_REGION" ]; then
+    echo "Error: AWS region is required"
+    echo "Usage: ./deploy [--profile <aws_profile>] [--region <aws_region>] [--env <environment>]"
+    echo "Example: ./deploy --profile dev --region us-west-2 --env development"
+    echo "You may also configure your region by running 'aws configure'"
+    exit 1
+  fi
+fi
+
+echo "Using AWS Profile: $CDK_PROFILE"
+echo "Using AWS Region: $AWS_REGION"
+echo "Using Environment: $DEPLOYMENT_ENV"
+
+# Build and deploy infrastructure
+echo "Building and deploying infrastructure..."
+npm ci && npm run build
+
+# Prepare CDK context parameters
+CDK_CONTEXT_PARAMS=""
+CDK_CONTEXT_PARAMS="$CDK_CONTEXT_PARAMS -c nodeEnv=$DEPLOYMENT_ENV"
+
+# Set logging level (default to info)
+LOG_LEVEL=${LOG_LEVEL:-info}
+CDK_CONTEXT_PARAMS="$CDK_CONTEXT_PARAMS -c logLevel=$LOG_LEVEL"
+
+# Set defaults for S3 Buckets (optional - from .env.local)
+EVIDENCE_LEDGER_BUCKET=${EVIDENCE_LEDGER_BUCKET:-}
+WORLD_STATE_SNAPSHOTS_BUCKET=${WORLD_STATE_SNAPSHOTS_BUCKET:-}
+SCHEMA_REGISTRY_BUCKET=${SCHEMA_REGISTRY_BUCKET:-}
+ARTIFACTS_BUCKET=${ARTIFACTS_BUCKET:-}
+LEDGER_ARCHIVES_BUCKET=${LEDGER_ARCHIVES_BUCKET:-}
+
+# Pass S3 bucket names to CDK if provided
+if [ ! -z "$EVIDENCE_LEDGER_BUCKET" ]; then
+  CDK_CONTEXT_PARAMS="$CDK_CONTEXT_PARAMS -c evidenceLedgerBucket=$EVIDENCE_LEDGER_BUCKET"
+  echo "Using Evidence Ledger Bucket: $EVIDENCE_LEDGER_BUCKET"
+fi
+
+if [ ! -z "$WORLD_STATE_SNAPSHOTS_BUCKET" ]; then
+  CDK_CONTEXT_PARAMS="$CDK_CONTEXT_PARAMS -c worldStateSnapshotsBucket=$WORLD_STATE_SNAPSHOTS_BUCKET"
+  echo "Using World State Snapshots Bucket: $WORLD_STATE_SNAPSHOTS_BUCKET"
+fi
+
+if [ ! -z "$SCHEMA_REGISTRY_BUCKET" ]; then
+  CDK_CONTEXT_PARAMS="$CDK_CONTEXT_PARAMS -c schemaRegistryBucket=$SCHEMA_REGISTRY_BUCKET"
+  echo "Using Schema Registry Bucket: $SCHEMA_REGISTRY_BUCKET"
+fi
+
+if [ ! -z "$ARTIFACTS_BUCKET" ]; then
+  CDK_CONTEXT_PARAMS="$CDK_CONTEXT_PARAMS -c artifactsBucket=$ARTIFACTS_BUCKET"
+  echo "Using Artifacts Bucket: $ARTIFACTS_BUCKET"
+fi
+
+if [ ! -z "$LEDGER_ARCHIVES_BUCKET" ]; then
+  CDK_CONTEXT_PARAMS="$CDK_CONTEXT_PARAMS -c ledgerArchivesBucket=$LEDGER_ARCHIVES_BUCKET"
+  echo "Using Ledger Archives Bucket: $LEDGER_ARCHIVES_BUCKET"
+fi
+
+echo "Using Log Level: $LOG_LEVEL"
+
+# Find existing stack
+echo "Finding existing CC Native stack..."
+STACK_NAME=$(aws cloudformation list-stacks \
+  --profile $CDK_PROFILE \
+  --region $AWS_REGION \
+  --no-cli-pager \
+  --stack-status-filter CREATE_COMPLETE UPDATE_COMPLETE UPDATE_ROLLBACK_COMPLETE \
+  --query "StackSummaries[?starts_with(StackName, 'CCNativeStack')].StackName" \
+  --output text | head -n 1)
+
+if [ -z "$STACK_NAME" ]; then
+  echo "No existing CC Native stack found. Creating new stack..."
+  npx cdk --profile $CDK_PROFILE --region $AWS_REGION deploy CCNativeStack --require-approval never $CDK_CONTEXT_PARAMS
+else
+  echo "Updating existing stack: $STACK_NAME"
+  npx cdk --profile $CDK_PROFILE --region $AWS_REGION deploy CCNativeStack --require-approval never $CDK_CONTEXT_PARAMS
+fi
+
+# Get stack outputs
+echo "Getting stack outputs..."
+STACK_OUTPUTS=$(aws cloudformation describe-stacks \
+  --profile $CDK_PROFILE \
+  --region $AWS_REGION \
+  --no-cli-pager \
+  --stack-name CCNativeStack \
+  --query 'Stacks[0].Outputs' \
+  --output json)
+
+# Extract output values (use stack outputs, or fall back to .env.local if provided)
+EVIDENCE_LEDGER_BUCKET_OUTPUT=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="EvidenceLedgerBucketName") | .OutputValue')
+WORLD_STATE_SNAPSHOTS_BUCKET_OUTPUT=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="WorldStateSnapshotsBucketName") | .OutputValue')
+SCHEMA_REGISTRY_BUCKET_OUTPUT=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="SchemaRegistryBucketName") | .OutputValue')
+ARTIFACTS_BUCKET_OUTPUT=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="ArtifactsBucketName") | .OutputValue')
+LEDGER_ARCHIVES_BUCKET_OUTPUT=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="LedgerArchivesBucketName") | .OutputValue')
+EVENT_BUS_NAME=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="EventBusName") | .OutputValue')
+
+# Use stack outputs (preferred) or fall back to .env.local values
+EVIDENCE_LEDGER_BUCKET=${EVIDENCE_LEDGER_BUCKET_OUTPUT:-$EVIDENCE_LEDGER_BUCKET}
+WORLD_STATE_SNAPSHOTS_BUCKET=${WORLD_STATE_SNAPSHOTS_BUCKET_OUTPUT:-$WORLD_STATE_SNAPSHOTS_BUCKET}
+SCHEMA_REGISTRY_BUCKET=${SCHEMA_REGISTRY_BUCKET_OUTPUT:-$SCHEMA_REGISTRY_BUCKET}
+ARTIFACTS_BUCKET=${ARTIFACTS_BUCKET_OUTPUT:-$ARTIFACTS_BUCKET}
+LEDGER_ARCHIVES_BUCKET=${LEDGER_ARCHIVES_BUCKET_OUTPUT:-$LEDGER_ARCHIVES_BUCKET}
+
+# Create .env file with stack outputs
+cat > .env << EOF
+# Autonomous Revenue Decision Loop Configuration
+# Generated by deploy script on $(date)
+
+# AWS Configuration
+AWS_REGION=$AWS_REGION
+AWS_PROFILE=$CDK_PROFILE
+
+# Environment
+NODE_ENV=$DEPLOYMENT_ENV
+
+# S3 Buckets (World Model)
+EVIDENCE_LEDGER_BUCKET=$EVIDENCE_LEDGER_BUCKET
+WORLD_STATE_SNAPSHOTS_BUCKET=$WORLD_STATE_SNAPSHOTS_BUCKET
+SCHEMA_REGISTRY_BUCKET=$SCHEMA_REGISTRY_BUCKET
+ARTIFACTS_BUCKET=$ARTIFACTS_BUCKET
+LEDGER_ARCHIVES_BUCKET=$LEDGER_ARCHIVES_BUCKET
+
+# EventBridge
+EVENT_BUS_NAME=$EVENT_BUS_NAME
+
+# Logging
+LOG_LEVEL=$LOG_LEVEL
+EOF
+
+echo "Environment variables saved to .env file"
+
+echo ""
+echo "🎉 Autonomous Revenue Decision Loop deployment complete!"
+echo ""
+echo "📊 Stack: CCNativeStack"
+echo "🌐 Region: $AWS_REGION"
+echo "🔧 Environment: $DEPLOYMENT_ENV"
+echo ""
+echo "📦 S3 Buckets (World Model):"
+echo "   Evidence Ledger: $EVIDENCE_LEDGER_BUCKET"
+echo "   World State Snapshots: $WORLD_STATE_SNAPSHOTS_BUCKET"
+echo "   Schema Registry: $SCHEMA_REGISTRY_BUCKET"
+echo "   Artifacts: $ARTIFACTS_BUCKET"
+echo "   Ledger Archives: $LEDGER_ARCHIVES_BUCKET"
+echo ""
+echo "📡 EventBridge:"
+echo "   Event Bus: $EVENT_BUS_NAME"
+echo ""
+echo "📋 DynamoDB Tables (configured in CDK):"
+echo "   - cc-native-accounts"
+echo "   - cc-native-signals"
+echo "   - cc-native-tool-runs"
+echo "   - cc-native-approval-requests"
+echo "   - cc-native-action-queue"
+echo "   - cc-native-policy-config"
+echo "   - cc-native-ledger"
+echo "   - cc-native-cache"
+echo "   - cc-native-tenants"
+echo "   - cc-native-world-state"
+echo "   - cc-native-evidence-index"
+echo "   - cc-native-snapshots-index"
+echo "   - cc-native-schema-registry"
+echo "   - cc-native-critical-field-registry"
+echo ""
+echo "📝 Configuration saved to .env file"
+echo ""
+echo "🧪 Next Steps:"
+echo "   1. Review .env file for configuration"
+echo "   2. Start implementing Phase 0 services"
+echo "   3. Run integration tests"
+echo ""

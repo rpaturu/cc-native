@@ -1,0 +1,85 @@
+#!/bin/bash
+
+set -e;
+
+# Load environment variables from .env.local if it exists
+if [ -f .env.local ]; then
+  source .env.local
+fi
+
+# Parse arguments
+CDK_PROFILE=${AWS_PROFILE:-default}
+CDK_REGION=${AWS_REGION:-us-west-2}
+while [[ "$#" -gt 0 ]]; do case $1 in
+  --profile) CDK_PROFILE="$2"; shift;;
+  --region) AWS_REGION="$2"; shift;;
+  --force) FORCE_DESTROY=true;;
+esac; shift; done
+
+# Check if region is set
+if [ -z "$AWS_REGION" ]; then
+  # Try to get region from AWS config
+  AWS_REGION=$(aws configure get region --profile $CDK_PROFILE 2>/dev/null)
+  
+  if [ -z "$AWS_REGION" ]; then
+    echo "Error: AWS region is required"
+    echo "Usage: ./destroy [--profile <aws_profile>] [--region <aws_region>] [--force]"
+    echo "Example: ./destroy --profile dev --region us-west-2"
+    echo "You may also configure your region by running 'aws configure'"
+    exit 1
+  fi
+fi
+
+echo "Using AWS Profile: $CDK_PROFILE"
+echo "Using AWS Region: $AWS_REGION"
+
+# Check if stack exists
+STACK_NAME=$(aws cloudformation list-stacks \
+  --profile $CDK_PROFILE \
+  --region $AWS_REGION \
+  --no-cli-pager \
+  --stack-status-filter CREATE_COMPLETE UPDATE_COMPLETE UPDATE_ROLLBACK_COMPLETE \
+  --query "StackSummaries[?starts_with(StackName, 'CCNativeStack')].StackName" \
+  --output text | head -n 1)
+
+if [ -z "$STACK_NAME" ]; then
+  echo "No CC Native stack found. Nothing to destroy."
+  exit 0
+fi
+
+echo "Found stack: $STACK_NAME"
+
+# Safety check
+if [ "$FORCE_DESTROY" != "true" ]; then
+  echo ""
+  echo "⚠️  WARNING: This will destroy the CCNativeStack and all its resources!"
+  echo "   This includes:"
+  echo "   - All DynamoDB tables and data"
+  echo "   - All S3 buckets and objects"
+  echo "   - EventBridge bus and rules"
+  echo "   - KMS keys"
+  echo "   - All other stack resources"
+  echo ""
+  read -p "Are you sure you want to continue? (type 'yes' to confirm): " confirmation
+  
+  if [ "$confirmation" != "yes" ]; then
+    echo "Destruction cancelled."
+    exit 0
+  fi
+fi
+
+echo ""
+echo "Destroying stack: $STACK_NAME"
+echo "This may take several minutes..."
+
+# Destroy the stack
+npx cdk --profile $CDK_PROFILE --region $AWS_REGION destroy CCNativeStack --force
+
+echo ""
+echo "✅ Stack destruction complete!"
+echo ""
+echo "Note: Some resources may take time to fully delete:"
+echo "   - S3 buckets with versioning may require manual cleanup"
+echo "   - DynamoDB tables are deleted immediately"
+echo "   - KMS keys may have deletion delays"
+echo ""
