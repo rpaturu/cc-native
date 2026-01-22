@@ -37,7 +37,12 @@ echo "Using Environment: $DEPLOYMENT_ENV"
 
 # Build and deploy infrastructure
 echo "Building and deploying infrastructure..."
-npm ci && npm run build
+# Skip npm ci if node_modules exists and build works (faster, avoids permission issues)
+if [ ! -d "node_modules" ] || ! npm run build > /dev/null 2>&1; then
+  echo "Installing dependencies..."
+  npm install
+fi
+npm run build
 
 # Prepare CDK context parameters
 CDK_CONTEXT_PARAMS=""
