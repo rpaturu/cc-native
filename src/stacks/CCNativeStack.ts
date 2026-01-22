@@ -35,6 +35,10 @@ export class CCNativeStack extends cdk.Stack {
   public readonly ledgerTable: dynamodb.Table;
   public readonly cacheTable: dynamodb.Table;
   public readonly tenantsTable: dynamodb.Table;
+  
+  // Methodology Tables
+  public readonly methodologyTable: dynamodb.Table;
+  public readonly assessmentTable: dynamodb.Table;
 
   // EventBridge
   public readonly eventBus: events.EventBus;
@@ -323,6 +327,42 @@ export class CCNativeStack extends cdk.Stack {
       },
     });
 
+    // Methodology Table (methodology definitions)
+    this.methodologyTable = new dynamodb.Table(this, 'MethodologyTable', {
+      tableName: 'cc-native-methodology',
+      partitionKey: { name: 'pk', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'sk', type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      pointInTimeRecoverySpecification: {
+        pointInTimeRecoveryEnabled: true,
+      },
+    });
+
+    // Add GSI for tenant + status queries
+    this.methodologyTable.addGlobalSecondaryIndex({
+      indexName: 'tenant-status-index',
+      partitionKey: { name: 'gsi1pk', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'gsi1sk', type: dynamodb.AttributeType.STRING },
+    });
+
+    // Assessment Table (methodology assessments)
+    this.assessmentTable = new dynamodb.Table(this, 'AssessmentTable', {
+      tableName: 'cc-native-assessment',
+      partitionKey: { name: 'pk', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'sk', type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      pointInTimeRecoverySpecification: {
+        pointInTimeRecoveryEnabled: true,
+      },
+    });
+
+    // Add GSI for opportunity + methodology + status queries (getActiveAssessment)
+    this.assessmentTable.addGlobalSecondaryIndex({
+      indexName: 'opportunity-methodology-index',
+      partitionKey: { name: 'gsi1pk', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'gsi1sk', type: dynamodb.AttributeType.STRING },
+    });
+
     // EventBridge Custom Bus
     this.eventBus = new events.EventBus(this, 'CCNativeEventBus', {
       eventBusName: 'cc-native-events',
@@ -408,6 +448,17 @@ export class CCNativeStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'TenantsTableName', {
       value: this.tenantsTable.tableName,
       description: 'DynamoDB table for tenant configuration and metadata',
+    });
+
+    // Methodology Tables
+    new cdk.CfnOutput(this, 'MethodologyTableName', {
+      value: this.methodologyTable.tableName,
+      description: 'DynamoDB table for methodology definitions',
+    });
+
+    new cdk.CfnOutput(this, 'AssessmentTableName', {
+      value: this.assessmentTable.tableName,
+      description: 'DynamoDB table for methodology assessments',
     });
   }
 }
