@@ -1,6 +1,6 @@
 import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, GetCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, GetCommand, QueryCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
 import { EntitySchema, CriticalFieldRegistry, SchemaQuery, ISchemaRegistryService } from '../../types/SchemaTypes';
 import { EntityType } from '../../types/WorldStateTypes';
 import { Logger } from '../core/Logger';
@@ -203,6 +203,56 @@ export class SchemaRegistryService implements ISchemaRegistryService {
         error: error instanceof Error ? error.message : String(error),
       });
       return false; // Fail-closed
+    }
+  }
+
+  /**
+   * Register schema in registry (for methodologies and other entity types)
+   * 
+   * Stores schema index in DynamoDB pointing to S3 location.
+   * Schema must already be stored in S3.
+   */
+  async registerSchema(input: {
+    entityType: EntityType;
+    version: string;
+    schemaHash: string;
+    s3Key: string;
+    schema: any;
+  }): Promise<void> {
+    try {
+      // Store index in Schema Registry table
+      const record = {
+        pk: `SCHEMA#${input.entityType}`,
+        sk: `VERSION#${input.version}#${input.schemaHash}`,
+        entityType: input.entityType,
+        version: input.version,
+        schemaHash: input.schemaHash,
+        s3Key: input.s3Key,
+        createdAt: new Date().toISOString(),
+      };
+
+      await this.dynamoClient.send(new PutCommand({
+        TableName: this.registryTableName,
+        Item: record,
+        ConditionExpression: 'attribute_not_exists(pk) OR attribute_not_exists(sk)', // Prevent overwrites
+      }));
+
+      // Invalidate cache for this schema
+      const cacheKey = `${input.entityType}:${input.version}`;
+      this.schemaCache.delete(cacheKey);
+
+      this.logger.info('Schema registered', {
+        entityType: input.entityType,
+        version: input.version,
+        schemaHash: input.schemaHash,
+      });
+    } catch (error) {
+      this.logger.error('Failed to register schema', {
+        entityType: input.entityType,
+        version: input.version,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
     }
   }
 
