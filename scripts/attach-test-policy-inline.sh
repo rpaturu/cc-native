@@ -208,6 +208,43 @@ put_inline_policy() {
   fi
 }
 
+# Check existing inline policies and their sizes
+echo "Checking existing inline policies..."
+if [ "$IAM_ENTITY_TYPE" == "user" ]; then
+  EXISTING_POLICIES=$(aws iam list-user-policies \
+    --profile $AWS_PROFILE \
+    --user-name "$IAM_USER_OR_ROLE_NAME" \
+    --no-cli-pager \
+    --query 'PolicyNames' \
+    --output json 2>/dev/null || echo "[]")
+  
+  if [ "$EXISTING_POLICIES" != "[]" ] && [ -n "$EXISTING_POLICIES" ]; then
+    echo "Existing inline policies for user '$IAM_USER_OR_ROLE_NAME':"
+    echo "$EXISTING_POLICIES" | python3 -m json.tool 2>/dev/null || echo "$EXISTING_POLICIES"
+    echo ""
+    
+    # Get sizes of existing policies
+    TOTAL_SIZE=0
+    for policy_name in $(echo "$EXISTING_POLICIES" | python3 -c "import sys, json; [print(p) for p in json.load(sys.stdin)]" 2>/dev/null || echo ""); do
+      POLICY_DOC=$(aws iam get-user-policy \
+        --profile $AWS_PROFILE \
+        --user-name "$IAM_USER_OR_ROLE_NAME" \
+        --policy-name "$policy_name" \
+        --no-cli-pager \
+        --query 'PolicyDocument' \
+        --output json 2>/dev/null || echo "")
+      
+      if [ -n "$POLICY_DOC" ]; then
+        POLICY_SIZE=$(echo "$POLICY_DOC" | wc -c | tr -d ' ')
+        TOTAL_SIZE=$((TOTAL_SIZE + POLICY_SIZE))
+        echo "  - $policy_name: $POLICY_SIZE bytes"
+      fi
+    done
+    echo "  Total size of existing policies: $TOTAL_SIZE bytes"
+    echo ""
+  fi
+fi
+
 # Attach the policies
 echo "Attaching inline policies (using compact wildcard patterns)..."
 echo ""
