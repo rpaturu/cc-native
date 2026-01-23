@@ -99,80 +99,17 @@ FULL_POLICY_DOCUMENT=$(aws iam get-policy-version \
 echo "Policy document retrieved successfully"
 echo ""
 
-# Create compact policies using wildcards where possible
-# This approach creates smaller policies by using more efficient ARN patterns
+# Create compact policies using wildcards - MINIFIED JSON (no whitespace)
+# This approach creates the smallest possible policies
 
-# S3 Policy - Use wildcard for all buckets (more compact)
-S3_POLICY=$(cat <<EOF
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Action": [
-        "s3:GetObject",
-        "s3:PutObject",
-        "s3:DeleteObject",
-        "s3:ListBucket",
-        "s3:GetObjectVersion",
-        "s3:PutObjectVersion"
-      ],
-      "Resource": [
-        "arn:aws:s3:::cc-native-*",
-        "arn:aws:s3:::cc-native-*/*"
-      ]
-    }
-  ]
-}
-EOF
-)
+# DynamoDB Policy - Minified JSON
+DYNAMODB_POLICY='{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["dynamodb:PutItem","dynamodb:GetItem","dynamodb:UpdateItem","dynamodb:DeleteItem","dynamodb:Query","dynamodb:Scan","dynamodb:BatchGetItem","dynamodb:BatchWriteItem"],"Resource":["arn:aws:dynamodb:*:*:table/cc-native-*","arn:aws:dynamodb:*:*:table/cc-native-*/index/*"]}]}'
 
-# EventBridge Policy - Very compact
-EVENTBRIDGE_POLICY=$(cat <<EOF
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Action": [
-        "events:PutEvents"
-      ],
-      "Resource": [
-        "arn:aws:events:*:*:event-bus/cc-native-events"
-      ]
-    }
-  ]
-}
-EOF
-)
+# S3 Policy - Minified JSON
+S3_POLICY='{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["s3:GetObject","s3:PutObject","s3:DeleteObject","s3:ListBucket","s3:GetObjectVersion","s3:PutObjectVersion"],"Resource":["arn:aws:s3:::cc-native-*","arn:aws:s3:::cc-native-*/*"]}]}'
 
-# DynamoDB - Split into 2 policies using wildcards
-# Policy 1: All tables with wildcard
-DYNAMODB_POLICY_1=$(cat <<EOF
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Action": [
-        "dynamodb:PutItem",
-        "dynamodb:GetItem",
-        "dynamodb:UpdateItem",
-        "dynamodb:DeleteItem",
-        "dynamodb:Query",
-        "dynamodb:Scan",
-        "dynamodb:BatchGetItem",
-        "dynamodb:BatchWriteItem"
-      ],
-      "Resource": [
-        "arn:aws:dynamodb:*:*:table/cc-native-*",
-        "arn:aws:dynamodb:*:*:table/cc-native-*/index/*"
-      ]
-    }
-  ]
-}
-EOF
-)
+# EventBridge Policy - Minified JSON
+EVENTBRIDGE_POLICY='{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["events:PutEvents"],"Resource":["arn:aws:events:*:*:event-bus/cc-native-events"]}]}'
 
 # Function to put inline policy
 put_inline_policy() {
