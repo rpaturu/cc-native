@@ -169,8 +169,9 @@ export class SchemaRegistryService implements ISchemaRegistryService {
     try {
       const schema = await this.getSchema(entityType, version);
       if (!schema) {
-        this.logger.warn('Schema not found for validation', { entityType, version });
-        return false; // Missing schema = fail-closed
+        // Missing schema = fail-closed (expected in Phase 0 when schemas aren't registered yet)
+        this.logger.debug('Schema not found for validation (fail-closed)', { entityType, version });
+        return false;
       }
 
       const criticalFields = await this.getCriticalFields(entityType);
