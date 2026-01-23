@@ -22,17 +22,38 @@ echo ""
 
 # Step 1: Get the inline policy document
 echo "Step 1: Retrieving inline policy document..."
+
+# First check if policy exists
+POLICY_EXISTS=$(aws iam list-user-policies \
+  --profile $AWS_PROFILE \
+  --user-name "$IAM_USER_NAME" \
+  --no-cli-pager \
+  --query "PolicyNames[?@=='$POLICY_NAME']" \
+  --output text 2>/dev/null || echo "")
+
+if [ -z "$POLICY_EXISTS" ]; then
+  echo "Policy '$POLICY_NAME' does not exist. Nothing to convert."
+  exit 0
+fi
+
+echo "✓ Policy exists, retrieving document..."
 POLICY_DOC=$(aws iam get-user-policy \
   --profile $AWS_PROFILE \
   --user-name "$IAM_USER_NAME" \
   --policy-name "$POLICY_NAME" \
   --no-cli-pager \
   --query 'PolicyDocument' \
-  --output json 2>/dev/null || echo "")
+  --output json 2>&1)
+
+# Check for errors in the output
+if echo "$POLICY_DOC" | grep -q "Error\|error\|Could not"; then
+  echo "Error retrieving policy:"
+  echo "$POLICY_DOC"
+  exit 1
+fi
 
 if [ -z "$POLICY_DOC" ] || [ "$POLICY_DOC" == "null" ]; then
-  echo "Error: Could not retrieve inline policy '$POLICY_NAME'"
-  echo "The policy may not exist or you may not have permissions to read it."
+  echo "Error: Policy document is empty or null"
   exit 1
 fi
 
