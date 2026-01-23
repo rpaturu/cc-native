@@ -102,19 +102,25 @@ echo ""
 # Create compact policies using wildcards - MINIFIED JSON (no whitespace)
 # This approach creates the smallest possible policies
 
-# DynamoDB Policy - Minified JSON
-DYNAMODB_POLICY='{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["dynamodb:PutItem","dynamodb:GetItem","dynamodb:UpdateItem","dynamodb:DeleteItem","dynamodb:Query","dynamodb:Scan","dynamodb:BatchGetItem","dynamodb:BatchWriteItem"],"Resource":["arn:aws:dynamodb:*:*:table/cc-native-*","arn:aws:dynamodb:*:*:table/cc-native-*/index/*"]}]}'
+# DynamoDB Policy - Minified JSON (use double quotes for variable expansion)
+DYNAMODB_POLICY="{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":[\"dynamodb:PutItem\",\"dynamodb:GetItem\",\"dynamodb:UpdateItem\",\"dynamodb:DeleteItem\",\"dynamodb:Query\",\"dynamodb:Scan\",\"dynamodb:BatchGetItem\",\"dynamodb:BatchWriteItem\"],\"Resource\":[\"arn:aws:dynamodb:*:*:table/cc-native-*\",\"arn:aws:dynamodb:*:*:table/cc-native-*/index/*\"]}]}"
 
 # S3 Policy - Minified JSON
-S3_POLICY='{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["s3:GetObject","s3:PutObject","s3:DeleteObject","s3:ListBucket","s3:GetObjectVersion","s3:PutObjectVersion"],"Resource":["arn:aws:s3:::cc-native-*","arn:aws:s3:::cc-native-*/*"]}]}'
+S3_POLICY="{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":[\"s3:GetObject\",\"s3:PutObject\",\"s3:DeleteObject\",\"s3:ListBucket\",\"s3:GetObjectVersion\",\"s3:PutObjectVersion\"],\"Resource\":[\"arn:aws:s3:::cc-native-*\",\"arn:aws:s3:::cc-native-*/*\"]}]}"
 
 # EventBridge Policy - Minified JSON
-EVENTBRIDGE_POLICY='{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["events:PutEvents"],"Resource":["arn:aws:events:*:*:event-bus/cc-native-events"]}]}'
+EVENTBRIDGE_POLICY="{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":[\"events:PutEvents\"],\"Resource\":[\"arn:aws:events:*:*:event-bus/cc-native-events\"]}]}"
 
 # Function to put inline policy
 put_inline_policy() {
   local policy_name=$1
   local policy_doc=$2
+  
+  # Validate policy document is not empty
+  if [ -z "$policy_doc" ]; then
+    echo "  ERROR: Policy document is empty for '$policy_name'"
+    return 1
+  fi
   
   if [ "$IAM_ENTITY_TYPE" == "user" ]; then
     # Check if policy exists
@@ -132,7 +138,7 @@ put_inline_policy() {
         --user-name "$IAM_USER_OR_ROLE_NAME" \
         --policy-name "$policy_name" \
         --policy-document "$policy_doc" \
-        --no-cli-pager > /dev/null
+        --no-cli-pager
     else
       echo "  Creating inline policy '$policy_name'..."
       aws iam put-user-policy \
@@ -140,7 +146,7 @@ put_inline_policy() {
         --user-name "$IAM_USER_OR_ROLE_NAME" \
         --policy-name "$policy_name" \
         --policy-document "$policy_doc" \
-        --no-cli-pager > /dev/null
+        --no-cli-pager
     fi
   else
     # Check if policy exists
@@ -158,7 +164,7 @@ put_inline_policy() {
         --role-name "$IAM_USER_OR_ROLE_NAME" \
         --policy-name "$policy_name" \
         --policy-document "$policy_doc" \
-        --no-cli-pager > /dev/null
+        --no-cli-pager
     else
       echo "  Creating inline policy '$policy_name'..."
       aws iam put-role-policy \
@@ -166,7 +172,7 @@ put_inline_policy() {
         --role-name "$IAM_USER_OR_ROLE_NAME" \
         --policy-name "$policy_name" \
         --policy-document "$policy_doc" \
-        --no-cli-pager > /dev/null
+        --no-cli-pager
     fi
   fi
 }
