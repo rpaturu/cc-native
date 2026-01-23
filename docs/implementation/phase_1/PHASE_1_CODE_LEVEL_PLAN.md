@@ -401,33 +401,35 @@ These contract tests validate Phase 1's non-negotiables and serve as the Phase 1
 
 Phase 1 is complete when:
 
-- [ ] All 8 signal types defined and implemented
-- [ ] Connector framework supports delta-based polling with EvidenceSnapshot creation
-- [ ] All signal detectors implemented as pure functions over EvidenceSnapshots
-- [ ] **Every signal is replayable from raw evidence without LLM inference** (non-negotiable)
-- [ ] Idempotency keys (dedupeKey) implemented and tested
-- [ ] Status state machine (ACTIVE | SUPPRESSED | EXPIRED) implemented with invariants
-- [ ] AccountState read model implemented for efficient inference
-- [ ] Lifecycle state inference works deterministically using read model
-- [ ] Signal precedence and suppression rules implemented and tested
-- [ ] TTL semantics defined and enforced for all signal types
-- [ ] Confidence normalized to [0.0-1.0] scale and logged
-- [ ] Signals bind to immutable evidence (EvidenceSnapshotRef)
-- [ ] All signal creation, suppression, and expiry logged to ledger
-- [ ] Detector versioning (detectorVersion) implemented
-- [ ] Rule versioning (inferenceRuleVersion, suppressionRuleVersion) implemented
-- [ ] DLQ configured for all handlers (connector-poll, signal-detection, lifecycle-inference)
-- [ ] Unit tests cover all detectors and services (>80% coverage)
-- [ ] Contract tests pass (idempotency, replayability, suppression logging, inference stability, ordering/race safety)
-- [ ] WindowKey derivation implemented correctly for all 8 signal types
-- [ ] Atomicity/ordering between signal write + AccountState update implemented (TransactWriteItems or event-sourced)
-- [ ] SuppressionEngine implemented (all suppression paths route through it)
-- [ ] Connector sync mode (TIMESTAMP | CURSOR | HYBRID) declared per connector
-- [ ] `FIRST_ENGAGEMENT_OCCURRED` inference risk addressed (inferenceActive flag or suppression on CUSTOMER transition)
-- [ ] `NO_ENGAGEMENT_PRESENT` guardrails enforced (state-entry only, time-decay re-emit)
-- [ ] `DISCOVERY_PROGRESS_STALLED` uses only structural checks (no semantic analysis)
-- [ ] No manual tagging required for lifecycle state transitions
-- [ ] Source costs bounded (delta-only, capped polling, read-model based inference)
+- [x] All 8 signal types defined and implemented ✅
+- [x] Connector framework supports delta-based polling with EvidenceSnapshot creation ✅
+- [x] All signal detectors implemented as pure functions over EvidenceSnapshots ✅
+- [x] **Every signal is replayable from raw evidence without LLM inference** (non-negotiable) ✅
+- [x] Idempotency keys (dedupeKey) implemented and tested ✅
+- [x] Status state machine (ACTIVE | SUPPRESSED | EXPIRED) implemented with invariants ✅
+- [x] AccountState read model implemented for efficient inference ✅
+- [x] Lifecycle state inference works deterministically using read model ✅
+- [x] Signal precedence and suppression rules implemented and tested ✅
+- [x] TTL semantics defined and enforced for all signal types ✅
+- [x] Confidence normalized to [0.0-1.0] scale and logged ✅
+- [x] Signals bind to immutable evidence (EvidenceSnapshotRef) ✅
+- [x] All signal creation, suppression, and expiry logged to ledger ✅
+- [x] Detector versioning (detectorVersion) implemented ✅
+- [x] Rule versioning (inferenceRuleVersion, suppressionRuleVersion) implemented ✅
+- [x] DLQ configured for all handlers (connector-poll, signal-detection, lifecycle-inference) ✅
+- [x] Unit tests cover all detectors and services (>80% coverage) ✅
+- [x] Contract tests pass (idempotency, replayability, suppression logging, inference stability, ordering/race safety) ✅
+- [x] WindowKey derivation implemented correctly for all 8 signal types ✅
+- [x] Atomicity/ordering between signal write + AccountState update implemented (TransactWriteItems or event-sourced) ✅
+- [x] SuppressionEngine implemented (all suppression paths route through it) ✅
+- [x] Connector sync mode (TIMESTAMP | CURSOR | HYBRID) declared per connector ✅
+- [x] `FIRST_ENGAGEMENT_OCCURRED` inference risk addressed (inferenceActive flag or suppression on CUSTOMER transition) ✅
+- [x] `NO_ENGAGEMENT_PRESENT` guardrails enforced (state-entry only, time-decay re-emit) ✅
+- [x] `DISCOVERY_PROGRESS_STALLED` uses only structural checks (no semantic analysis) ✅
+- [x] No manual tagging required for lifecycle state transitions ✅
+- [x] Source costs bounded (delta-only, capped polling, read-model based inference) ✅
+
+**Status: ✅ Phase 1 Implementation Complete**
 
 ---
 
