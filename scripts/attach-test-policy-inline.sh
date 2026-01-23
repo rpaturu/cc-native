@@ -137,11 +137,21 @@ put_inline_policy() {
     return 1
   fi
   
-  # Check file size
+  # Check file size and display for debugging
   FILE_SIZE=$(wc -c < "$policy_file" | tr -d ' ')
+  echo "  Policy file size: $FILE_SIZE bytes"
+  
   if [ "$FILE_SIZE" -gt 2048 ]; then
-    echo "  WARNING: Policy file size ($FILE_SIZE bytes) exceeds 2048 byte limit"
+    echo "  ERROR: Policy file size ($FILE_SIZE bytes) exceeds 2048 byte limit"
+    echo "  Policy content:"
+    cat "$policy_file"
+    return 1
   fi
+  
+  # Display policy content for debugging
+  echo "  Policy content:"
+  cat "$policy_file" | python3 -m json.tool 2>/dev/null || cat "$policy_file"
+  echo ""
   
   if [ "$IAM_ENTITY_TYPE" == "user" ]; then
     # Check if policy exists
