@@ -86,9 +86,7 @@ export class LedgerService implements ILedgerService {
     try {
       let keyConditionExpression = '';
       let filterExpression = '';
-      const expressionAttributeValues: Record<string, any> = {
-        ':tenantId': query.tenantId,
-      };
+      const expressionAttributeValues: Record<string, any> = {};
       const expressionAttributeNames: Record<string, string> = {};
 
       // Determine which index to use
@@ -104,9 +102,8 @@ export class LedgerService implements ILedgerService {
         expressionAttributeValues[':endTime'] = query.endTime;
       } else {
         // Default: query by tenant
-        keyConditionExpression = 'pk = :pk';
+        keyConditionExpression = 'pk = :pk AND begins_with(sk, :sk)';
         expressionAttributeValues[':pk'] = `TENANT#${query.tenantId}`;
-        filterExpression = 'begins_with(sk, :sk)';
         expressionAttributeValues[':sk'] = 'ENTRY#';
       }
 
