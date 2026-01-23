@@ -10,6 +10,7 @@ import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as lambdaNodejs from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
 import { Construct } from 'constructs';
+import { TestUserPolicy } from './TestUserPolicy';
 
 export interface CCNativeStackProps extends cdk.StackProps {
   // Add any custom props here
@@ -71,6 +72,9 @@ export class CCNativeStack extends cdk.Stack {
   public readonly connectorPollDlq!: sqs.Queue;
   public readonly signalDetectionDlq!: sqs.Queue;
   public readonly lifecycleInferenceDlq!: sqs.Queue;
+
+  // Test User Policy (for integration tests)
+  public readonly testUserPolicy!: iam.ManagedPolicy;
 
   constructor(scope: Construct, id: string, props?: CCNativeStackProps) {
     super(scope, id, props);
@@ -758,6 +762,43 @@ export class CCNativeStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'LifecycleInferenceHandlerArn', {
       value: self.lifecycleInferenceHandler.functionArn,
       description: 'ARN of lifecycle inference handler Lambda function',
+    });
+
+    // Create IAM policy for integration test users
+    const testUserPolicyConstruct = new TestUserPolicy(this, 'TestUserPolicy', {
+      evidenceLedgerBucket: this.evidenceLedgerBucket.bucketName,
+      worldStateSnapshotsBucket: this.worldStateSnapshotsBucket.bucketName,
+      schemaRegistryBucket: this.schemaRegistryBucket.bucketName,
+      artifactsBucket: this.artifactsBucket.bucketName,
+      ledgerArchivesBucket: this.ledgerArchivesBucket.bucketName,
+      eventBusName: this.eventBus.eventBusName,
+      tableNames: {
+        tenants: this.tenantsTable.tableName,
+        evidenceIndex: this.evidenceIndexTable.tableName,
+        worldState: this.worldStateTable.tableName,
+        snapshotsIndex: this.snapshotsIndexTable.tableName,
+        schemaRegistry: this.schemaRegistryTable.tableName,
+        criticalFieldRegistry: this.criticalFieldRegistryTable.tableName,
+        ledger: this.ledgerTable.tableName,
+        cache: this.cacheTable.tableName,
+        accounts: this.accountsTable.tableName,
+        signals: this.signalsTable.tableName,
+        toolRuns: this.toolRunsTable.tableName,
+        approvalRequests: this.approvalRequestsTable.tableName,
+        actionQueue: this.actionQueueTable.tableName,
+        policyConfig: this.policyConfigTable.tableName,
+        methodology: this.methodologyTable.tableName,
+        assessment: this.assessmentTable.tableName,
+        identities: this.identitiesTable.tableName,
+      },
+    });
+    self.testUserPolicy = testUserPolicyConstruct.policy;
+
+    // Output the policy ARN for easy attachment
+    new cdk.CfnOutput(this, 'TestUserPolicyArn', {
+      value: self.testUserPolicy.managedPolicyArn,
+      description: 'IAM Managed Policy ARN for integration test users. Attach this to your test IAM user/role.',
+      exportName: 'CCNativeTestUserPolicyArn',
     });
   }
 }

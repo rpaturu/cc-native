@@ -1,0 +1,190 @@
+# Integration Test Setup Guide
+
+This guide explains how to set up IAM permissions for running integration tests against real AWS resources.
+
+## Overview
+
+Integration tests use **real AWS resources** (DynamoDB, S3, EventBridge) and require proper IAM permissions. The test suite includes a CDK construct that creates an IAM managed policy with all necessary permissions.
+
+## Prerequisites
+
+1. **Infrastructure Deployed**: Run `./deploy` to deploy the CDK stack
+2. **AWS Credentials Configured**: Set `AWS_PROFILE` in `.env.local` or use `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`
+3. **IAM User or Role**: You need an IAM user or role to attach the policy to
+
+## Quick Setup
+
+### Step 1: Deploy Infrastructure
+
+```bash
+./deploy
+```
+
+This creates the `TestUserPolicy` IAM managed policy and outputs its ARN.
+
+### Step 2: Attach Policy to Your IAM User
+
+```bash
+# For IAM user
+./scripts/attach-test-policy.sh --user amplify_admin
+
+# For IAM role
+./scripts/attach-test-policy.sh --role MyTestRole
+
+# With custom profile/region
+./scripts/attach-test-policy.sh --profile dev --region us-east-1 --user my-test-user
+```
+
+### Step 3: Verify Permissions
+
+```bash
+# Check attached policies
+aws iam list-attached-user-policies --user-name amplify_admin --no-cli-pager
+
+# Or for roles
+aws iam list-attached-role-policies --role-name MyTestRole --no-cli-pager
+```
+
+### Step 4: Run Tests
+
+```bash
+npm test
+```
+
+All integration tests should now pass!
+
+## Manual Setup (Alternative)
+
+If you prefer to attach the policy manually:
+
+### 1. Get Policy ARN from Stack Outputs
+
+```bash
+aws cloudformation describe-stacks \
+  --stack-name CCNativeStack \
+  --query 'Stacks[0].Outputs[?OutputKey==`TestUserPolicyArn`].OutputValue' \
+  --output text \
+  --no-cli-pager
+```
+
+### 2. Attach Policy to IAM User
+
+```bash
+aws iam attach-user-policy \
+  --user-name amplify_admin \
+  --policy-arn <POLICY_ARN_FROM_STEP_1> \
+  --no-cli-pager
+```
+
+### 3. Attach Policy to IAM Role (if using role)
+
+```bash
+aws iam attach-role-policy \
+  --role-name MyTestRole \
+  --policy-arn <POLICY_ARN_FROM_STEP_1> \
+  --no-cli-pager
+```
+
+## What Permissions Are Granted?
+
+The `TestUserPolicy` grants the following permissions:
+
+### DynamoDB
+- Full access (PutItem, GetItem, UpdateItem, DeleteItem, Query, Scan, Batch operations) to all tables:
+  - `cc-native-tenants`
+  - `cc-native-evidence-index`
+  - `cc-native-world-state`
+  - `cc-native-snapshots-index`
+  - `cc-native-schema-registry`
+  - `cc-native-critical-field-registry`
+  - `cc-native-ledger`
+  - `cc-native-cache`
+  - `cc-native-accounts`
+  - `cc-native-signals`
+  - `cc-native-tool-runs`
+  - `cc-native-approval-requests`
+  - `cc-native-action-queue`
+  - `cc-native-policy-config`
+  - `cc-native-methodology`
+  - `cc-native-assessment`
+  - `cc-native-identities`
+- Access to all Global Secondary Indexes (GSIs) on these tables
+
+### S3
+- Full access (GetObject, PutObject, DeleteObject, ListBucket, GetObjectVersion, PutObjectVersion) to all buckets:
+  - Evidence Ledger Bucket
+  - World State Snapshots Bucket
+  - Schema Registry Bucket
+  - Artifacts Bucket
+  - Ledger Archives Bucket
+
+### EventBridge
+- `PutEvents` permission on the `cc-native-events` event bus
+
+## Troubleshooting
+
+### Error: "User is not authorized to perform: events:PutEvents"
+
+**Solution**: The IAM user/role doesn't have the TestUserPolicy attached. Run:
+```bash
+./scripts/attach-test-policy.sh --user <your-iam-user-name>
+```
+
+### Error: "Could not find TestUserPolicyArn in stack outputs"
+
+**Solution**: The stack needs to be redeployed to include the TestUserPolicy. Run:
+```bash
+./deploy
+```
+
+### Error: "AccessDeniedException" for DynamoDB or S3
+
+**Solution**: Verify the policy is attached and the resource names match:
+```bash
+# Check attached policies
+aws iam list-attached-user-policies --user-name <your-user> --no-cli-pager
+
+# Verify policy exists
+aws iam get-policy --policy-arn <policy-arn> --no-cli-pager
+```
+
+### Policy Not Taking Effect
+
+**Solution**: IAM policy changes can take a few seconds to propagate. Wait 10-30 seconds and try again. If still not working, verify:
+1. Policy is attached to the correct user/role
+2. You're using the correct AWS credentials
+3. The policy ARN matches the one in stack outputs
+
+## Security Considerations
+
+⚠️ **Important**: The TestUserPolicy grants **full access** to all CC Native resources. This is intentional for integration tests, but:
+
+1. **Only attach to test users/roles** - Never attach to production IAM entities
+2. **Use separate AWS account** - Run integration tests in a dedicated sandbox account
+3. **Rotate credentials regularly** - Test credentials should be rotated periodically
+4. **Monitor usage** - Review CloudTrail logs for unexpected access
+
+## Removing Permissions
+
+To remove the policy:
+
+```bash
+# For IAM user
+aws iam detach-user-policy \
+  --user-name amplify_admin \
+  --policy-arn <POLICY_ARN> \
+  --no-cli-pager
+
+# For IAM role
+aws iam detach-role-policy \
+  --role-name MyTestRole \
+  --policy-arn <POLICY_ARN> \
+  --no-cli-pager
+```
+
+## Next Steps
+
+After setting up permissions:
+1. Run `npm test` to verify all tests pass
+2. Review test output to ensure no permission errors
+3. Check CloudWatch Logs if tests fail unexpectedly
