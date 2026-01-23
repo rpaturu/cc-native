@@ -82,7 +82,7 @@ export interface EvidenceBinding {
  * Signal TTL Configuration
  */
 export interface SignalTTL {
-  ttlDays: number;                  // TTL in days (or null for permanent)
+  ttlDays: number | null;           // TTL in days (null for permanent)
   expiresAt: string | null;         // ISO timestamp when signal expires (null if permanent)
   isPermanent: boolean;             // Whether signal never expires
 }
