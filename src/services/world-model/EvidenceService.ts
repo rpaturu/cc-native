@@ -198,10 +198,11 @@ export class EvidenceService implements IEvidenceService {
 
       if (query.entityId) {
         // Query by entityId (most efficient)
-        keyConditionExpression = 'pk = :pk';
+        // sk is part of primary key, so begins_with must be in KeyConditionExpression
+        keyConditionExpression = 'pk = :pk AND begins_with(sk, :sk)';
         expressionAttributeValues[':pk'] = `ENTITY#${query.entityId}`;
-        filterExpression = 'begins_with(sk, :sk)';
         expressionAttributeValues[':sk'] = 'EVIDENCE#';
+        filterExpression = 'tenantId = :tenantId';
       } else if (query.entityType) {
         // Query by entityType using GSI
         keyConditionExpression = 'gsi1pk = :gsi1pk';
