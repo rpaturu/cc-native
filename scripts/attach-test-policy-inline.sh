@@ -100,10 +100,13 @@ echo "Policy document retrieved successfully"
 echo ""
 
 # Create compact policies using wildcards - MINIFIED JSON (no whitespace)
-# This approach creates the smallest possible policies
+# Split DynamoDB into 2 smaller policies to stay under 2048 bytes
 
-# DynamoDB Policy - Minified JSON (use double quotes for variable expansion)
-DYNAMODB_POLICY="{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":[\"dynamodb:PutItem\",\"dynamodb:GetItem\",\"dynamodb:UpdateItem\",\"dynamodb:DeleteItem\",\"dynamodb:Query\",\"dynamodb:Scan\",\"dynamodb:BatchGetItem\",\"dynamodb:BatchWriteItem\"],\"Resource\":[\"arn:aws:dynamodb:*:*:table/cc-native-*\",\"arn:aws:dynamodb:*:*:table/cc-native-*/index/*\"]}]}"
+# DynamoDB Policy 1 - Tables only (no indexes)
+DYNAMODB_POLICY_1="{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":[\"dynamodb:PutItem\",\"dynamodb:GetItem\",\"dynamodb:UpdateItem\",\"dynamodb:DeleteItem\",\"dynamodb:Query\",\"dynamodb:Scan\",\"dynamodb:BatchGetItem\",\"dynamodb:BatchWriteItem\"],\"Resource\":[\"arn:aws:dynamodb:*:*:table/cc-native-*\"]}]}"
+
+# DynamoDB Policy 2 - Indexes only
+DYNAMODB_POLICY_2="{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":[\"dynamodb:Query\",\"dynamodb:Scan\"],\"Resource\":[\"arn:aws:dynamodb:*:*:table/cc-native-*/index/*\"]}]}"
 
 # S3 Policy - Minified JSON
 S3_POLICY="{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":[\"s3:GetObject\",\"s3:PutObject\",\"s3:DeleteObject\",\"s3:ListBucket\",\"s3:GetObjectVersion\",\"s3:PutObjectVersion\"],\"Resource\":[\"arn:aws:s3:::cc-native-*\",\"arn:aws:s3:::cc-native-*/*\"]}]}"
@@ -181,20 +184,24 @@ put_inline_policy() {
 echo "Attaching inline policies (using compact wildcard patterns)..."
 echo ""
 
-echo "1. DynamoDB Policy (all cc-native-* tables)..."
-put_inline_policy "CCNativeTestUserPolicy-DynamoDB" "$DYNAMODB_POLICY"
+echo "1. DynamoDB Policy - Tables (cc-native-* tables)..."
+put_inline_policy "CCNativeTestUserPolicy-DynamoDB-Tables" "$DYNAMODB_POLICY_1"
 
-echo "2. S3 Policy (all cc-native-* buckets)..."
+echo "2. DynamoDB Policy - Indexes (cc-native-* indexes)..."
+put_inline_policy "CCNativeTestUserPolicy-DynamoDB-Indexes" "$DYNAMODB_POLICY_2"
+
+echo "3. S3 Policy (all cc-native-* buckets)..."
 put_inline_policy "CCNativeTestUserPolicy-S3" "$S3_POLICY"
 
-echo "3. EventBridge Policy..."
+echo "4. EventBridge Policy..."
 put_inline_policy "CCNativeTestUserPolicy-EventBridge" "$EVENTBRIDGE_POLICY"
 
 echo ""
 echo "✓ All inline policies attached successfully!"
 echo ""
 echo "The IAM $IAM_ENTITY_TYPE '$IAM_USER_OR_ROLE_NAME' now has permissions to:"
-echo "  - Read/Write all DynamoDB tables matching 'cc-native-*' (via CCNativeTestUserPolicy-DynamoDB)"
+echo "  - Read/Write all DynamoDB tables matching 'cc-native-*' (via CCNativeTestUserPolicy-DynamoDB-Tables)"
+echo "  - Query/Scan all DynamoDB indexes matching 'cc-native-*/index/*' (via CCNativeTestUserPolicy-DynamoDB-Indexes)"
 echo "  - Read/Write all S3 buckets matching 'cc-native-*' (via CCNativeTestUserPolicy-S3)"
 echo "  - PutEvents to EventBridge event bus 'cc-native-events' (via CCNativeTestUserPolicy-EventBridge)"
 echo ""
