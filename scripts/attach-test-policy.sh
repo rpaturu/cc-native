@@ -11,7 +11,8 @@ if [ -f .env.local ]; then
 fi
 
 # Parse arguments
-AWS_PROFILE=${AWS_PROFILE:-default}
+# Use ADMIN_PROFILE from .env.local if available, otherwise AWS_PROFILE, otherwise default
+AWS_PROFILE=${ADMIN_PROFILE:-${AWS_PROFILE:-default}}
 AWS_REGION=${AWS_REGION:-us-west-2}
 IAM_USER_OR_ROLE_NAME=""
 IAM_ENTITY_TYPE="user"  # 'user' or 'role'
@@ -29,13 +30,17 @@ while [[ "$#" -gt 0 ]]; do
       echo "This policy grants permissions needed for running integration tests."
       echo ""
       echo "Options:"
-      echo "  --profile <aws_profile>  AWS profile to use (default: default)"
+      echo "  --profile <aws_profile>  AWS profile to use (default: ADMIN_PROFILE from .env.local, or AWS_PROFILE, or default)"
       echo "  --region <aws_region>    AWS region (default: us-west-2)"
       echo "  --user <iam_user_name>   IAM user name to attach policy to"
       echo "  --role <iam_role_name>   IAM role name to attach policy to"
       echo ""
-      echo "Example:"
-      echo "  $0 --profile dev --user amplify_admin"
+      echo "The script automatically uses ADMIN_PROFILE from .env.local if available."
+      echo "This allows using admin credentials to attach policies to other users."
+      echo ""
+      echo "Examples:"
+      echo "  $0 --user amplify_admin  # Uses ADMIN_PROFILE from .env.local"
+      echo "  $0 --profile dev --user amplify_admin  # Override with custom profile"
       exit 0;;
     *) echo "Unknown parameter: $1"; exit 1;;
   esac
