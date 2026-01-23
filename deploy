@@ -123,6 +123,22 @@ ARTIFACTS_BUCKET_OUTPUT=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.OutputKey
 LEDGER_ARCHIVES_BUCKET_OUTPUT=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="LedgerArchivesBucketName") | .OutputValue')
 EVENT_BUS_NAME=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="EventBusName") | .OutputValue')
 
+# Extract DynamoDB table names from stack outputs
+WORLD_STATE_TABLE_OUTPUT=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="WorldStateTableName") | .OutputValue')
+EVIDENCE_INDEX_TABLE_OUTPUT=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="EvidenceIndexTableName") | .OutputValue')
+SNAPSHOTS_INDEX_TABLE_OUTPUT=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="SnapshotsIndexTableName") | .OutputValue')
+SCHEMA_REGISTRY_TABLE_OUTPUT=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="SchemaRegistryTableName") | .OutputValue')
+CRITICAL_FIELD_REGISTRY_TABLE_OUTPUT=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="CriticalFieldRegistryTableName") | .OutputValue')
+LEDGER_TABLE_OUTPUT=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="LedgerTableName") | .OutputValue')
+CACHE_TABLE_OUTPUT=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="CacheTableName") | .OutputValue')
+TENANTS_TABLE_OUTPUT=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="TenantsTableName") | .OutputValue')
+METHODOLOGY_TABLE_OUTPUT=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="MethodologyTableName") | .OutputValue')
+ASSESSMENT_TABLE_OUTPUT=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="AssessmentTableName") | .OutputValue')
+IDENTITIES_TABLE_OUTPUT=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="IdentitiesTableName") | .OutputValue')
+AGENT_ROLE_ARN_OUTPUT=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="AgentRoleArn") | .OutputValue')
+USER_POOL_ID_OUTPUT=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="UserPoolId") | .OutputValue')
+USER_POOL_CLIENT_ID_OUTPUT=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="UserPoolClientId") | .OutputValue')
+
 # Use stack outputs (preferred) or fall back to .env.local values
 EVIDENCE_LEDGER_BUCKET=${EVIDENCE_LEDGER_BUCKET_OUTPUT:-$EVIDENCE_LEDGER_BUCKET}
 WORLD_STATE_SNAPSHOTS_BUCKET=${WORLD_STATE_SNAPSHOTS_BUCKET_OUTPUT:-$WORLD_STATE_SNAPSHOTS_BUCKET}
@@ -151,6 +167,32 @@ LEDGER_ARCHIVES_BUCKET=$LEDGER_ARCHIVES_BUCKET
 
 # EventBridge
 EVENT_BUS_NAME=$EVENT_BUS_NAME
+
+# DynamoDB Tables (World Model)
+WORLD_STATE_TABLE_NAME=$WORLD_STATE_TABLE_OUTPUT
+EVIDENCE_INDEX_TABLE_NAME=$EVIDENCE_INDEX_TABLE_OUTPUT
+SNAPSHOTS_INDEX_TABLE_NAME=$SNAPSHOTS_INDEX_TABLE_OUTPUT
+SCHEMA_REGISTRY_TABLE_NAME=$SCHEMA_REGISTRY_TABLE_OUTPUT
+CRITICAL_FIELD_REGISTRY_TABLE_NAME=$CRITICAL_FIELD_REGISTRY_TABLE_OUTPUT
+
+# DynamoDB Tables (Application)
+LEDGER_TABLE_NAME=$LEDGER_TABLE_OUTPUT
+CACHE_TABLE_NAME=$CACHE_TABLE_OUTPUT
+TENANTS_TABLE_NAME=$TENANTS_TABLE_OUTPUT
+
+# DynamoDB Tables (Methodology)
+METHODOLOGY_TABLE_NAME=$METHODOLOGY_TABLE_OUTPUT
+ASSESSMENT_TABLE_NAME=$ASSESSMENT_TABLE_OUTPUT
+
+# DynamoDB Tables (Identity)
+IDENTITIES_TABLE_NAME=$IDENTITIES_TABLE_OUTPUT
+
+# IAM Roles
+AGENT_ROLE_ARN=$AGENT_ROLE_ARN_OUTPUT
+
+# Cognito
+USER_POOL_ID=$USER_POOL_ID_OUTPUT
+USER_POOL_CLIENT_ID=$USER_POOL_CLIENT_ID_OUTPUT
 
 # Logging
 LOG_LEVEL=$LOG_LEVEL

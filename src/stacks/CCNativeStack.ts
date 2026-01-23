@@ -3,6 +3,8 @@ import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as events from 'aws-cdk-lib/aws-events';
 import * as kms from 'aws-cdk-lib/aws-kms';
+import * as iam from 'aws-cdk-lib/aws-iam';
+import * as cognito from 'aws-cdk-lib/aws-cognito';
 import { Construct } from 'constructs';
 
 export interface CCNativeStackProps extends cdk.StackProps {
@@ -40,11 +42,21 @@ export class CCNativeStack extends cdk.Stack {
   public readonly methodologyTable: dynamodb.Table;
   public readonly assessmentTable: dynamodb.Table;
 
+  // Identity Tables
+  public readonly identitiesTable: dynamodb.Table;
+
   // EventBridge
   public readonly eventBus: events.EventBus;
 
   // KMS Keys
   public readonly tenantEncryptionKey: kms.Key;
+
+  // IAM Roles
+  public readonly agentRole: iam.Role;
+
+  // Cognito
+  public readonly userPool: cognito.UserPool;
+  public readonly userPoolClient: cognito.UserPoolClient;
 
   constructor(scope: Construct, id: string, props?: CCNativeStackProps) {
     super(scope, id, props);
@@ -363,6 +375,24 @@ export class CCNativeStack extends cdk.Stack {
       sortKey: { name: 'gsi1sk', type: dynamodb.AttributeType.STRING },
     });
 
+    // Identities Table (user and agent identities)
+    this.identitiesTable = new dynamodb.Table(this, 'IdentitiesTable', {
+      tableName: 'cc-native-identities',
+      partitionKey: { name: 'pk', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'sk', type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      pointInTimeRecoverySpecification: {
+        pointInTimeRecoveryEnabled: true,
+      },
+    });
+
+    // Add GSI for tenant queries
+    this.identitiesTable.addGlobalSecondaryIndex({
+      indexName: 'tenant-index',
+      partitionKey: { name: 'gsi1pk', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'gsi1sk', type: dynamodb.AttributeType.STRING },
+    });
+
     // EventBridge Custom Bus
     this.eventBus = new events.EventBus(this, 'CCNativeEventBus', {
       eventBusName: 'cc-native-events',
@@ -372,6 +402,93 @@ export class CCNativeStack extends cdk.Stack {
     this.tenantEncryptionKey = new kms.Key(this, 'TenantEncryptionKey', {
       description: 'KMS key for tenant data encryption',
       enableKeyRotation: true,
+    });
+
+    // IAM Role for Agents (Read-Only Access)
+    // Per AGENT_READ_POLICY.md Section 10.1
+    this.agentRole = new iam.Role(this, 'AgentRole', {
+      roleName: 'cc-native-agent-role',
+      assumedBy: new iam.CompositePrincipal(
+        new iam.ServicePrincipal('lambda.amazonaws.com'),
+        new iam.ServicePrincipal('bedrock.amazonaws.com') // For AgentCore Identity
+      ),
+      description: 'Read-only IAM role for autonomous agents (World Model read access only)',
+    });
+
+    // Read-only DynamoDB policy
+    this.agentRole.addToPolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: [
+        'dynamodb:GetItem',
+        'dynamodb:Query',
+        'dynamodb:Scan',
+      ],
+      resources: [
+        `arn:aws:dynamodb:${this.region}:${this.account}:table/cc-native-*`,
+      ],
+      conditions: {
+        StringEquals: {
+          'dynamodb:ReadConsistency': 'eventual',
+        },
+      },
+    }));
+
+    // Read-only S3 policy (evidence and snapshots only)
+    this.agentRole.addToPolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: ['s3:GetObject'],
+      resources: [
+        `arn:aws:s3:::${evidenceLedgerBucketNameFinal}/evidence/*`,
+        `arn:aws:s3:::${worldStateSnapshotsBucketNameFinal}/snapshots/*`,
+      ],
+    }));
+
+    // Explicit deny for write operations (fail-closed security)
+    this.agentRole.addToPolicy(new iam.PolicyStatement({
+      effect: iam.Effect.DENY,
+      actions: [
+        'dynamodb:PutItem',
+        'dynamodb:UpdateItem',
+        'dynamodb:DeleteItem',
+        'dynamodb:BatchWriteItem',
+        's3:PutObject',
+        's3:DeleteObject',
+        's3:PutObjectAcl',
+      ],
+      resources: ['*'],
+    }));
+
+    // Cognito User Pool for user authentication
+    this.userPool = new cognito.UserPool(this, 'UserPool', {
+      userPoolName: 'cc-native-users',
+      selfSignUpEnabled: false, // Admin-controlled user creation
+      signInAliases: {
+        email: true,
+        username: false,
+      },
+      autoVerify: {
+        email: true,
+      },
+      passwordPolicy: {
+        minLength: 12,
+        requireLowercase: true,
+        requireUppercase: true,
+        requireDigits: true,
+        requireSymbols: true,
+      },
+      accountRecovery: cognito.AccountRecovery.EMAIL_ONLY,
+      removalPolicy: cdk.RemovalPolicy.RETAIN, // Retain users on stack deletion
+    });
+
+    // User Pool Client
+    this.userPoolClient = this.userPool.addClient('WebClient', {
+      userPoolClientName: 'cc-native-web-client',
+      generateSecret: false, // Public client for web apps
+      authFlows: {
+        userPassword: true,
+        userSrp: true,
+      },
+      preventUserExistenceErrors: true,
     });
 
     // Stack Outputs
@@ -459,6 +576,29 @@ export class CCNativeStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'AssessmentTableName', {
       value: this.assessmentTable.tableName,
       description: 'DynamoDB table for methodology assessments',
+    });
+
+    // Identity Tables
+    new cdk.CfnOutput(this, 'IdentitiesTableName', {
+      value: this.identitiesTable.tableName,
+      description: 'DynamoDB table for user and agent identities',
+    });
+
+    // IAM Roles
+    new cdk.CfnOutput(this, 'AgentRoleArn', {
+      value: this.agentRole.roleArn,
+      description: 'IAM role ARN for autonomous agents (read-only access)',
+    });
+
+    // Cognito
+    new cdk.CfnOutput(this, 'UserPoolId', {
+      value: this.userPool.userPoolId,
+      description: 'Cognito User Pool ID for user authentication',
+    });
+
+    new cdk.CfnOutput(this, 'UserPoolClientId', {
+      value: this.userPoolClient.userPoolClientId,
+      description: 'Cognito User Pool Client ID',
     });
   }
 }

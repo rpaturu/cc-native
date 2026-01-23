@@ -25,11 +25,17 @@ export const mockEventBridgeClient = {
   send: jest.fn(),
 };
 
+// Mock Cognito Identity Provider Client
+export const mockCognitoClient = {
+  send: jest.fn(),
+};
+
 // Helper to reset all mocks
 export function resetAllMocks() {
   mockDynamoDBDocumentClient.send.mockReset();
   mockS3Client.send.mockReset();
   mockEventBridgeClient.send.mockReset();
+  mockCognitoClient.send.mockReset();
 }
 
 // Helper to create successful DynamoDB responses
