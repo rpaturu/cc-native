@@ -7,7 +7,8 @@ import { EventPublisher } from '../../services/events/EventPublisher';
 import { LedgerService } from '../../services/ledger/LedgerService';
 import { Logger } from '../../services/core/Logger';
 import { TraceService } from '../../services/core/TraceService';
-import { EvidenceRecord } from '../../types/EvidenceTypes';
+import { EvidenceRecord, EvidenceType } from '../../types/EvidenceTypes';
+import { LedgerEventType } from '../../types/LedgerTypes';
 import { EntityState } from '../../types/WorldStateTypes';
 import { WorldSnapshot } from '../../types/SnapshotTypes';
 import { LedgerEntry } from '../../types/LedgerTypes';
@@ -85,7 +86,6 @@ describe('Phase 0 Integration Tests', () => {
     snapshotService = new SnapshotService(
       logger,
       worldStateService,
-      schemaRegistryService,
       process.env.WORLD_STATE_SNAPSHOTS_BUCKET || '',
       process.env.SNAPSHOTS_INDEX_TABLE_NAME || 'cc-native-snapshots-index',
       process.env.AWS_REGION || 'us-west-2'
@@ -144,7 +144,7 @@ describe('Phase 0 Integration Tests', () => {
       const evidence = await evidenceService.store({
         entityId,
         entityType: 'Account',
-        source: 'crm',
+        evidenceType: EvidenceType.CRM,
         payload: {
           accountName: 'Test Account',
           renewalDate: '2026-12-31',
@@ -153,7 +153,7 @@ describe('Phase 0 Integration Tests', () => {
         provenance: {
           trustClass: 'PRIMARY',
           sourceSystem: 'salesforce',
-          verified: true,
+          collectedAt: new Date().toISOString(),
         },
         metadata: {
           traceId,
@@ -184,17 +184,13 @@ describe('Phase 0 Integration Tests', () => {
         'Account',
         testTenantId,
         state,
-        'Integration test snapshot',
-        {
-          decisionId: 'test-decision-123',
-          agentId: 'test-agent',
-        }
+        'Integration test snapshot'
       );
 
       expect(snapshot.snapshotId).toBeDefined();
-      expect(snapshot.entityId).toBe(entityId);
+      expect(snapshot.metadata.entityId).toBe(entityId);
       expect(snapshot.state).toBeDefined();
-      expect(snapshot.metadata.decisionId).toBe('test-decision-123');
+      expect(snapshot.metadata.createdBy).toBeDefined();
 
       // 4. Verify snapshot is immutable (attempt overwrite should fail)
       // Note: S3 Object Lock prevents overwrites, but we can't easily test this in integration
@@ -212,7 +208,7 @@ describe('Phase 0 Integration Tests', () => {
         tenantId: testTenantId,
         accountId: testAccountId,
         source: 'system',
-        eventType: 'TEST_EVENT',
+        eventType: 'SIGNAL_GENERATED',
         ts: new Date().toISOString(),
         payload: {
           message: 'Integration test event',
@@ -225,7 +221,7 @@ describe('Phase 0 Integration Tests', () => {
       const ledgerEntries = await ledgerService.getByTraceId(traceId);
 
       expect(ledgerEntries.length).toBeGreaterThan(0);
-      const ledgerEntry = ledgerEntries.find(e => e.eventType === 'TEST_EVENT');
+      const ledgerEntry = ledgerEntries.find(e => e.eventType === LedgerEventType.SIGNAL);
       expect(ledgerEntry).toBeDefined();
       expect(ledgerEntry?.traceId).toBe(traceId);
       expect(ledgerEntry?.tenantId).toBe(testTenantId);
@@ -239,7 +235,7 @@ describe('Phase 0 Integration Tests', () => {
         traceId,
         tenantId: testTenantId,
         source: 'system',
-        eventType: 'IDEMPOTENCY_TEST',
+        eventType: 'SIGNAL_GENERATED',
         ts: new Date().toISOString(),
         payload: {
           idempotencyKey,
@@ -254,12 +250,12 @@ describe('Phase 0 Integration Tests', () => {
       // Verify only one ledger entry exists (idempotency)
       const entries = await ledgerService.query({
         tenantId: testTenantId,
-        eventType: 'IDEMPOTENCY_TEST',
+        eventType: LedgerEventType.SIGNAL,
       });
 
       // Note: EventRouter should handle idempotency, but for this test we verify ledger
       const idempotencyEntries = entries.filter(e => 
-        (e.payload as any)?.idempotencyKey === idempotencyKey
+        (e.data as any)?.idempotencyKey === idempotencyKey
       );
       
       // Should have at least one entry, but EventRouter should prevent duplicate processing

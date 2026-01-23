@@ -4,21 +4,29 @@
  * 
  * Loads baseline methodology bundles into Schema Registry and Methodology table.
  * 
- * NOTE: This script requires MethodologyService to be implemented first.
- * It's a placeholder for future implementation.
+ * Usage:
+ *   npm run seed:methodologies [--tenant-id tenant:global] [--region us-west-2]
  * 
- * Usage (when implemented):
- *   ts-node src/scripts/seed-methodologies.ts [--tenant-id tenant:global] [--region us-west-2]
+ * Environment variables (from .env file):
+ *   - METHODOLOGY_TABLE_NAME
+ *   - SCHEMA_REGISTRY_BUCKET
+ *   - SCHEMA_REGISTRY_TABLE_NAME
+ *   - CRITICAL_FIELD_REGISTRY_TABLE_NAME
+ *   - AWS_REGION
  */
 
 import * as fs from 'fs';
 import * as path from 'path';
+import * as dotenv from 'dotenv';
+import { MethodologyService } from '../services/methodology/MethodologyService';
+import { SchemaRegistryService } from '../services/world-model/SchemaRegistryService';
+import { Logger } from '../services/core/Logger';
+import { CreateMethodologyInput } from '../types/MethodologyTypes';
 
-// TODO: Uncomment when MethodologyService is implemented
-// import { MethodologyService } from '../services/methodology/MethodologyService';
-// import { SchemaRegistryService } from '../services/world-model/SchemaRegistryService';
-// import { Logger } from '../services/core/Logger';
-// import { SalesMethodology } from '../types/MethodologyTypes';
+// Load environment variables from .env file if it exists
+if (fs.existsSync(path.join(__dirname, '../../.env'))) {
+  dotenv.config({ path: path.join(__dirname, '../../.env') });
+}
 
 const METHODOLOGY_FIXTURES_DIR = path.join(__dirname, '../tests/fixtures/methodology');
 
@@ -36,14 +44,15 @@ interface SeedOptions {
  */
 function loadMethodologyFixture(filename: string): any {
   const filePath = path.join(METHODOLOGY_FIXTURES_DIR, filename);
+  if (!fs.existsSync(filePath)) {
+    throw new Error(`Methodology fixture not found: ${filePath}`);
+  }
   const content = fs.readFileSync(filePath, 'utf-8');
   return JSON.parse(content);
 }
 
 /**
  * Seed baseline methodologies
- * 
- * TODO: Implement when MethodologyService is available
  */
 async function seedMethodologies(options: SeedOptions): Promise<void> {
   // Load baseline methodologies
@@ -60,12 +69,8 @@ async function seedMethodologies(options: SeedOptions): Promise<void> {
     });
   }
 
-  console.log('Methodology seeding not yet implemented.');
-  console.log('This script requires MethodologyService to be implemented first.');
-  console.log(`Would seed ${methodologies.length} methodologies for tenant: ${options.tenantId || 'tenant:global'}`);
+  console.log(`🌱 Seeding ${methodologies.length} methodologies for tenant: ${options.tenantId || 'tenant:global'}`);
   
-  // TODO: Uncomment when MethodologyService is implemented
-  /*
   const logger = new Logger('SeedMethodologies');
   
   const schemaRegistryService = new SchemaRegistryService(
@@ -84,40 +89,50 @@ async function seedMethodologies(options: SeedOptions): Promise<void> {
     options.region
   );
 
+  let successCount = 0;
+  let skipCount = 0;
+  let errorCount = 0;
+
   for (const methodology of methodologies) {
     try {
-      const created = await methodologyService.createMethodology({
+      // Create methodology input (version is generated internally, so we don't pass it)
+      const input: CreateMethodologyInput = {
         methodology_id: methodology.methodology_id,
         name: methodology.name,
         description: methodology.description,
         dimensions: methodology.dimensions,
         scoring_model: methodology.scoring_model,
         autonomy_gates: methodology.autonomy_gates,
-        tenant_id: methodology.tenant_id,
-        version: methodology.version,
-      });
+        tenant_id: methodology.tenant_id || options.tenantId || 'tenant:global',
+      };
 
-      logger.info('Methodology seeded', {
-        methodology_id: created.methodology_id,
-        version: created.version,
-        schema_hash: created.schema_hash,
-      });
-    } catch (error) {
-      if (error instanceof Error && error.message.includes('already exists')) {
-        logger.warn('Methodology already exists, skipping', {
-          methodology_id: methodology.methodology_id,
-          version: methodology.version,
-        });
+      const created = await methodologyService.createMethodology(input);
+
+      console.log(`✅ Seeded: ${created.methodology_id} (version: ${created.version})`);
+      successCount++;
+    } catch (error: any) {
+      // Check if it's a conditional check failure (already exists)
+      if (error.name === 'ConditionalCheckFailedException' || 
+          (error instanceof Error && error.message.includes('already exists')) ||
+          (error instanceof Error && error.message.includes('ConditionalCheckFailedException'))) {
+        console.log(`⏭️  Skipped (already exists): ${methodology.methodology_id}`);
+        skipCount++;
       } else {
-        logger.error('Failed to seed methodology', {
-          methodology_id: methodology.methodology_id,
-          error: error instanceof Error ? error.message : String(error),
-        });
-        throw error;
+        console.error(`❌ Failed to seed ${methodology.methodology_id}:`, error instanceof Error ? error.message : String(error));
+        errorCount++;
+        // Continue with other methodologies even if one fails
       }
     }
   }
-  */
+
+  console.log('\n📊 Seeding Summary:');
+  console.log(`   ✅ Success: ${successCount}`);
+  console.log(`   ⏭️  Skipped: ${skipCount}`);
+  console.log(`   ❌ Errors: ${errorCount}`);
+  
+  if (errorCount > 0) {
+    throw new Error(`Failed to seed ${errorCount} methodology(ies)`);
+  }
 }
 
 /**
@@ -125,13 +140,40 @@ async function seedMethodologies(options: SeedOptions): Promise<void> {
  */
 async function main() {
   const args = process.argv.slice(2);
+  
+  // Get required environment variables
+  const methodologyTableName = process.env.METHODOLOGY_TABLE_NAME;
+  const schemaBucket = process.env.SCHEMA_REGISTRY_BUCKET;
+  const schemaRegistryTableName = process.env.SCHEMA_REGISTRY_TABLE_NAME;
+  const criticalFieldsTableName = process.env.CRITICAL_FIELD_REGISTRY_TABLE_NAME;
+  const region = process.env.AWS_REGION || 'us-west-2';
+
+  // Validate required environment variables
+  if (!methodologyTableName) {
+    console.error('❌ Error: METHODOLOGY_TABLE_NAME environment variable is required');
+    console.error('   Please ensure .env file exists with table names from CDK outputs');
+    process.exit(1);
+  }
+  if (!schemaBucket) {
+    console.error('❌ Error: SCHEMA_REGISTRY_BUCKET environment variable is required');
+    process.exit(1);
+  }
+  if (!schemaRegistryTableName) {
+    console.error('❌ Error: SCHEMA_REGISTRY_TABLE_NAME environment variable is required');
+    process.exit(1);
+  }
+  if (!criticalFieldsTableName) {
+    console.error('❌ Error: CRITICAL_FIELD_REGISTRY_TABLE_NAME environment variable is required');
+    process.exit(1);
+  }
+
   const options: SeedOptions = {
     tenantId: 'tenant:global',
-    region: process.env.AWS_REGION || 'us-west-2',
-    methodologyTableName: process.env.METHODOLOGY_TABLE_NAME || 'cc-native-methodology',
-    schemaBucket: process.env.SCHEMA_REGISTRY_BUCKET || 'cc-native-schema-registry',
-    schemaRegistryTableName: process.env.SCHEMA_REGISTRY_TABLE_NAME || 'cc-native-schema-registry',
-    criticalFieldsTableName: process.env.CRITICAL_FIELD_REGISTRY_TABLE_NAME || 'cc-native-critical-field-registry',
+    region,
+    methodologyTableName,
+    schemaBucket,
+    schemaRegistryTableName,
+    criticalFieldsTableName,
   };
 
   // Parse command line arguments
@@ -147,10 +189,10 @@ async function main() {
 
   try {
     await seedMethodologies(options);
-    console.log('✅ Methodology seeding completed successfully');
+    console.log('\n✅ Methodology seeding completed successfully');
     process.exit(0);
   } catch (error) {
-    console.error('❌ Methodology seeding failed:', error);
+    console.error('\n❌ Methodology seeding failed:', error instanceof Error ? error.message : String(error));
     process.exit(1);
   }
 }

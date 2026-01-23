@@ -1,5 +1,7 @@
 import { EventPublisher } from '../../../services/events/EventPublisher';
 import { Logger } from '../../../services/core/Logger';
+import { EventEnvelope } from '../../../types/EventTypes';
+import { EventSource } from '../../../types/CommonTypes';
 import { EventBridgeClient, PutEventsCommand } from '@aws-sdk/client-eventbridge';
 import { mockEventBridgeClient, resetAllMocks, createEventBridgeSuccessResponse } from '../../__mocks__/aws-sdk-clients';
 
@@ -140,9 +142,9 @@ describe('EventPublisher', () => {
           traceId: 'trace-1',
           tenantId: 'tenant-1',
           eventType: 'EVENT_1',
-          source: 'system',
+          source: 'system' as EventSource,
           payload: {},
-          timestamp: new Date().toISOString(),
+          ts: new Date().toISOString(),
         },
       ];
 

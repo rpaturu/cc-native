@@ -7,7 +7,7 @@ import { EventPublisher } from '../../services/events/EventPublisher';
 import { LedgerService } from '../../services/ledger/LedgerService';
 import { Logger } from '../../services/core/Logger';
 import { TraceService } from '../../services/core/TraceService';
-import { EvidenceRecord } from '../../types/EvidenceTypes';
+import { EvidenceRecord, EvidenceType } from '../../types/EvidenceTypes';
 import { EntityState } from '../../types/WorldStateTypes';
 import { WorldSnapshot } from '../../types/SnapshotTypes';
 import { LedgerEntry, LedgerEventType } from '../../types/LedgerTypes';
@@ -93,7 +93,6 @@ describe('Phase 0 Contract Certification', () => {
     snapshotService = new SnapshotService(
       logger,
       worldStateService,
-      schemaRegistryService,
       process.env.WORLD_STATE_SNAPSHOTS_BUCKET || '',
       process.env.SNAPSHOTS_INDEX_TABLE_NAME || 'cc-native-snapshots-index',
       process.env.AWS_REGION || 'us-west-2'
@@ -128,7 +127,7 @@ describe('Phase 0 Contract Certification', () => {
     const evidence = await evidenceService.store({
       entityId,
       entityType: 'Account',
-      source: 'crm',
+      evidenceType: EvidenceType.CRM,
       payload: {
         accountName: 'Certification Test Account',
         renewalDate: '2026-12-31',
@@ -137,7 +136,7 @@ describe('Phase 0 Contract Certification', () => {
       provenance: {
         trustClass: 'PRIMARY',
         sourceSystem: 'salesforce',
-        verified: true,
+        collectedAt: new Date().toISOString(),
       },
       metadata: {
         traceId,
@@ -162,16 +161,12 @@ describe('Phase 0 Contract Certification', () => {
       'Account',
       testTenantId,
       state1,
-      'Certification test snapshot',
-      {
-        decisionId: 'cert-decision-123',
-        agentId: 'cert-agent',
-      }
+      'Certification test snapshot'
     );
 
     snapshotId = snapshot.snapshotId;
     expect(snapshotId).toBeDefined();
-    expect(snapshot.metadata.decisionId).toBe('cert-decision-123');
+    expect(snapshot.metadata.createdBy).toBeDefined();
 
     // 5. Publish event (idempotent)
     const event: EventEnvelope = {
@@ -179,7 +174,7 @@ describe('Phase 0 Contract Certification', () => {
       tenantId: testTenantId,
       accountId: testAccountId,
       source: 'system',
-      eventType: 'CERTIFICATION_TEST',
+      eventType: 'SIGNAL_GENERATED',
       ts: new Date().toISOString(),
       payload: {
         snapshotId,
@@ -191,7 +186,7 @@ describe('Phase 0 Contract Certification', () => {
 
     // 6. Verify ledger entry with snapshot binding
     const ledgerEntries = await ledgerService.getByTraceId(traceId);
-    const certEntry = ledgerEntries.find(e => e.eventType === 'CERTIFICATION_TEST');
+    const certEntry = ledgerEntries.find(e => e.eventType === LedgerEventType.SIGNAL);
     expect(certEntry).toBeDefined();
     expect(certEntry?.snapshotId).toBe(snapshotId);
 
@@ -217,7 +212,7 @@ describe('Phase 0 Contract Certification', () => {
     // Verify ledger entries (may have multiple entries, but EventRouter should prevent duplicate processing)
     const entriesAfterDuplicate = await ledgerService.query({
       tenantId: testTenantId,
-      eventType: 'CERTIFICATION_TEST',
+      eventType: LedgerEventType.SIGNAL,
     });
     
     // Should have entries, but processing should be idempotent
