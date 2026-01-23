@@ -99,30 +99,48 @@ FULL_POLICY_DOCUMENT=$(aws iam get-policy-version \
 echo "Policy document retrieved successfully"
 echo ""
 
-# Create compact policies using wildcards - MINIFIED JSON (no whitespace)
+# Create temporary directory for policy files
+TMP_DIR=$(mktemp -d)
+trap "rm -rf $TMP_DIR" EXIT
+
+# Create compact policies using wildcards - Write to files to avoid bash escaping issues
 # Split DynamoDB into 2 smaller policies to stay under 2048 bytes
 
 # DynamoDB Policy 1 - Tables only (no indexes)
-DYNAMODB_POLICY_1="{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":[\"dynamodb:PutItem\",\"dynamodb:GetItem\",\"dynamodb:UpdateItem\",\"dynamodb:DeleteItem\",\"dynamodb:Query\",\"dynamodb:Scan\",\"dynamodb:BatchGetItem\",\"dynamodb:BatchWriteItem\"],\"Resource\":[\"arn:aws:dynamodb:*:*:table/cc-native-*\"]}]}"
+cat > "$TMP_DIR/dynamodb-tables.json" <<'POLICY_EOF'
+{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["dynamodb:PutItem","dynamodb:GetItem","dynamodb:UpdateItem","dynamodb:DeleteItem","dynamodb:Query","dynamodb:Scan","dynamodb:BatchGetItem","dynamodb:BatchWriteItem"],"Resource":["arn:aws:dynamodb:*:*:table/cc-native-*"]}]}
+POLICY_EOF
 
 # DynamoDB Policy 2 - Indexes only
-DYNAMODB_POLICY_2="{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":[\"dynamodb:Query\",\"dynamodb:Scan\"],\"Resource\":[\"arn:aws:dynamodb:*:*:table/cc-native-*/index/*\"]}]}"
+cat > "$TMP_DIR/dynamodb-indexes.json" <<'POLICY_EOF'
+{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["dynamodb:Query","dynamodb:Scan"],"Resource":["arn:aws:dynamodb:*:*:table/cc-native-*/index/*"]}]}
+POLICY_EOF
 
-# S3 Policy - Minified JSON
-S3_POLICY="{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":[\"s3:GetObject\",\"s3:PutObject\",\"s3:DeleteObject\",\"s3:ListBucket\",\"s3:GetObjectVersion\",\"s3:PutObjectVersion\"],\"Resource\":[\"arn:aws:s3:::cc-native-*\",\"arn:aws:s3:::cc-native-*/*\"]}]}"
+# S3 Policy
+cat > "$TMP_DIR/s3.json" <<'POLICY_EOF'
+{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["s3:GetObject","s3:PutObject","s3:DeleteObject","s3:ListBucket","s3:GetObjectVersion","s3:PutObjectVersion"],"Resource":["arn:aws:s3:::cc-native-*","arn:aws:s3:::cc-native-*/*"]}]}
+POLICY_EOF
 
-# EventBridge Policy - Minified JSON
-EVENTBRIDGE_POLICY="{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":[\"events:PutEvents\"],\"Resource\":[\"arn:aws:events:*:*:event-bus/cc-native-events\"]}]}"
+# EventBridge Policy
+cat > "$TMP_DIR/eventbridge.json" <<'POLICY_EOF'
+{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["events:PutEvents"],"Resource":["arn:aws:events:*:*:event-bus/cc-native-events"]}]}
+POLICY_EOF
 
-# Function to put inline policy
+# Function to put inline policy from file
 put_inline_policy() {
   local policy_name=$1
-  local policy_doc=$2
+  local policy_file=$2
   
-  # Validate policy document is not empty
-  if [ -z "$policy_doc" ]; then
-    echo "  ERROR: Policy document is empty for '$policy_name'"
+  # Validate policy file exists
+  if [ ! -f "$policy_file" ]; then
+    echo "  ERROR: Policy file not found: '$policy_file'"
     return 1
+  fi
+  
+  # Check file size
+  FILE_SIZE=$(wc -c < "$policy_file" | tr -d ' ')
+  if [ "$FILE_SIZE" -gt 2048 ]; then
+    echo "  WARNING: Policy file size ($FILE_SIZE bytes) exceeds 2048 byte limit"
   fi
   
   if [ "$IAM_ENTITY_TYPE" == "user" ]; then
@@ -140,7 +158,7 @@ put_inline_policy() {
         --profile $AWS_PROFILE \
         --user-name "$IAM_USER_OR_ROLE_NAME" \
         --policy-name "$policy_name" \
-        --policy-document "$policy_doc" \
+        --policy-document "file://$policy_file" \
         --no-cli-pager
     else
       echo "  Creating inline policy '$policy_name'..."
@@ -148,7 +166,7 @@ put_inline_policy() {
         --profile $AWS_PROFILE \
         --user-name "$IAM_USER_OR_ROLE_NAME" \
         --policy-name "$policy_name" \
-        --policy-document "$policy_doc" \
+        --policy-document "file://$policy_file" \
         --no-cli-pager
     fi
   else
@@ -166,7 +184,7 @@ put_inline_policy() {
         --profile $AWS_PROFILE \
         --role-name "$IAM_USER_OR_ROLE_NAME" \
         --policy-name "$policy_name" \
-        --policy-document "$policy_doc" \
+        --policy-document "file://$policy_file" \
         --no-cli-pager
     else
       echo "  Creating inline policy '$policy_name'..."
@@ -174,7 +192,7 @@ put_inline_policy() {
         --profile $AWS_PROFILE \
         --role-name "$IAM_USER_OR_ROLE_NAME" \
         --policy-name "$policy_name" \
-        --policy-document "$policy_doc" \
+        --policy-document "file://$policy_file" \
         --no-cli-pager
     fi
   fi
@@ -185,16 +203,16 @@ echo "Attaching inline policies (using compact wildcard patterns)..."
 echo ""
 
 echo "1. DynamoDB Policy - Tables (cc-native-* tables)..."
-put_inline_policy "CCNativeTestUserPolicy-DynamoDB-Tables" "$DYNAMODB_POLICY_1"
+put_inline_policy "CCNativeTestUserPolicy-DynamoDB-Tables" "$TMP_DIR/dynamodb-tables.json"
 
 echo "2. DynamoDB Policy - Indexes (cc-native-* indexes)..."
-put_inline_policy "CCNativeTestUserPolicy-DynamoDB-Indexes" "$DYNAMODB_POLICY_2"
+put_inline_policy "CCNativeTestUserPolicy-DynamoDB-Indexes" "$TMP_DIR/dynamodb-indexes.json"
 
 echo "3. S3 Policy (all cc-native-* buckets)..."
-put_inline_policy "CCNativeTestUserPolicy-S3" "$S3_POLICY"
+put_inline_policy "CCNativeTestUserPolicy-S3" "$TMP_DIR/s3.json"
 
 echo "4. EventBridge Policy..."
-put_inline_policy "CCNativeTestUserPolicy-EventBridge" "$EVENTBRIDGE_POLICY"
+put_inline_policy "CCNativeTestUserPolicy-EventBridge" "$TMP_DIR/eventbridge.json"
 
 echo ""
 echo "✓ All inline policies attached successfully!"
