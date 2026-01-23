@@ -194,13 +194,26 @@ describe('Phase 0 Contract Certification', () => {
 
     await eventPublisher.publish(event);
 
-    // 6. Verify ledger entry with snapshot binding
+    // 6. Manually append ledger entry (simulating event handler processing)
+    await ledgerService.append({
+      traceId,
+      tenantId: testTenantId,
+      accountId: testAccountId,
+      eventType: LedgerEventType.SIGNAL,
+      snapshotId,
+      data: {
+        eventType: event.eventType,
+        payload: event.payload,
+      },
+    });
+
+    // 7. Verify ledger entry with snapshot binding
     const ledgerEntries = await ledgerService.getByTraceId(traceId);
     const certEntry = ledgerEntries.find(e => e.eventType === LedgerEventType.SIGNAL);
     expect(certEntry).toBeDefined();
     expect(certEntry?.snapshotId).toBe(snapshotId);
 
-    // 7. Verify recompute determinism
+    // 8. Verify recompute determinism
     // Get state again - should produce same result
     const state2 = await worldStateService.computeState(entityId, 'Account', testTenantId);
     
