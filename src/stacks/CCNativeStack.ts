@@ -2,9 +2,13 @@ import * as cdk from 'aws-cdk-lib';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as events from 'aws-cdk-lib/aws-events';
+import * as eventsTargets from 'aws-cdk-lib/aws-events-targets';
 import * as kms from 'aws-cdk-lib/aws-kms';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as cognito from 'aws-cdk-lib/aws-cognito';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as lambdaNodejs from 'aws-cdk-lib/aws-lambda-nodejs';
+import * as sqs from 'aws-cdk-lib/aws-sqs';
 import { Construct } from 'constructs';
 
 export interface CCNativeStackProps extends cdk.StackProps {
@@ -57,6 +61,16 @@ export class CCNativeStack extends cdk.Stack {
   // Cognito
   public readonly userPool: cognito.UserPool;
   public readonly userPoolClient: cognito.UserPoolClient;
+
+  // Phase 1: Perception Lambda Functions
+  public readonly connectorPollHandler!: lambda.Function;
+  public readonly signalDetectionHandler!: lambda.Function;
+  public readonly lifecycleInferenceHandler!: lambda.Function;
+
+  // Phase 1: DLQs for handlers
+  public readonly connectorPollDlq!: sqs.Queue;
+  public readonly signalDetectionDlq!: sqs.Queue;
+  public readonly lifecycleInferenceDlq!: sqs.Queue;
 
   constructor(scope: Construct, id: string, props?: CCNativeStackProps) {
     super(scope, id, props);
@@ -599,6 +613,151 @@ export class CCNativeStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'UserPoolClientId', {
       value: this.userPoolClient.userPoolClientId,
       description: 'Cognito User Pool Client ID',
+    });
+
+    // Phase 1: Perception Lambda Functions
+    this.createPerceptionHandlers();
+  }
+
+  /**
+   * Create Phase 1 perception handlers with DLQs and EventBridge rules
+   */
+  private createPerceptionHandlers(): void {
+    // Use type assertion to allow assignment
+    const self = this as any;
+    // Common environment variables for all handlers
+    const commonEnv = {
+      ACCOUNTS_TABLE_NAME: this.accountsTable.tableName,
+      SIGNALS_TABLE_NAME: this.signalsTable.tableName,
+      LEDGER_TABLE_NAME: this.ledgerTable.tableName,
+      EVIDENCE_INDEX_TABLE_NAME: this.evidenceIndexTable.tableName,
+      EVIDENCE_LEDGER_BUCKET: this.evidenceLedgerBucket.bucketName,
+      EVENT_BUS_NAME: this.eventBus.eventBusName,
+      AWS_REGION: this.region,
+    };
+
+    // Create DLQs
+    self.connectorPollDlq = new sqs.Queue(this, 'ConnectorPollDlq', {
+      queueName: 'cc-native-connector-poll-handler-dlq',
+      retentionPeriod: cdk.Duration.days(14),
+    });
+
+    self.signalDetectionDlq = new sqs.Queue(this, 'SignalDetectionDlq', {
+      queueName: 'cc-native-signal-detection-handler-dlq',
+      retentionPeriod: cdk.Duration.days(14),
+    });
+
+    self.lifecycleInferenceDlq = new sqs.Queue(this, 'LifecycleInferenceDlq', {
+      queueName: 'cc-native-lifecycle-inference-handler-dlq',
+      retentionPeriod: cdk.Duration.days(14),
+    });
+
+    // Connector Poll Handler
+    self.connectorPollHandler = new lambdaNodejs.NodejsFunction(this, 'ConnectorPollHandler', {
+      functionName: 'cc-native-connector-poll-handler',
+      entry: 'src/handlers/perception/connector-poll-handler.ts',
+      handler: 'handler',
+      runtime: lambda.Runtime.NODEJS_20_X,
+      timeout: cdk.Duration.minutes(15),
+      memorySize: 512,
+      environment: commonEnv,
+      deadLetterQueue: this.connectorPollDlq,
+      deadLetterQueueEnabled: true,
+      retryAttempts: 2,
+    });
+
+    // Grant permissions
+    this.evidenceLedgerBucket.grantReadWrite(self.connectorPollHandler);
+    this.evidenceIndexTable.grantReadWriteData(self.connectorPollHandler);
+    this.eventBus.grantPutEventsTo(self.connectorPollHandler);
+
+    // Signal Detection Handler
+    self.signalDetectionHandler = new lambdaNodejs.NodejsFunction(this, 'SignalDetectionHandler', {
+      functionName: 'cc-native-signal-detection-handler',
+      entry: 'src/handlers/perception/signal-detection-handler.ts',
+      handler: 'handler',
+      runtime: lambda.Runtime.NODEJS_20_X,
+      timeout: cdk.Duration.minutes(15),
+      memorySize: 1024,
+      environment: commonEnv,
+      deadLetterQueue: this.signalDetectionDlq,
+      deadLetterQueueEnabled: true,
+      retryAttempts: 2,
+    });
+
+    // Grant permissions
+    this.evidenceLedgerBucket.grantRead(self.signalDetectionHandler);
+    this.signalsTable.grantReadWriteData(self.signalDetectionHandler);
+    this.accountsTable.grantReadWriteData(self.signalDetectionHandler);
+    this.ledgerTable.grantWriteData(self.signalDetectionHandler);
+    this.eventBus.grantPutEventsTo(self.signalDetectionHandler);
+
+    // Lifecycle Inference Handler
+    self.lifecycleInferenceHandler = new lambdaNodejs.NodejsFunction(this, 'LifecycleInferenceHandler', {
+      functionName: 'cc-native-lifecycle-inference-handler',
+      entry: 'src/handlers/perception/lifecycle-inference-handler.ts',
+      handler: 'handler',
+      runtime: lambda.Runtime.NODEJS_20_X,
+      timeout: cdk.Duration.minutes(5),
+      memorySize: 512,
+      environment: commonEnv,
+      deadLetterQueue: this.lifecycleInferenceDlq,
+      deadLetterQueueEnabled: true,
+      retryAttempts: 2,
+    });
+
+    // Grant permissions
+    this.accountsTable.grantReadWriteData(self.lifecycleInferenceHandler);
+    this.signalsTable.grantReadData(self.lifecycleInferenceHandler);
+    this.ledgerTable.grantWriteData(self.lifecycleInferenceHandler);
+    this.eventBus.grantPutEventsTo(self.lifecycleInferenceHandler);
+
+    // EventBridge Rules
+
+    // Rule 1: CONNECTOR_POLL_COMPLETED → signal-detection-handler
+    new events.Rule(this, 'ConnectorPollCompletedRule', {
+      eventBus: this.eventBus,
+      eventPattern: {
+        source: ['cc-native.perception'],
+        detailType: ['CONNECTOR_POLL_COMPLETED'],
+      },
+      targets: [
+        new eventsTargets.LambdaFunction(self.signalDetectionHandler, {
+          deadLetterQueue: self.signalDetectionDlq,
+          retryAttempts: 2,
+        }),
+      ],
+    });
+
+    // Rule 2: SIGNAL_DETECTED → lifecycle-inference-handler
+    new events.Rule(this, 'SignalDetectedRule', {
+      eventBus: this.eventBus,
+      eventPattern: {
+        source: ['cc-native.perception'],
+        detailType: ['SIGNAL_DETECTED', 'SIGNAL_CREATED'],
+      },
+      targets: [
+        new eventsTargets.LambdaFunction(self.lifecycleInferenceHandler, {
+          deadLetterQueue: self.lifecycleInferenceDlq,
+          retryAttempts: 2,
+        }),
+      ],
+    });
+
+    // Outputs
+    new cdk.CfnOutput(this, 'ConnectorPollHandlerArn', {
+      value: self.connectorPollHandler.functionArn,
+      description: 'ARN of connector poll handler Lambda function',
+    });
+
+    new cdk.CfnOutput(this, 'SignalDetectionHandlerArn', {
+      value: self.signalDetectionHandler.functionArn,
+      description: 'ARN of signal detection handler Lambda function',
+    });
+
+    new cdk.CfnOutput(this, 'LifecycleInferenceHandlerArn', {
+      value: self.lifecycleInferenceHandler.functionArn,
+      description: 'ARN of lifecycle inference handler Lambda function',
     });
   }
 }
