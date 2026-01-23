@@ -150,10 +150,7 @@ describe('Phase 1 Contract Certification Tests', () => {
         .mockResolvedValueOnce({ Item: null }) // getAccountState
         .mockResolvedValueOnce({}) // TransactWriteItems (first create) succeeds
         .mockResolvedValueOnce({}) // Ledger append
-        .mockResolvedValueOnce(createEventBridgeSuccessResponse()) // Event publish
-        // Second attempt - idempotent (transaction fails, but we return existing)
-        .mockResolvedValueOnce({ Item: null }) // getAccountState (second attempt)
-        .mockResolvedValueOnce({ Item: signal1 }); // getSignalByDedupeKey returns existing
+        .mockResolvedValueOnce(createEventBridgeSuccessResponse()); // Event publish
 
       // Create signal first time
       const created1 = await signalService.createSignal({
@@ -161,13 +158,12 @@ describe('Phase 1 Contract Certification Tests', () => {
         traceId: 'trace-789',
       });
 
-      // Attempt to create same signal again (should return existing via idempotency)
-      // Simulate TransactionCanceledException (idempotency check)
-      const error = new Error('TransactionCanceledException');
-      error.name = 'TransactionCanceledException';
+      // Reset mocks for second attempt
+      (mockDynamoDBDocumentClient.send as jest.Mock).mockReset();
+      
+      // Second attempt - should return existing signal (idempotent)
+      // getSignalByDedupeKey returns existing signal
       (mockDynamoDBDocumentClient.send as jest.Mock)
-        .mockResolvedValueOnce({ Item: null }) // getAccountState
-        .mockRejectedValueOnce(error) // TransactWriteItems fails (idempotency)
         .mockResolvedValueOnce({ Item: created1 }); // getSignalByDedupeKey returns existing
 
       // Should handle idempotency gracefully and return existing signal
@@ -176,9 +172,10 @@ describe('Phase 1 Contract Certification Tests', () => {
         traceId: 'trace-789',
       });
 
-      // Should be the same signal (idempotent)
-      expect(created1.signalId).toBe(created2.signalId);
+      // Should be the same signal (idempotent) - dedupeKey is the key, not signalId
+      // Signal IDs may differ due to timestamp, but dedupeKey ensures idempotency
       expect(created1.dedupeKey).toBe(created2.dedupeKey);
+      expect(created2.signalId).toBe(created1.signalId); // Should return existing signal
     });
   });
 
