@@ -136,30 +136,46 @@ export class EvidenceService implements IEvidenceService {
       return null;
     }
     try {
-      // Query by entityId (primary key) and filter by evidenceId and tenantId
+      // Query by entityId (primary key) - get all evidence for this entity
+      // Filter by evidenceId and tenantId in code (more reliable than FilterExpression for eventual consistency)
       const queryResult = await this.dynamoClient.send(new QueryCommand({
         TableName: this.indexTableName,
         KeyConditionExpression: 'pk = :pk AND begins_with(sk, :sk)',
-        FilterExpression: 'evidenceId = :evidenceId AND tenantId = :tenantId',
         ExpressionAttributeValues: {
           ':pk': `ENTITY#${entityId}`,
           ':sk': 'EVIDENCE#',
-          ':evidenceId': evidenceId,
-          ':tenantId': tenantId,
         },
-        Limit: 1,
+        Limit: 50, // Get enough items to find the matching one
       }));
       
-      if (!queryResult.Items || queryResult.Items.length === 0) {
-        this.logger.debug('No evidence found in index', {
+      // Filter by evidenceId and tenantId in code
+      let matchingItems = (queryResult.Items || []).filter(item => {
+        const itemEvidenceId = item.evidenceId as string;
+        const itemTenantId = item.tenantId as string;
+        const matchesEvidenceId = itemEvidenceId === evidenceId;
+        const matchesTenantId = !tenantId || itemTenantId === tenantId;
+        return matchesEvidenceId && matchesTenantId;
+      });
+      
+      if (matchingItems.length === 0) {
+        this.logger.debug('No evidence found in index after filtering', {
           evidenceId,
           entityId,
           tenantId,
+          totalItemsFound: queryResult.Items?.length || 0,
         });
         return null;
       }
-
-      const index = queryResult.Items[0];
+      
+      // Use the first matching item
+      const index = matchingItems[0];
+      
+      this.logger.debug('Evidence found in index', {
+        evidenceId,
+        itemCount: matchingItems.length,
+        firstItemKeys: index ? Object.keys(index) : [],
+        firstItemEvidenceId: index?.evidenceId,
+      });
       const s3Key = index.s3Key as string;
       
       // Get evidenceId from index, fallback to parameter if not in index
@@ -202,27 +218,55 @@ export class EvidenceService implements IEvidenceService {
         s3VersionId: index.s3VersionId as string | undefined,
       };
       
-      // Force set evidenceId using defineProperty to ensure it's not overwritten
-      Object.defineProperty(evidence, 'evidenceId', {
-        value: finalEvidenceId,
-        writable: true,
-        enumerable: true,
-        configurable: true,
-      });
-      
       // Final verification - evidenceId must be set
+      // Double-check that evidenceId is actually set on the object
       if (!evidence.evidenceId || evidence.evidenceId !== finalEvidenceId) {
-        this.logger.error('EvidenceId verification failed', {
+        this.logger.error('EvidenceId verification failed before return', {
           evidenceId,
           finalEvidenceId,
           actualEvidenceId: evidence.evidenceId,
           indexEvidenceId,
           indexKeys: Object.keys(index),
+          evidenceKeys: Object.keys(evidence),
+          evidenceHasEvidenceId: 'evidenceId' in evidence,
+          evidenceDescriptor: Object.getOwnPropertyDescriptor(evidence, 'evidenceId'),
         });
         throw new Error(`EvidenceId mismatch: expected ${finalEvidenceId}, got ${evidence.evidenceId}`);
       }
       
-      return evidence;
+      // Log what we're about to return
+      this.logger.debug('Returning evidence with evidenceId', {
+        evidenceId: evidence.evidenceId,
+        finalEvidenceId,
+        entityId: evidence.entityId,
+        returnObjectKeys: Object.keys(evidence),
+        returnObjectHasEvidenceId: 'evidenceId' in evidence,
+      });
+      
+      // Create a fresh object to ensure all properties are properly set
+      const returnEvidence: EvidenceRecord = {
+        evidenceId: finalEvidenceId,
+        entityId: evidence.entityId,
+        entityType: evidence.entityType,
+        evidenceType: evidence.evidenceType,
+        timestamp: evidence.timestamp,
+        payload: evidence.payload,
+        provenance: evidence.provenance,
+        metadata: evidence.metadata,
+        s3Location: evidence.s3Location,
+        s3VersionId: evidence.s3VersionId,
+      };
+      
+      // Final check on return object
+      if (!returnEvidence.evidenceId) {
+        this.logger.error('Return evidence missing evidenceId', {
+          finalEvidenceId,
+          returnObjectKeys: Object.keys(returnEvidence),
+        });
+        throw new Error(`Return evidence missing evidenceId`);
+      }
+      
+      return returnEvidence;
     } catch (error) {
       this.logger.error('Failed to retrieve evidence', {
         evidenceId,
