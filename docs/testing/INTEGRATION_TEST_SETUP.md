@@ -24,6 +24,8 @@ This creates the `TestUserPolicy` IAM managed policy and outputs its ARN.
 
 ### Step 2: Attach Policy to Your IAM User
 
+**Option A: Managed Policy (Recommended if user has < 10 managed policies)**
+
 ```bash
 # For IAM user
 ./scripts/attach-test-policy.sh --user amplify_admin
@@ -34,6 +36,20 @@ This creates the `TestUserPolicy` IAM managed policy and outputs its ARN.
 # With custom profile/region
 ./scripts/attach-test-policy.sh --profile dev --region us-east-1 --user my-test-user
 ```
+
+**Option B: Inline Policy (Use if hitting the 10 managed policy limit)**
+
+If you get the error `LimitExceeded: Cannot exceed quota for PoliciesPerUser: 10`, use the inline policy script instead:
+
+```bash
+# For IAM user (inline policy - no quota limit)
+./scripts/attach-test-policy-inline.sh --user amplify_admin
+
+# For IAM role
+./scripts/attach-test-policy-inline.sh --role MyTestRole
+```
+
+**Note**: Inline policies don't count toward the 10 managed policy limit, but they're tied to the specific user/role and can't be shared.
 
 ### Step 3: Verify Permissions
 
@@ -129,6 +145,20 @@ The `TestUserPolicy` grants the following permissions:
 ```bash
 ./scripts/attach-test-policy.sh --user <your-iam-user-name>
 ```
+
+Or if you're hitting the managed policy limit:
+```bash
+./scripts/attach-test-policy-inline.sh --user <your-iam-user-name>
+```
+
+### Error: "LimitExceeded: Cannot exceed quota for PoliciesPerUser: 10"
+
+**Solution**: AWS limits IAM users to 10 managed policies. Use the inline policy script instead:
+```bash
+./scripts/attach-test-policy-inline.sh --user <your-iam-user-name>
+```
+
+Inline policies don't count toward this limit.
 
 ### Error: "Could not find TestUserPolicyArn in stack outputs"
 
