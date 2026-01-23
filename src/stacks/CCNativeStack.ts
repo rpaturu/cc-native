@@ -630,6 +630,7 @@ export class CCNativeStack extends cdk.Stack {
     // Use type assertion to allow assignment
     const self = this as any;
     // Common environment variables for all handlers
+    // Note: AWS_REGION is automatically set by Lambda runtime and cannot be set manually
     const commonEnv = {
       ACCOUNTS_TABLE_NAME: this.accountsTable.tableName,
       SIGNALS_TABLE_NAME: this.signalsTable.tableName,
@@ -637,7 +638,7 @@ export class CCNativeStack extends cdk.Stack {
       EVIDENCE_INDEX_TABLE_NAME: this.evidenceIndexTable.tableName,
       EVIDENCE_LEDGER_BUCKET: this.evidenceLedgerBucket.bucketName,
       EVENT_BUS_NAME: this.eventBus.eventBusName,
-      AWS_REGION: this.region,
+      // AWS_REGION is automatically available via process.env.AWS_REGION in Lambda
     };
 
     // Create DLQs
