@@ -1,0 +1,114 @@
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "cloudformation:CreateStack",
+                "cloudformation:DeleteStack",
+                "cloudformation:TagResource",
+                "cloudformation:UntagResource",
+                "cloudformation:ListStacks"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "ecr:*"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "logs:*",
+                "sqs:ListQueues",
+                "sqs:GetQueueAttributes",
+                "sqs:GetQueueUrl",
+                "sqs:ReceiveMessage",
+                "sqs:DeleteMessage",
+                "sqs:PurgeQueue",
+                "sqs:ChangeMessageVisibility"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "batch:*",
+                "ec2:Describe*",
+                "ecs:*",
+                "autoscaling:Describe*",
+                "iam:CreateRole",
+                "iam:DeleteRole",
+                "iam:AttachRolePolicy",
+                "iam:DetachRolePolicy",
+                "iam:GetRole",
+                "iam:UpdateAssumeRolePolicy"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": "iam:CreateServiceLinkedRole",
+            "Resource": "arn:aws:iam::099892828192:role/aws-service-role/batch.amazonaws.com/*",
+            "Condition": {
+                "StringEquals": {
+                    "iam:AWSServiceName": "batch.amazonaws.com"
+                }
+            }
+        },
+        {
+            "Effect": "Allow",
+            "Action": "iam:PassRole",
+            "Resource": "arn:aws:iam::099892828192:role/*",
+            "Condition": {
+                "StringEquals": {
+                    "iam:PassedToService": [
+                        "batch.amazonaws.com",
+                        "ecs-tasks.amazonaws.com"
+                    ]
+                }
+            }
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "states:ListExecutions"
+            ],
+            "Resource": [
+                "arn:aws:states:us-east-1:*:stateMachine:cc-crawl-state-machine"
+            ]
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "rds-data:ExecuteStatement",
+                "rds-data:BatchExecuteStatement",
+                "rds-data:BeginTransaction",
+                "rds-data:CommitTransaction",
+                "rds-data:RollbackTransaction"
+            ],
+            "Resource": "arn:aws:rds:us-west-2:099892828192:cluster:ccknowledgebasestack-ccknowledgebasecluster900274a-5kqbspjzbxht"
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "secretsmanager:GetSecretValue"
+            ],
+            "Resource": "arn:aws:secretsmanager:us-west-2:099892828192:secret:CcKnowledgeBaseClusterSecre-U0JAP71iKsEM-ICSptP"
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "cloudfront:CreateInvalidation",
+                "cloudfront:GetInvalidation",
+                "cloudfront:ListInvalidations",
+                "cloudfront:GetDistribution",
+                "cloudfront:ListDistributions"
+            ],
+            "Resource": "*"
+        }
+    ]
+}
