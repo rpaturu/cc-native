@@ -78,6 +78,26 @@ fi
 echo "Found policy ARN: $POLICY_ARN"
 echo ""
 
+# Check if user has too many managed policies (AWS limit is 10)
+if [ "$IAM_ENTITY_TYPE" == "user" ]; then
+  ATTACHED_COUNT=$(aws iam list-attached-user-policies \
+    --profile $AWS_PROFILE \
+    --user-name "$IAM_USER_OR_ROLE_NAME" \
+    --no-cli-pager \
+    --query 'length(AttachedPolicies)' \
+    --output text 2>/dev/null || echo "0")
+  
+  if [ "$ATTACHED_COUNT" -ge 10 ]; then
+    echo "⚠️  Warning: IAM user '$IAM_USER_OR_ROLE_NAME' already has $ATTACHED_COUNT managed policies attached."
+    echo "   AWS limit is 10 managed policies per user."
+    echo ""
+    echo "   Use the inline policy script instead:"
+    echo "   ./scripts/attach-test-policy-inline.sh --user $IAM_USER_OR_ROLE_NAME"
+    echo ""
+    exit 1
+  fi
+fi
+
 # Attach the policy
 if [ "$IAM_ENTITY_TYPE" == "user" ]; then
   echo "Attaching policy to IAM user: $IAM_USER_OR_ROLE_NAME"
