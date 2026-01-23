@@ -69,6 +69,6 @@ export interface EvidenceQuery {
  */
 export interface IEvidenceService {
   store(evidence: Omit<EvidenceRecord, 'evidenceId' | 's3Location' | 's3VersionId' | 'timestamp'>): Promise<EvidenceRecord>;
-  get(evidenceId: string, tenantId: string, entityId?: string): Promise<EvidenceRecord | null>;
+  get(evidenceId: string, tenantId: string, entityId?: string, retryCount?: number): Promise<EvidenceRecord | null>;
   query(query: EvidenceQuery): Promise<EvidenceRecord[]>;
 }

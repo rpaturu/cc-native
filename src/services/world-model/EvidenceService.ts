@@ -122,8 +122,10 @@ export class EvidenceService implements IEvidenceService {
    * Retrieve evidence from S3
    * Note: entityId is optional but recommended for efficient query (Phase 0 limitation)
    * TODO: Add GSI on evidenceId for direct lookup without entityId
+   * 
+   * @param retryCount Internal parameter for retry logic (defaults to 0)
    */
-  async get(evidenceId: string, tenantId: string, entityId?: string): Promise<EvidenceRecord | null> {
+  async get(evidenceId: string, tenantId: string, entityId?: string, retryCount = 0): Promise<EvidenceRecord | null> {
     if (!entityId) {
       // For Phase 0, entityId is required for efficient query
       // In future, we'll add GSI on evidenceId
@@ -138,6 +140,7 @@ export class EvidenceService implements IEvidenceService {
     try {
       // Query by entityId (primary key) - get all evidence for this entity
       // Filter by evidenceId and tenantId in code (more reliable than FilterExpression for eventual consistency)
+      // Use ScanIndexForward: false to get most recent items first (sk includes timestamp)
       const queryResult = await this.dynamoClient.send(new QueryCommand({
         TableName: this.indexTableName,
         KeyConditionExpression: 'pk = :pk AND begins_with(sk, :sk)',
@@ -145,7 +148,8 @@ export class EvidenceService implements IEvidenceService {
           ':pk': `ENTITY#${entityId}`,
           ':sk': 'EVIDENCE#',
         },
-        Limit: 50, // Get enough items to find the matching one
+        Limit: 100, // Get enough items to find the matching one
+        ScanIndexForward: false, // Most recent first (sk format: EVIDENCE#timestamp#evidenceId)
       }));
       
       // Filter by evidenceId and tenantId in code
@@ -154,15 +158,37 @@ export class EvidenceService implements IEvidenceService {
         const itemTenantId = item.tenantId as string;
         const matchesEvidenceId = itemEvidenceId === evidenceId;
         const matchesTenantId = !tenantId || itemTenantId === tenantId;
+        
         return matchesEvidenceId && matchesTenantId;
       });
       
+      this.logger.debug('Evidence query results', {
+        evidenceId,
+        entityId,
+        tenantId,
+        totalItems: queryResult.Items?.length || 0,
+        matchingItems: matchingItems.length,
+      });
+      
       if (matchingItems.length === 0) {
+        // Retry once for DynamoDB eventual consistency (evidence might not be immediately available)
+        if (retryCount === 0 && queryResult.Items && queryResult.Items.length > 0) {
+          this.logger.debug('Evidence not found on first attempt, retrying for eventual consistency', {
+            evidenceId,
+            entityId,
+            tenantId,
+            totalItemsFound: queryResult.Items.length,
+          });
+          await new Promise(resolve => setTimeout(resolve, 500));
+          return this.get(evidenceId, tenantId, entityId, 1);
+        }
+        
         this.logger.debug('No evidence found in index after filtering', {
           evidenceId,
           entityId,
           tenantId,
           totalItemsFound: queryResult.Items?.length || 0,
+          retryCount,
         });
         return null;
       }
