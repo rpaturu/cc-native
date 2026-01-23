@@ -242,6 +242,22 @@ if [ "$IAM_ENTITY_TYPE" == "user" ]; then
     done
     echo "  Total size of existing policies: $TOTAL_SIZE bytes"
     echo ""
+    
+    # AWS has a limit on total size of all inline policies per user
+    # The limit is typically 2048 bytes TOTAL for all inline policies combined
+    # If existing policies exceed this, we need to remove or consolidate them
+    if [ "$TOTAL_SIZE" -gt 2048 ]; then
+      echo "⚠️  WARNING: Total size of existing inline policies ($TOTAL_SIZE bytes) exceeds AWS limit (2048 bytes)"
+      echo "   You may need to remove or consolidate existing policies before adding new ones."
+      echo "   Consider removing: StackCreateListDeletePolicy ($(echo "$EXISTING_POLICIES" | grep -q "StackCreateListDeletePolicy" && aws iam get-user-policy --profile $AWS_PROFILE --user-name "$IAM_USER_OR_ROLE_NAME" --policy-name "StackCreateListDeletePolicy" --no-cli-pager --query 'PolicyDocument' --output json 2>/dev/null | wc -c | tr -d ' ' || echo "unknown") bytes)"
+      echo ""
+      read -p "   Do you want to continue anyway? (y/N): " -n 1 -r
+      echo ""
+      if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        echo "   Aborted. Please remove existing policies first or use managed policies instead."
+        exit 1
+      fi
+    fi
   fi
 fi
 
