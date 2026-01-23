@@ -8,7 +8,9 @@ if [ -f .env.local ]; then
 fi
 
 # Parse arguments
-CDK_PROFILE=${AWS_PROFILE:-default}
+# Use ADMIN_PROFILE for deployments if available (has CloudFormation permissions)
+# Otherwise fall back to AWS_PROFILE
+CDK_PROFILE=${ADMIN_PROFILE:-${AWS_PROFILE:-default}}
 CDK_REGION=${AWS_REGION:-us-west-2}
 DEPLOYMENT_ENV=${NODE_ENV:-development}
 while [[ "$#" -gt 0 ]]; do case $1 in
