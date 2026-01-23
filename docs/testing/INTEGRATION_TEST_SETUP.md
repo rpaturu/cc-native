@@ -24,7 +24,7 @@ This creates the `TestUserPolicy` IAM managed policy and outputs its ARN.
 
 ### Step 2: Attach Policy to Your IAM User
 
-**Option A: Managed Policy (Recommended if user has < 10 managed policies)**
+**Option A: Managed Policy (Recommended - Use this if you have < 10 managed policies)**
 
 ```bash
 # For IAM user
@@ -37,9 +37,11 @@ This creates the `TestUserPolicy` IAM managed policy and outputs its ARN.
 ./scripts/attach-test-policy.sh --profile dev --region us-east-1 --user my-test-user
 ```
 
-**Option B: Inline Policy (Use if hitting the 10 managed policy limit)**
+**Note**: If you already have an inline policy (like `StackCreateListDeletePolicy`), you should use managed policies for test permissions to avoid the 2048-byte cumulative inline policy limit.
 
-If you get the error `LimitExceeded: Cannot exceed quota for PoliciesPerUser: 10`, use the inline policy script instead:
+**Option B: Inline Policy (Only if you have < 10 managed policies AND no existing inline policies)**
+
+If you get the error `LimitExceeded: Cannot exceed quota for PoliciesPerUser: 10`, and you don't have existing inline policies, you can use inline policies:
 
 ```bash
 # For IAM user (inline policy - no quota limit)
@@ -49,7 +51,7 @@ If you get the error `LimitExceeded: Cannot exceed quota for PoliciesPerUser: 10
 ./scripts/attach-test-policy-inline.sh --role MyTestRole
 ```
 
-**Note**: Inline policies don't count toward the 10 managed policy limit, but they're tied to the specific user/role and can't be shared.
+**Important**: Inline policies have a **cumulative 2048-byte limit** across ALL inline policies per user. If you already have inline policies (like `StackCreateListDeletePolicy` at 3525 bytes), you cannot add more inline policies. Use managed policies instead.
 
 ### Step 3: Verify Permissions
 
