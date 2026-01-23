@@ -5,6 +5,7 @@ import { EvidenceRecord } from '../../types/EvidenceTypes';
 import { TrustClass } from '../../types/CommonTypes';
 import { Logger } from '../core/Logger';
 import { EvidenceService } from './EvidenceService';
+import { getAWSClientConfig } from '../../utils/aws-client-config';
 
 /**
  * WorldStateService - Compute and store entity state
@@ -40,7 +41,8 @@ export class WorldStateService implements IWorldStateService {
     this.evidenceService = evidenceService;
     this.stateTableName = stateTableName;
     
-    this.dynamoClient = DynamoDBDocumentClient.from(new DynamoDBClient({ region }));
+    const clientConfig = getAWSClientConfig(region);
+    this.dynamoClient = DynamoDBDocumentClient.from(new DynamoDBClient(clientConfig));
   }
 
   /**

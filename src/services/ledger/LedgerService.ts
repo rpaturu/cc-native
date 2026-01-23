@@ -2,6 +2,7 @@ import { DynamoDBDocumentClient, PutCommand, QueryCommand, GetCommand } from '@a
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { LedgerEntry, LedgerQuery, ILedgerService, LedgerEventType } from '../../types/LedgerTypes';
 import { Logger } from '../core/Logger';
+import { getAWSClientConfig } from '../../utils/aws-client-config';
 import { v4 as uuidv4 } from 'uuid';
 
 /**
@@ -22,7 +23,8 @@ export class LedgerService implements ILedgerService {
     this.logger = logger;
     this.tableName = tableName;
     
-    const client = new DynamoDBClient({ region });
+    const clientConfig = getAWSClientConfig(region);
+    const client = new DynamoDBClient(clientConfig);
     this.dynamoClient = DynamoDBDocumentClient.from(client);
   }
 

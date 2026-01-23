@@ -18,4 +18,6 @@ module.exports = {
     '^@/(.*)$': '<rootDir>/src/$1',
   },
   testTimeout: 10000,
+  // Setup for AWS SDK credential provider
+  setupFiles: ['<rootDir>/src/tests/setup/jest-setup.ts'],
 };

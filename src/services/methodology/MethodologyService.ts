@@ -1,6 +1,7 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, PutCommand, GetCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
+import { getAWSClientConfig } from '../../utils/aws-client-config';
 import { createHash } from 'crypto';
 import { 
   SalesMethodology, 
@@ -39,8 +40,9 @@ export class MethodologyService implements IMethodologyService {
     this.methodologyTableName = methodologyTableName;
     this.schemaBucket = schemaBucket;
     
-    this.dynamoClient = DynamoDBDocumentClient.from(new DynamoDBClient({ region }));
-    this.s3Client = new S3Client({ region });
+    const clientConfig = getAWSClientConfig(region);
+    this.dynamoClient = DynamoDBDocumentClient.from(new DynamoDBClient(clientConfig));
+    this.s3Client = new S3Client(clientConfig);
   }
 
   /**

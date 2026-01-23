@@ -1,6 +1,7 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, PutCommand, UpdateCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { CognitoIdentityProviderClient, AdminGetUserCommand, ListUsersCommand } from '@aws-sdk/client-cognito-identity-provider';
+import { getAWSClientConfig } from '../../utils/aws-client-config';
 import {
   UserIdentity,
   AgentIdentity,
@@ -39,9 +40,10 @@ export class IdentityService implements IIdentityService {
     this.userPoolId = userPoolId;
     this.region = region;
     
-    this.dynamoClient = DynamoDBDocumentClient.from(new DynamoDBClient({ region }));
+    const clientConfig = getAWSClientConfig(region);
+    this.dynamoClient = DynamoDBDocumentClient.from(new DynamoDBClient(clientConfig));
     if (userPoolId) {
-      this.cognitoClient = new CognitoIdentityProviderClient({ region });
+      this.cognitoClient = new CognitoIdentityProviderClient(clientConfig);
     }
   }
 

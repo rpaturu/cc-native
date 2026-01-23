@@ -2,6 +2,7 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, PutCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { Tenant, CreateTenantInput, UpdateTenantInput } from '../../types/TenantTypes';
 import { Logger } from './Logger';
+import { getAWSClientConfig } from '../../utils/aws-client-config';
 import { v4 as uuidv4 } from 'uuid';
 
 /**
@@ -16,7 +17,8 @@ export class TenantService {
     this.logger = logger;
     this.tableName = tableName;
     
-    const client = new DynamoDBClient({ region });
+    const clientConfig = getAWSClientConfig(region);
+    const client = new DynamoDBClient(clientConfig);
     this.dynamoClient = DynamoDBDocumentClient.from(client);
   }
 

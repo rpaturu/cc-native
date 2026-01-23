@@ -5,6 +5,7 @@ import { WorldSnapshot, SnapshotQuery, ISnapshotService } from '../../types/Snap
 import { EntityState } from '../../types/WorldStateTypes';
 import { Logger } from '../core/Logger';
 import { WorldStateService } from './WorldStateService';
+import { getAWSClientConfig } from '../../utils/aws-client-config';
 import { v4 as uuidv4 } from 'uuid';
 
 /**
@@ -32,8 +33,9 @@ export class SnapshotService implements ISnapshotService {
     this.snapshotsBucket = snapshotsBucket;
     this.indexTableName = indexTableName;
     
-    this.s3Client = new S3Client({ region });
-    this.dynamoClient = DynamoDBDocumentClient.from(new DynamoDBClient({ region }));
+    const clientConfig = getAWSClientConfig(region);
+    this.s3Client = new S3Client(clientConfig);
+    this.dynamoClient = DynamoDBDocumentClient.from(new DynamoDBClient(clientConfig));
   }
 
   /**

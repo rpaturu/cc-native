@@ -4,6 +4,7 @@ import { DynamoDBDocumentClient, GetCommand, QueryCommand, PutCommand } from '@a
 import { EntitySchema, CriticalFieldRegistry, SchemaQuery, ISchemaRegistryService } from '../../types/SchemaTypes';
 import { EntityType } from '../../types/WorldStateTypes';
 import { Logger } from '../core/Logger';
+import { getAWSClientConfig } from '../../utils/aws-client-config';
 import { createHash } from 'crypto';
 
 /**
@@ -33,8 +34,9 @@ export class SchemaRegistryService implements ISchemaRegistryService {
     this.registryTableName = registryTableName;
     this.criticalFieldsTableName = criticalFieldsTableName;
     
-    this.s3Client = new S3Client({ region });
-    this.dynamoClient = DynamoDBDocumentClient.from(new DynamoDBClient({ region }));
+    const clientConfig = getAWSClientConfig(region);
+    this.s3Client = new S3Client(clientConfig);
+    this.dynamoClient = DynamoDBDocumentClient.from(new DynamoDBClient(clientConfig));
   }
 
   /**

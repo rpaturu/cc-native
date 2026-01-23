@@ -50,12 +50,22 @@ describe('Phase 0 Contract Certification', () => {
   let snapshotId: string;
 
   beforeAll(() => {
-    // Load environment variables
+    // Load environment variables from .env.local first, then .env
+    // This allows local overrides while falling back to deployment config
     try {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      require('dotenv').config({ path: '.env' });
+      const dotenv = require('dotenv');
+      // Try .env.local first (local overrides)
+      dotenv.config({ path: '.env.local' });
+      // Then .env (deployment config)
+      dotenv.config({ path: '.env' });
     } catch {
-      // dotenv not available, use process.env
+      // dotenv not available, use process.env directly
+    }
+    
+    // Ensure AWS credentials are available
+    if (!process.env.AWS_ACCESS_KEY_ID && !process.env.AWS_PROFILE) {
+      console.warn('Warning: AWS credentials not found. Integration tests may fail.');
+      console.warn('Set AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY or AWS_PROFILE in .env.local');
     }
 
     logger = new Logger('CertificationTest');

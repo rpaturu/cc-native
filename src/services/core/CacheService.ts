@@ -1,6 +1,7 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, PutCommand, DeleteCommand } from '@aws-sdk/lib-dynamodb';
 import { Logger } from './Logger';
+import { getAWSClientConfig } from '../../utils/aws-client-config';
 
 export interface CacheConfig {
   ttlHours: number;
@@ -25,7 +26,8 @@ export class CacheService {
     this.logger = logger;
     this.tableName = tableName;
     
-    const client = new DynamoDBClient({ region });
+    const clientConfig = getAWSClientConfig(region);
+    const client = new DynamoDBClient(clientConfig);
     this.dynamoClient = DynamoDBDocumentClient.from(client);
   }
 

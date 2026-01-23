@@ -3,6 +3,7 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, PutCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { EvidenceRecord, EvidenceQuery, IEvidenceService } from '../../types/EvidenceTypes';
 import { Logger } from '../core/Logger';
+import { getAWSClientConfig } from '../../utils/aws-client-config';
 import { v4 as uuidv4 } from 'uuid';
 
 /**
@@ -27,8 +28,9 @@ export class EvidenceService implements IEvidenceService {
     this.evidenceBucket = evidenceBucket;
     this.indexTableName = indexTableName;
     
-    this.s3Client = new S3Client({ region });
-    this.dynamoClient = DynamoDBDocumentClient.from(new DynamoDBClient({ region }));
+    const clientConfig = getAWSClientConfig(region);
+    this.s3Client = new S3Client(clientConfig);
+    this.dynamoClient = DynamoDBDocumentClient.from(new DynamoDBClient(clientConfig));
   }
 
   /**

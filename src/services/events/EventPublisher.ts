@@ -1,6 +1,7 @@
 import { EventBridgeClient, PutEventsCommand } from '@aws-sdk/client-eventbridge';
 import { EventEnvelope, createEventSource } from '../../types/EventTypes';
 import { Logger } from '../core/Logger';
+import { getAWSClientConfig } from '../../utils/aws-client-config';
 
 /**
  * EventPublisher - Publish events to EventBridge
@@ -13,7 +14,9 @@ export class EventPublisher {
   constructor(logger: Logger, eventBusName: string, region?: string) {
     this.logger = logger;
     this.eventBusName = eventBusName;
-    this.eventBridgeClient = new EventBridgeClient({ region });
+    
+    const clientConfig = getAWSClientConfig(region);
+    this.eventBridgeClient = new EventBridgeClient(clientConfig);
   }
 
   /**

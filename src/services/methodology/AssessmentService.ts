@@ -1,5 +1,6 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, PutCommand, GetCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import { getAWSClientConfig } from '../../utils/aws-client-config';
 import { 
   MethodologyAssessment, 
   IAssessmentService, 
@@ -38,7 +39,8 @@ export class AssessmentService implements IAssessmentService {
     this.worldStateService = worldStateService;
     this.assessmentTableName = assessmentTableName;
     
-    this.dynamoClient = DynamoDBDocumentClient.from(new DynamoDBClient({ region }));
+    const clientConfig = getAWSClientConfig(region);
+    this.dynamoClient = DynamoDBDocumentClient.from(new DynamoDBClient(clientConfig));
   }
 
   /**
