@@ -182,7 +182,7 @@ echo "Attaching inline policies (using compact wildcard patterns)..."
 echo ""
 
 echo "1. DynamoDB Policy (all cc-native-* tables)..."
-put_inline_policy "CCNativeTestUserPolicy-DynamoDB" "$DYNAMODB_POLICY_1"
+put_inline_policy "CCNativeTestUserPolicy-DynamoDB" "$DYNAMODB_POLICY"
 
 echo "2. S3 Policy (all cc-native-* buckets)..."
 put_inline_policy "CCNativeTestUserPolicy-S3" "$S3_POLICY"
