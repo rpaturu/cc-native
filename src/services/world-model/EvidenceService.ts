@@ -136,33 +136,47 @@ export class EvidenceService implements IEvidenceService {
       return null;
     }
     try {
-      // Query index to find evidence
+      // Query by entityId (primary key) and filter by evidenceId and tenantId
       const queryResult = await this.dynamoClient.send(new QueryCommand({
         TableName: this.indexTableName,
-        IndexName: 'entityType-index',
-        KeyConditionExpression: 'gsi1pk = :gsi1pk',
+        KeyConditionExpression: 'pk = :pk AND begins_with(sk, :sk)',
         FilterExpression: 'evidenceId = :evidenceId AND tenantId = :tenantId',
         ExpressionAttributeValues: {
-          ':gsi1pk': 'ENTITY_TYPE#', // Will need entityType for efficient query
+          ':pk': `ENTITY#${entityId}`,
+          ':sk': 'EVIDENCE#',
           ':evidenceId': evidenceId,
           ':tenantId': tenantId,
         },
         Limit: 1,
       }));
-
-      // Alternative: Scan if we don't have entityType (less efficient)
-      // For now, we'll need entityId to query efficiently
-      // This is a limitation - we should store evidenceId in a GSI for direct lookup
-      
-      // For Phase 0, we'll use a simpler approach: require entityId
-      // TODO: Add GSI on evidenceId for direct lookup
       
       if (!queryResult.Items || queryResult.Items.length === 0) {
+        this.logger.debug('No evidence found in index', {
+          evidenceId,
+          entityId,
+          tenantId,
+        });
         return null;
       }
 
       const index = queryResult.Items[0];
       const s3Key = index.s3Key as string;
+      
+      // Get evidenceId from index, fallback to parameter if not in index
+      // The index should always have evidenceId, but we use parameter as fallback for safety
+      const indexEvidenceId = index.evidenceId as string | undefined;
+      const finalEvidenceId = indexEvidenceId || evidenceId;
+
+      if (!finalEvidenceId) {
+        this.logger.error('No evidenceId found in index or parameter', {
+          evidenceId,
+          entityId,
+          tenantId,
+          indexKeys: Object.keys(index),
+          indexEvidenceId,
+        });
+        throw new Error(`No evidenceId found for evidence lookup`);
+      }
 
       // Retrieve from S3
       const s3Result = await this.s3Client.send(new GetObjectCommand({
@@ -172,7 +186,42 @@ export class EvidenceService implements IEvidenceService {
       }));
 
       const body = await s3Result.Body!.transformToString();
-      const evidence = JSON.parse(body) as EvidenceRecord;
+      const evidenceFromS3 = JSON.parse(body) as any;
+      
+      // Create evidence record - use index as source of truth for metadata
+      const evidence: EvidenceRecord = {
+        evidenceId: finalEvidenceId, // CRITICAL: Always set from index or parameter
+        entityId: evidenceFromS3.entityId || index.entityId,
+        entityType: evidenceFromS3.entityType || index.entityType,
+        evidenceType: evidenceFromS3.evidenceType || index.evidenceType,
+        timestamp: evidenceFromS3.timestamp || index.timestamp,
+        payload: evidenceFromS3.payload || {},
+        provenance: evidenceFromS3.provenance || {},
+        metadata: evidenceFromS3.metadata || {},
+        s3Location: s3Key,
+        s3VersionId: index.s3VersionId as string | undefined,
+      };
+      
+      // Force set evidenceId using defineProperty to ensure it's not overwritten
+      Object.defineProperty(evidence, 'evidenceId', {
+        value: finalEvidenceId,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+      
+      // Final verification - evidenceId must be set
+      if (!evidence.evidenceId || evidence.evidenceId !== finalEvidenceId) {
+        this.logger.error('EvidenceId verification failed', {
+          evidenceId,
+          finalEvidenceId,
+          actualEvidenceId: evidence.evidenceId,
+          indexEvidenceId,
+          indexKeys: Object.keys(index),
+        });
+        throw new Error(`EvidenceId mismatch: expected ${finalEvidenceId}, got ${evidence.evidenceId}`);
+      }
+      
       return evidence;
     } catch (error) {
       this.logger.error('Failed to retrieve evidence', {
