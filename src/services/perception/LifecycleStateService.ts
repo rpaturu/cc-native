@@ -19,12 +19,14 @@ import { Signal, SignalType, SignalStatus } from '../../types/SignalTypes';
 import { Logger } from '../core/Logger';
 import { LedgerService } from '../ledger/LedgerService';
 import { LedgerEventType } from '../../types/LedgerTypes';
+import { SuppressionEngine } from './SuppressionEngine';
 import { v4 as uuidv4 } from 'uuid';
 
 export interface LifecycleStateServiceConfig {
   logger: Logger;
   accountsTableName: string;
   ledgerService: LedgerService;
+  suppressionEngine: SuppressionEngine;
   region?: string;
   inferenceRuleVersion?: string;
 }
@@ -37,12 +39,14 @@ export class LifecycleStateService {
   private logger: Logger;
   private accountsTableName: string;
   private ledgerService: LedgerService;
+  private suppressionEngine: SuppressionEngine;
   private inferenceRuleVersion: string;
 
   constructor(config: LifecycleStateServiceConfig) {
     this.logger = config.logger;
     this.accountsTableName = config.accountsTableName;
     this.ledgerService = config.ledgerService;
+    this.suppressionEngine = config.suppressionEngine;
     this.inferenceRuleVersion = config.inferenceRuleVersion || '1.0.0';
     
     this.dynamoClient = DynamoDBDocumentClient.from(new DynamoDBClient({ region: config.region }));
