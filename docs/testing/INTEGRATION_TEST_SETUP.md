@@ -160,6 +160,15 @@ Or if you're hitting the managed policy limit:
 
 Inline policies don't count toward this limit.
 
+### Error: "Maximum policy size of 2048 bytes exceeded"
+
+**Solution**: AWS limits inline policies to 2048 bytes. The script automatically splits the policy into 3 smaller policies:
+- `CCNativeTestUserPolicy-DynamoDB`
+- `CCNativeTestUserPolicy-S3`
+- `CCNativeTestUserPolicy-EventBridge`
+
+Each policy is under the limit and provides the same permissions when combined.
+
 ### Error: "Could not find TestUserPolicyArn in stack outputs"
 
 **Solution**: The stack needs to be redeployed to include the TestUserPolicy. Run:
