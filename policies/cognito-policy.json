@@ -1,0 +1,66 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+      {
+          "Effect": "Allow",
+          "Action": [
+              "cognito-idp:DescribeUserPool",
+              "cognito-idp:DescribeUserPoolClient",
+              "cognito-idp:ListUserPoolClients",
+              "cognito-idp:UpdateUserPoolClient"
+          ],
+          "Resource": "*"
+      },
+      {
+          "Effect": "Allow",
+          "Action": [
+              "glue:GetDatabase",
+              "glue:GetDatabases",
+              "glue:GetTable",
+              "glue:GetTables",
+              "glue:GetPartition",
+              "glue:GetPartitions",
+              "glue:BatchGetPartition",
+              "glue:CreateDatabase",
+              "glue:CreateTable",
+              "glue:DeleteDatabase",
+              "glue:DeleteTable"
+          ],
+          "Resource": "*"
+      },
+      {
+          "Effect": "Allow",
+          "Action": [
+              "athena:StartQueryExecution",
+              "athena:GetQueryExecution",
+              "athena:GetQueryResults",
+              "athena:GetWorkGroup",
+              "athena:ListWorkGroups"
+          ],
+          "Resource": "*"
+      },
+      {
+          "Effect": "Allow",
+          "Action": [
+              "s3:GetBucketLocation",
+              "s3:GetObject",
+              "s3:ListBucket",
+              "s3:PutObject",
+              "s3:DeleteObject"
+          ],
+          "Resource": [
+              "arn:aws:s3:::compete.cloud-athena-results",
+              "arn:aws:s3:::compete.cloud-athena-results/*"
+          ]
+      },
+      {
+          "Effect": "Allow",
+          "Action": [
+              "events:PutEvents"
+          ],
+          "Resource": [
+              "arn:aws:events:*:*:event-bus/cc-native-events"
+          ]
+      }
+  ]
+}
