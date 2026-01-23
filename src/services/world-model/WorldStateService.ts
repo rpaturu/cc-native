@@ -57,6 +57,11 @@ export class WorldStateService implements IWorldStateService {
       
       const evidenceRecords = evidenceQuery;
 
+      // NOTE: If we need to fetch evidence by IDs in the future, use Promise.all with concurrency cap
+      // Example: const evidenceRecords = await Promise.all(
+      //   evidenceIds.map(id => this.evidenceService.get(id, tenantId, entityId))
+      // ).filter(e => e !== null) as EvidenceRecord[];
+
       if (evidenceRecords.length === 0) {
         throw new Error(`No evidence found for entity ${entityId}`);
       }
