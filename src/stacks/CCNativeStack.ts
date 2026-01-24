@@ -564,6 +564,16 @@ export class CCNativeStack extends cdk.Stack {
       description: 'DynamoDB table for tenant configuration and metadata',
     });
 
+    new cdk.CfnOutput(this, 'AccountsTableName', {
+      value: this.accountsTable.tableName,
+      description: 'DynamoDB table for account metadata',
+    });
+
+    new cdk.CfnOutput(this, 'SignalsTableName', {
+      value: this.signalsTable.tableName,
+      description: 'DynamoDB table for signals',
+    });
+
     // Methodology Tables
     new cdk.CfnOutput(this, 'MethodologyTableName', {
       value: this.methodologyTable.tableName,
