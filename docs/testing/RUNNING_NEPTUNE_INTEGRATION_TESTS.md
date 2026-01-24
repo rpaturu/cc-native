@@ -1,6 +1,6 @@
 # Running Neptune Integration Tests
 
-Neptune is deployed in **isolated VPC subnets** (no internet access), which means it's only accessible from resources within the same VPC. This guide covers several methods to run the Phase 2 integration tests that require Neptune access.
+Neptune is deployed in **isolated VPC subnets** (no internet access), which means it's only accessible from resources within the same VPC. This guide shows you how to set up an EC2 instance in your VPC to run the Phase 2 integration tests.
 
 ## Prerequisites
 
@@ -633,9 +633,10 @@ chmod +x setup-test-runner-prerequisites.sh
 
 ## Next Steps
 
-1. Choose a method based on your needs
-2. Set up the test runner environment
-3. Run `npm test -- src/tests/integration/phase2.test.ts`
-4. Review test results
+1. Run the prerequisites setup script (or follow the manual steps)
+2. Launch your EC2 instance
+3. SSH into the instance and configure it
+4. Run `npm test -- src/tests/integration/phase2.test.ts`
+5. Review test results
 
 The tests will automatically detect if Neptune is accessible and skip gracefully if not, so you can verify your setup is working correctly.
