@@ -93,22 +93,31 @@ echo ""
 echo "Step 3: Running tests on instance..."
 echo ""
 
-# Prepare test commands
+# Prepare test commands with REPO_URL substitution
 TEST_COMMANDS_FILE="/tmp/test-commands-$$.json"
-cat > $TEST_COMMANDS_FILE << 'EOF'
-[
-  "cd ~ || exit 1",
-  "if ! command -v node &> /dev/null; then echo 'Installing Node.js 20...'; curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash; export NVM_DIR=\"$HOME/.nvm\"; [ -s \"$NVM_DIR/nvm.sh\" ] && . \"$NVM_DIR/nvm.sh\"; nvm install 20; nvm use 20; fi",
-  "if [ ! -d \"cc-native\" ]; then if [ -z \"$REPO_URL\" ]; then echo 'Error: Repository not found and REPO_URL not set'; exit 1; fi; echo 'Cloning repository...'; git clone \"$REPO_URL\" cc-native; fi",
-  "cd cc-native || exit 1",
-  "if [ ! -d \"node_modules\" ]; then echo 'Installing dependencies...'; npm install; fi",
-  "echo 'Running Phase 2 integration tests...'",
-  "npm test -- src/tests/integration/phase2.test.ts"
-]
+
+# Escape REPO_URL for JSON
+ESCAPED_REPO_URL=$(echo "$REPO_URL" | sed 's/"/\\"/g')
+
+cat > $TEST_COMMANDS_FILE << EOF
+{
+  "commands": [
+    "cd ~ || exit 1",
+    "if ! command -v node &> /dev/null; then echo 'Installing Node.js 20...'; curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash; export NVM_DIR=\\\"\\\$HOME/.nvm\\\"; [ -s \\\"\\\$NVM_DIR/nvm.sh\\\" ] && . \\\"\\\$NVM_DIR/nvm.sh\\\"; nvm install 20; nvm use 20; fi",
+    "if [ ! -d \\\"cc-native\\\" ]; then if [ -z \\\"$ESCAPED_REPO_URL\\\" ]; then echo 'Error: Repository not found and REPO_URL not set'; exit 1; fi; echo 'Cloning repository...'; git clone \\\"$ESCAPED_REPO_URL\\\" cc-native; fi",
+    "cd cc-native || exit 1",
+    "if [ ! -d \\\"node_modules\\\" ]; then echo 'Installing dependencies...'; npm install; fi",
+    "echo 'Running Phase 2 integration tests...'",
+    "npm test -- src/tests/integration/phase2.test.ts"
+  ]
+}
 EOF
 
 # Send command to instance
 echo "Sending test command to instance..."
+if [ -n "$REPO_URL" ]; then
+  echo "Repository URL: $REPO_URL"
+fi
 COMMAND_OUTPUT=$(aws ssm send-command \
   --instance-ids "$TEST_RUNNER_INSTANCE_ID" \
   --document-name "AWS-RunShellScript" \
