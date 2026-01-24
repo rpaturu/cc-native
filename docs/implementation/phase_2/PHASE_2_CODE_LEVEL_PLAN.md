@@ -120,10 +120,17 @@ const graph = new Graph();
 const g = graph.traversal().withRemote(connection);
 ```
 
+**Connection Management:**
+- Implement **lazy singleton** with reconnect-on-failure
+- Keep Gremlin connection lifetime short and resilient (health check + retry)
+- Handle frequent cold starts and stale websockets gracefully
+- Do NOT assume connection pooling "just works" - connections are per-warm-container only
+
 **Acceptance Criteria:**
 - Connection utility can connect to Neptune
 - Health check returns success
-- Connection is reusable across Lambda invocations (connection pooling)
+- Connection reconnects on failure (lazy singleton pattern)
+- Handles cold starts gracefully (reconnects on each invocation if needed)
 
 ---
 
@@ -160,7 +167,7 @@ const g = graph.traversal().withRemote(connection);
 - `ACCOUNT#{tenant_id}#{account_id}` (or `TENANT#{tenant_id}#ACCOUNT#{account_id}`)
 - `SIGNAL#{signal_id}` (use signal_id directly, NOT dedupeKey)
 - `EVIDENCE_SNAPSHOT#{evidence_snapshot_id}` (from EvidenceSnapshotRef.sha256 or unique ID)
-- `POSTURE#{tenant_id}#{account_id}#{posture_id}` (posture_id = timestamp or version)
+- `POSTURE#{tenant_id}#{account_id}#{posture_id}` (posture_id = inputs_hash, NOT timestamp - ensures determinism)
 - `RISK_FACTOR#{risk_factor_id}` (risk_factor_id = deterministic hash)
 - `OPPORTUNITY#{opportunity_id}` (opportunity_id = deterministic hash)
 - `UNKNOWN#{unknown_id}` (unknown_id = deterministic hash)
@@ -274,13 +281,13 @@ async upsertEdge(
   edgeLabel: string,
   properties?: Record<string, any>
 ): Promise<void> {
-  // Gremlin pattern:
+  // Gremlin pattern (corrected - prevents duplicates):
   // g.V(fromVertexId).as('from')
-  //  .V(toVertexId).as('to')
   //  .coalesce(
-  //    __.inE(edgeLabel).where(__.outV().as('from')),
-  //    addE(edgeLabel).from('from').to('to').property(...properties)
+  //    __.outE(edgeLabel).where(__.inV().hasId(toVertexId)),
+  //    __.V(toVertexId).addE(edgeLabel).from('from').property(...properties)
   //  ).next()
+  // Start at 'from', check outE(edgeLabel) where inV() matches 'to', else add edge
 }
 ```
 
@@ -419,15 +426,16 @@ export interface AccountPostureStateV1 {
   unknowns: UnknownV1[];
   
   // Evidence (IDs-first, types-second)
-  evidence_signal_ids: string[]; // Top K (authoritative)
-  evidence_snapshot_refs: EvidenceSnapshotRef[]; // Top K (authoritative)
+  evidence_signal_ids: string[]; // Top K (authoritative, for audit/readability)
+  evidence_snapshot_refs: EvidenceSnapshotRef[]; // Top K (authoritative, for audit/readability)
   evidence_signal_types: string[]; // Human-readable (documentation only)
   
   // Versioning & Determinism
   ruleset_version: string; // e.g., "v1.0.0"
   schema_version: string; // e.g., "v1"
-  active_signals_hash: string; // SHA256 hash of sorted active signal IDs
+  active_signals_hash: string; // SHA256 hash of ALL active signal IDs (after TTL + suppression), sorted lexicographically
   inputs_hash: string; // SHA256 hash of (active_signals_hash + lifecycle_state + ruleset_version)
+  // Note: active_signals_hash includes ALL active signals, not just top K evidence signals
   
   // Metadata
   evaluated_at: string; // ISO timestamp (event.as_of_time)
@@ -481,8 +489,11 @@ export interface RuleTriggerMetadata {
 6. Create edges:
    - Account `HAS_SIGNAL` Signal (idempotent)
    - Signal `SUPPORTED_BY` EvidenceSnapshot (idempotent)
-7. Set `graph_materialized=true` flag on signal (or ledger gate)
-8. Emit ledger events: `GRAPH_UPSERTED`, `GRAPH_EDGE_CREATED`
+7. Write materialization status to separate table (or ledger-derived state):
+   - `GraphMaterializationStatus(pk=SIGNAL#{signal_id}) { status: 'COMPLETED', trace_id, updated_at }`
+   - Alternative: Use ledger as source of truth (check for `GRAPH_MATERIALIZATION_COMPLETED` event)
+8. Emit ledger events: `GRAPH_UPSERTED`, `GRAPH_EDGE_CREATED`, `GRAPH_MATERIALIZATION_COMPLETED`
+9. Emit EventBridge event: `GRAPH_MATERIALIZED` (triggers synthesis)
 
 **Idempotency:**
 - All upserts use vertex ID uniqueness
@@ -491,7 +502,8 @@ export interface RuleTriggerMetadata {
 
 **Failure Semantics Rule:**
 - If graph materialization partially succeeds, synthesis MUST NOT run
-- Enforce via ledger gate or `graph_materialized=true` flag per signal
+- Enforce via separate `GraphMaterializationStatus` table or ledger gate (check for `GRAPH_MATERIALIZATION_COMPLETED` event)
+- Do NOT mutate signal record (avoids write contention and mixing responsibilities)
 - Prevents "phantom posture updates" without full evidence linkage
 
 **Error Handling:**
@@ -535,7 +547,9 @@ export interface RuleTriggerMetadata {
 1. Extract signalId from event
 2. Call `GraphMaterializer.materializeSignal(signalId, tenantId)`
 3. Log to ledger: `GRAPH_MATERIALIZATION_STARTED`, `GRAPH_MATERIALIZATION_COMPLETED`
-4. On failure: log `GRAPH_MATERIALIZATION_FAILED` and send to DLQ
+4. Write materialization status to `GraphMaterializationStatus` table (or verify ledger event)
+5. Emit EventBridge event: `GRAPH_MATERIALIZED` (triggers synthesis engine)
+6. On failure: log `GRAPH_MATERIALIZATION_FAILED` and send to DLQ (do NOT emit `GRAPH_MATERIALIZED`)
 
 **Dead Letter Queue:**
 - `graph-materializer-handler-dlq`
@@ -665,9 +679,9 @@ export interface RuleTriggerMetadata {
 4. Sort rules by priority (ascending), then by rule_id (alphabetical) as tie-breaker
 5. Evaluate rules in order until first match
 6. Generate posture state from matched rule
-7. Resolve evidence signals to IDs (IDs-first contract)
+7. Resolve evidence signals to IDs (IDs-first contract) - top K for evidence arrays
 8. Compute hashes:
-   - `active_signals_hash`: SHA256 of sorted active signal IDs
+   - `active_signals_hash`: SHA256 of ALL active signal IDs (after TTL + suppression), sorted lexicographically
    - `inputs_hash`: SHA256 of (active_signals_hash + lifecycle_state + ruleset_version)
 9. Return `AccountPostureStateV1`
 
@@ -703,14 +717,14 @@ export interface RuleTriggerMetadata {
 **Purpose:** Lambda handler for synthesis engine
 
 **Trigger:**
-- EventBridge: `SIGNAL_DETECTED` or `SIGNAL_CREATED` events (after graph materialization)
+- EventBridge: `GRAPH_MATERIALIZED` event (from graph materializer) - **Canonical path**
 - Scheduled: Hourly consolidation (optional)
 
 **Event Pattern:**
 ```typescript
 {
-  source: 'cc-native.perception',
-  'detail-type': ['SIGNAL_DETECTED', 'SIGNAL_CREATED'],
+  source: 'cc-native.graph',
+  'detail-type': 'GRAPH_MATERIALIZED',
   detail: {
     accountId: string,
     tenantId: string,
@@ -722,9 +736,9 @@ export interface RuleTriggerMetadata {
 
 **Handler Logic:**
 1. Extract accountId, tenantId from event
-2. Check `graph_materialized=true` flag (or ledger gate) - **Failure Semantics Rule**
+2. Verify graph materialization succeeded (check `GraphMaterializationStatus` table or ledger for `GRAPH_MATERIALIZATION_COMPLETED` event) - **Failure Semantics Rule**
 3. Call `SynthesisEngine.synthesize(accountId, tenantId, eventTime)`
-4. Write `AccountPostureState` to DynamoDB (idempotent)
+4. Write `AccountPostureState` to DynamoDB (idempotent - only if `inputs_hash` changed)
 5. Upsert Posture/Risk/Unknown vertices + edges in Neptune
 6. Emit ledger events: `POSTURE_UPDATED`, `RISK_FACTOR_EMITTED`, `UNKNOWN_EMITTED`
 
@@ -764,6 +778,7 @@ export interface RuleTriggerMetadata {
 **Idempotent Upsert:**
 - Use `inputs_hash` as idempotency key
 - Only update if `inputs_hash` changes (avoid churn)
+- **Churn Prevention:** If only `event.as_of_time` changes but signals/lifecycle don't, `inputs_hash` is unchanged → no DDB write
 
 **Acceptance Criteria:**
 - Returns posture state within low latency (single DDB read)
@@ -830,9 +845,13 @@ export interface RuleTriggerMetadata {
 }
 ```
 
-**EventBridge Integration:**
-- Route `SIGNAL_DETECTED` and `SIGNAL_CREATED` to both handlers (fan-out)
-- Use EventBridge filtering to route to materializer first, then synthesis
+**EventBridge Integration (Event-Driven Chain, NOT Fan-Out):**
+- Rule 1: Route `SIGNAL_DETECTED` → `Phase2GraphMaterializerStateMachine`
+- Rule 2: Route `SIGNAL_CREATED` → `Phase2GraphMaterializerStateMachine`
+- Rule 3: Route `GRAPH_MATERIALIZED` → `Phase2SynthesisEngineStateMachine` (canonical path)
+- **Critical:** Do NOT use fan-out pattern - EventBridge doesn't guarantee ordering across targets
+- Materializer emits `GRAPH_MATERIALIZED` event only after successful materialization
+- Synthesis handler triggers only on `GRAPH_MATERIALIZED` event (not directly on signal events)
 
 **Acceptance Criteria:**
 - State machines orchestrate handlers correctly
@@ -908,6 +927,7 @@ export interface RuleTriggerMetadata {
 4. **Evidence IDs Test:** Evidence is resolved to signal IDs (not just types)
 5. **Bounded Query Test:** All graph queries are bounded (no unbounded traversals)
 6. **Replay Test:** Replay harness passes with golden files
+7. **Churn Test:** If only `event.as_of_time` changes but signals/lifecycle don't, no DDB write (inputs_hash unchanged) - prevents clock drift from causing posture rewrites
 
 **Replay Test Harness:**
 - File: `src/tests/contract/phase2-replay.test.ts`
