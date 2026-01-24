@@ -30,34 +30,6 @@ echo "Subnet IDs: $NEPTUNE_SUBNET_IDS"
 echo "First Subnet ID: $NEPTUNE_SUBNET_ID"
 ```
 
-Alternatively, you can query them from CloudFormation:
-
-```bash
-# Get VPC ID from stack outputs
-aws cloudformation describe-stacks \
-  --stack-name CCNativeStack \
-  --query "Stacks[0].Outputs[?OutputKey=='VpcId'].OutputValue" \
-  --output text \
-  --profile cc-native-account \
-  --region us-west-2
-
-# Get subnet IDs (comma-separated)
-aws cloudformation describe-stacks \
-  --stack-name CCNativeStack \
-  --query "Stacks[0].Outputs[?OutputKey=='NeptuneSubnetIds'].OutputValue" \
-  --output text \
-  --profile cc-native-account \
-  --region us-west-2
-
-# Or get individual subnet details
-aws ec2 describe-subnets \
-  --filters "Name=vpc-id,Values=<VPC_ID>" \
-  --query "Subnets[*].[SubnetId,AvailabilityZone]" \
-  --output table \
-  --profile cc-native-account \
-  --region us-west-2
-```
-
 ### Step 2: Launch EC2 Instance
 
 ```bash
