@@ -12,6 +12,7 @@ import { Logger } from '../core/Logger';
 
 // Gremlin types from package structure
 type GraphTraversalSource = gremlin.process.GraphTraversalSource;
+const __ = gremlin.process.statics;
 
 const logger = new Logger('GraphService');
 
@@ -87,8 +88,8 @@ export class GraphService implements IGraphService {
         .V(vertexId)
         .fold()
         .coalesce(
-          g.V(vertexId).unfold(), // If exists, unfold and update
-          g.addV(label).property('id', vertexId) // If not exists, create
+          __.unfold(), // If exists, unfold and update
+          __.addV(label).property('id', vertexId) // If not exists, create
         )
         .property('updated_at', now)
         .next();
@@ -157,7 +158,7 @@ export class GraphService implements IGraphService {
       const existingEdge = await g
         .V(fromVertexId)
         .outE(edgeLabel)
-        .where((g as any).V(toVertexId).inV())
+        .where(__.inV().hasId(toVertexId))
         .next();
 
       if (!existingEdge.value) {

@@ -10,7 +10,6 @@ import { Logger } from '../core/Logger';
 
 // Gremlin types from package structure
 type DriverRemoteConnection = gremlin.driver.DriverRemoteConnection;
-type Graph = gremlin.structure.Graph;
 type GraphTraversalSource = gremlin.process.GraphTraversalSource;
 
 const logger = new Logger('NeptuneConnection');
@@ -34,7 +33,6 @@ export interface NeptuneConnectionConfig {
 export class NeptuneConnection {
   private static instance: NeptuneConnection | null = null;
   private connection: DriverRemoteConnection | null = null;
-  private graph: Graph | null = null;
   private g: GraphTraversalSource | null = null;
   private config: NeptuneConnectionConfig | null = null;
   private isConnecting: boolean = false;
@@ -119,17 +117,15 @@ export class NeptuneConnection {
       }
 
       const DriverRemoteConnection = gremlin.driver.DriverRemoteConnection;
-      const Graph = gremlin.structure.Graph;
+      const traversal = gremlin.process.AnonymousTraversalSource.traversal;
       
       this.connection = new DriverRemoteConnection(url, connectionOptions);
-      this.graph = new Graph();
-      this.g = this.graph.traversal().withRemote(this.connection);
+      this.g = traversal().withRemote(this.connection);
 
       logger.info('Neptune connection established');
     } catch (error) {
       logger.error('Failed to connect to Neptune', { error });
       this.connection = null;
-      this.graph = null;
       this.g = null;
       throw error;
     } finally {
@@ -202,7 +198,6 @@ export class NeptuneConnection {
         logger.warn('Error closing Neptune connection', { error });
       } finally {
         this.connection = null;
-        this.graph = null;
         this.g = null;
       }
     }

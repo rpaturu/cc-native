@@ -20,4 +20,11 @@ module.exports = {
   testTimeout: 10000,
   // Setup for AWS SDK credential provider
   setupFiles: ['<rootDir>/src/tests/setup/jest-setup.ts'],
+  // Enable experimental VM modules for gremlin package dynamic imports
+  extensionsToTreatAsEsm: [],
+  globals: {
+    'ts-jest': {
+      useESM: false,
+    },
+  },
 };
