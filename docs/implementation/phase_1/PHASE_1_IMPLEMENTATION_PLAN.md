@@ -392,18 +392,37 @@ No decisions are executed yet — only **made visible and logged**.
 
 Phase 1 is complete when:
 
-* Signals are emitted reliably for all three lifecycle stages
-* Each signal links to immutable evidence
-* **Every signal is replayable from raw evidence without LLM inference** (non-negotiable)
-* Lifecycle state can be inferred deterministically
-* Signal precedence and suppression rules are implemented and tested
-* TTL semantics are defined and enforced for all signal types
-* Confidence is normalized to [0.0-1.0] scale and logged
-* Ledger records all signal creation, suppression, and expiry
-* Source costs are bounded (delta-only, capped polling)
-* No manual tagging is required to move lifecycle state
-* `NO_ENGAGEMENT_PRESENT` guardrails are enforced (state-entry only, time-decay re-emit)
-* `DISCOVERY_PROGRESS_STALLED` uses only structural checks (no semantic analysis)
+* ✅ Signals are emitted reliably for all three lifecycle stages
+* ✅ Each signal links to immutable evidence
+* ✅ **Every signal is replayable from raw evidence without LLM inference** (non-negotiable)
+* ✅ Lifecycle state can be inferred deterministically
+* ✅ Signal precedence and suppression rules are implemented and tested
+* ✅ TTL semantics are defined and enforced for all signal types
+* ✅ Confidence is normalized to [0.0-1.0] scale and logged
+* ✅ Ledger records all signal creation, suppression, and expiry
+* ✅ Source costs are bounded (delta-only, capped polling)
+* ✅ No manual tagging is required to move lifecycle state
+* ✅ `NO_ENGAGEMENT_PRESENT` guardrails are enforced (state-entry only, time-decay re-emit)
+* ✅ `DISCOVERY_PROGRESS_STALLED` uses only structural checks (no semantic analysis)
+
+**Status: ✅ PHASE 1 COMPLETE** (January 2026)
+
+**Implementation Summary:**
+- **Total Files:** 33 TypeScript files in perception layer
+- **Test Coverage:** 134 tests passing (17 test suites)
+- **Components Implemented:**
+  - All 8 signal types defined and implemented
+  - All 7 signal detectors implemented
+  - 3 connector implementations (CRM, Usage Analytics, Support)
+  - LifecycleStateService with deterministic inference
+  - SignalService with idempotency and replayability
+  - SuppressionEngine for lifecycle-scoped suppression
+  - 3 event handlers (connector-poll, signal-detection, lifecycle-inference)
+  - CDK infrastructure with DLQs and EventBridge routing
+  - Contract certification tests (5 tests)
+  - Unit tests for all components
+
+**See `PHASE_1_CODE_LEVEL_PLAN.md` for detailed implementation checklist.**
 
 ---
 
