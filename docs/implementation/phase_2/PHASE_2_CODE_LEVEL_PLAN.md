@@ -516,9 +516,9 @@ export interface RuleTriggerMetadata {
 6. Create edges:
    - Account `HAS_SIGNAL` Signal (idempotent)
    - Signal `SUPPORTED_BY` EvidenceSnapshot (idempotent)
-7. Write materialization status to separate table (or ledger-derived state):
+7. Write materialization status to `GraphMaterializationStatus` table:
    - `GraphMaterializationStatus(pk=SIGNAL#{tenant_id}#{signal_id}) { status: 'COMPLETED', trace_id, updated_at }`
-   - Alternative: Use ledger as source of truth (check for `GRAPH_MATERIALIZATION_COMPLETED` event)
+   - This table is the authoritative gating mechanism for synthesis (ledger is for audit only)
 8. Emit ledger events: `GRAPH_UPSERTED`, `GRAPH_EDGE_CREATED`, `GRAPH_MATERIALIZATION_COMPLETED`
 9. Emit EventBridge event: `GRAPH_MATERIALIZED` (triggers synthesis)
 
