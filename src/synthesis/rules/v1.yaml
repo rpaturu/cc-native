@@ -1,0 +1,389 @@
+# Phase 2 Synthesis Ruleset v1
+# Deterministic rules for deriving AccountPostureState from signals and lifecycle state
+#
+# Rules are evaluated in priority order (lower priority number = evaluated first)
+# First matching rule wins (deterministic, order-stable)
+#
+# Schema Version: v1
+# Ruleset Version: v1.0.0
+# Last Updated: 2026-01-23
+
+ruleset:
+  version: "v1.0.0"
+  schema_version: "v1"
+  description: "Deterministic synthesis rules for account posture, risk factors, opportunities, and unknowns"
+  
+  # Rule evaluation order (priority: lower = evaluated first)
+  # Rules are evaluated top-to-bottom until a match is found
+  rules:
+    # ============================================================
+    # CUSTOMER LIFECYCLE RULES (Highest Priority)
+    # ============================================================
+    
+    # Rule 1: CUSTOMER - Renewal window + support risk → AT_RISK
+    - rule_id: "CUSTOMER_RENEWAL_SUPPORT_RISK"
+      priority: 1
+      lifecycle_state: "CUSTOMER"
+      conditions:
+        required_signals:
+          - signal_type: "RENEWAL_WINDOW_ENTERED"
+            status: "ACTIVE"
+          - signal_type: "SUPPORT_RISK_EMERGING"
+            status: "ACTIVE"
+      outputs:
+        posture: "AT_RISK"
+        momentum: "DOWN"
+        risk_factors:
+          - type: "RENEWAL_RISK"
+            severity: "high"
+            description: "Renewal window active with emerging support risk"
+            evidence_signals:
+              - "RENEWAL_WINDOW_ENTERED"
+              - "SUPPORT_RISK_EMERGING"
+        opportunities: []
+        unknowns: []
+      ttl_days: null  # Permanent until resolved
+    
+    # Rule 2: CUSTOMER - Renewal window + usage decline → AT_RISK
+    - rule_id: "CUSTOMER_RENEWAL_USAGE_DECLINE"
+      priority: 2
+      lifecycle_state: "CUSTOMER"
+      conditions:
+        required_signals:
+          - signal_type: "RENEWAL_WINDOW_ENTERED"
+            status: "ACTIVE"
+          - signal_type: "USAGE_TREND_CHANGE"
+            status: "ACTIVE"
+        signal_properties:
+          - signal_type: "USAGE_TREND_CHANGE"
+            property: "trend_direction"
+            operator: "equals"
+            value: "DOWN"
+      outputs:
+        posture: "AT_RISK"
+        momentum: "DOWN"
+        risk_factors:
+          - type: "USAGE_DECLINE"
+            severity: "high"
+            description: "Usage declining during renewal window"
+            evidence_signals:
+              - "RENEWAL_WINDOW_ENTERED"
+              - "USAGE_TREND_CHANGE"
+        opportunities: []
+        unknowns: []
+      ttl_days: null  # Permanent until resolved
+    
+    # Rule 3: CUSTOMER - Strong usage growth → EXPAND
+    - rule_id: "CUSTOMER_USAGE_GROWTH"
+      priority: 3
+      lifecycle_state: "CUSTOMER"
+      conditions:
+        required_signals:
+          - signal_type: "USAGE_TREND_CHANGE"
+            status: "ACTIVE"
+        signal_properties:
+          - signal_type: "USAGE_TREND_CHANGE"
+            property: "trend_direction"
+            operator: "equals"
+            value: "UP"
+          - signal_type: "USAGE_TREND_CHANGE"
+            property: "trend_magnitude"
+            operator: "greater_than"
+            value: 0.2  # 20%+ growth
+      outputs:
+        posture: "EXPAND"
+        momentum: "UP"
+        risk_factors: []
+        opportunities:
+          - type: "USAGE_GROWTH"
+            severity: "medium"
+            description: "Strong usage growth indicates expansion opportunity"
+            evidence_signals:
+              - "USAGE_TREND_CHANGE"
+        unknowns: []
+      ttl_days: 30  # Re-evaluate monthly
+    
+    # Rule 4: CUSTOMER - Renewal window + no risks → WATCH
+    - rule_id: "CUSTOMER_RENEWAL_WATCH"
+      priority: 4
+      lifecycle_state: "CUSTOMER"
+      conditions:
+        required_signals:
+          - signal_type: "RENEWAL_WINDOW_ENTERED"
+            status: "ACTIVE"
+        excluded_signals:
+          - signal_type: "SUPPORT_RISK_EMERGING"
+            status: "ACTIVE"
+          - signal_type: "USAGE_TREND_CHANGE"
+            status: "ACTIVE"
+            property: "trend_direction"
+            value: "DOWN"
+      outputs:
+        posture: "WATCH"
+        momentum: "FLAT"
+        risk_factors: []
+        opportunities: []
+        unknowns:
+          - type: "RENEWAL_INTENT"
+            description: "Renewal window active - intent unclear"
+            introduced_at: "${now}"
+            review_after: "${now + 30 days}"
+      ttl_days: 90  # Review after renewal window
+    
+    # Rule 5: CUSTOMER - No active signals → OK
+    - rule_id: "CUSTOMER_STABLE"
+      priority: 5
+      lifecycle_state: "CUSTOMER"
+      conditions:
+        excluded_signals:
+          - signal_type: "RENEWAL_WINDOW_ENTERED"
+            status: "ACTIVE"
+          - signal_type: "SUPPORT_RISK_EMERGING"
+            status: "ACTIVE"
+          - signal_type: "USAGE_TREND_CHANGE"
+            status: "ACTIVE"
+      outputs:
+        posture: "OK"
+        momentum: "FLAT"
+        risk_factors: []
+        opportunities: []
+        unknowns: []
+      ttl_days: null  # Stable state
+    
+    # ============================================================
+    # SUSPECT LIFECYCLE RULES
+    # ============================================================
+    
+    # Rule 6: SUSPECT - Discovery stalled → AT_RISK
+    - rule_id: "SUSPECT_DISCOVERY_STALLED"
+      priority: 6
+      lifecycle_state: "SUSPECT"
+      conditions:
+        required_signals:
+          - signal_type: "DISCOVERY_PROGRESS_STALLED"
+            status: "ACTIVE"
+      outputs:
+        posture: "AT_RISK"
+        momentum: "DOWN"
+        risk_factors:
+          - type: "DISCOVERY_STALL"
+            severity: "medium"
+            description: "Discovery progress has stalled"
+            evidence_signals:
+              - "DISCOVERY_PROGRESS_STALLED"
+        opportunities: []
+        unknowns:
+          - type: "STALL_REASON"
+            description: "Why has discovery stalled?"
+            introduced_at: "${now}"
+            review_after: "${now + 14 days}"
+      ttl_days: 30  # Re-evaluate if stall persists
+    
+    # Rule 7: SUSPECT - Stakeholder gap → WATCH with risk
+    - rule_id: "SUSPECT_STAKEHOLDER_GAP"
+      priority: 7
+      lifecycle_state: "SUSPECT"
+      conditions:
+        required_signals:
+          - signal_type: "STAKEHOLDER_GAP_DETECTED"
+            status: "ACTIVE"
+      outputs:
+        posture: "WATCH"
+        momentum: "FLAT"
+        risk_factors:
+          - type: "STAKEHOLDER_GAP"
+            severity: "medium"
+            description: "Missing critical stakeholders in buying group"
+            evidence_signals:
+              - "STAKEHOLDER_GAP_DETECTED"
+        opportunities: []
+        unknowns:
+          - type: "GAP_RESOLUTION"
+            description: "How to engage missing stakeholders?"
+            introduced_at: "${now}"
+            review_after: "${now + 30 days}"
+      ttl_days: 60  # Re-evaluate monthly
+    
+    # Rule 8: SUSPECT - First engagement occurred → WATCH
+    - rule_id: "SUSPECT_FIRST_ENGAGEMENT"
+      priority: 8
+      lifecycle_state: "SUSPECT"
+      conditions:
+        required_signals:
+          - signal_type: "FIRST_ENGAGEMENT_OCCURRED"
+            status: "ACTIVE"
+        excluded_signals:
+          - signal_type: "DISCOVERY_PROGRESS_STALLED"
+            status: "ACTIVE"
+          - signal_type: "STAKEHOLDER_GAP_DETECTED"
+            status: "ACTIVE"
+      outputs:
+        posture: "WATCH"
+        momentum: "UP"
+        risk_factors: []
+        opportunities:
+          - type: "EARLY_ENGAGEMENT"
+            severity: "low"
+            description: "First engagement - opportunity to build momentum"
+            evidence_signals:
+              - "FIRST_ENGAGEMENT_OCCURRED"
+        unknowns:
+          - type: "ENGAGEMENT_QUALITY"
+            description: "Is this engagement meaningful?"
+            introduced_at: "${now}"
+            review_after: "${now + 7 days}"
+      ttl_days: null  # Historical milestone
+    
+    # Rule 9: SUSPECT - Default (no specific signals) → WATCH
+    - rule_id: "SUSPECT_DEFAULT"
+      priority: 9
+      lifecycle_state: "SUSPECT"
+      conditions:
+        # Matches any SUSPECT state
+      outputs:
+        posture: "WATCH"
+        momentum: "FLAT"
+        risk_factors: []
+        opportunities: []
+        unknowns:
+          - type: "SUSPECT_PROGRESSION"
+            description: "What will move this account forward?"
+            introduced_at: "${now}"
+            review_after: "${now + 14 days}"
+      ttl_days: 30  # Re-evaluate bi-weekly
+    
+    # ============================================================
+    # PROSPECT LIFECYCLE RULES
+    # ============================================================
+    
+    # Rule 10: PROSPECT - Activation + no engagement → WATCH
+    - rule_id: "PROSPECT_ACTIVATION_NO_ENGAGEMENT"
+      priority: 10
+      lifecycle_state: "PROSPECT"
+      conditions:
+        required_signals:
+          - signal_type: "ACCOUNT_ACTIVATION_DETECTED"
+            status: "ACTIVE"
+          - signal_type: "NO_ENGAGEMENT_PRESENT"
+            status: "ACTIVE"
+      outputs:
+        posture: "WATCH"
+        momentum: "FLAT"
+        risk_factors: []
+        opportunities:
+          - type: "ACTIVATION_OPPORTUNITY"
+            severity: "low"
+            description: "Account activated but not yet engaged"
+            evidence_signals:
+              - "ACCOUNT_ACTIVATION_DETECTED"
+        unknowns:
+          - type: "ENGAGEMENT_STRATEGY"
+            description: "How should we engage this activated account?"
+            introduced_at: "${now}"
+            review_after: "${now + 7 days}"
+      ttl_days: 90  # Re-evaluate quarterly
+    
+    # Rule 11: PROSPECT - Activation only → WATCH
+    - rule_id: "PROSPECT_ACTIVATION"
+      priority: 11
+      lifecycle_state: "PROSPECT"
+      conditions:
+        required_signals:
+          - signal_type: "ACCOUNT_ACTIVATION_DETECTED"
+            status: "ACTIVE"
+        excluded_signals:
+          - signal_type: "NO_ENGAGEMENT_PRESENT"
+            status: "ACTIVE"
+      outputs:
+        posture: "WATCH"
+        momentum: "FLAT"
+        risk_factors: []
+        opportunities:
+          - type: "ACTIVATION_OPPORTUNITY"
+            severity: "low"
+            description: "Account activated"
+            evidence_signals:
+              - "ACCOUNT_ACTIVATION_DETECTED"
+        unknowns: []
+      ttl_days: 90  # Re-evaluate quarterly
+    
+    # Rule 12: PROSPECT - Default (no activation) → DORMANT
+    - rule_id: "PROSPECT_DORMANT"
+      priority: 12
+      lifecycle_state: "PROSPECT"
+      conditions:
+        excluded_signals:
+          - signal_type: "ACCOUNT_ACTIVATION_DETECTED"
+            status: "ACTIVE"
+      outputs:
+        posture: "DORMANT"
+        momentum: "FLAT"
+        risk_factors: []
+        opportunities: []
+        unknowns:
+          - type: "ACTIVATION_TRIGGER"
+            description: "What would activate this account?"
+            introduced_at: "${now}"
+            review_after: "${now + 30 days}"
+      ttl_days: 30  # Re-evaluate monthly
+    
+    # ============================================================
+    # CROSS-LIFECYCLE RULES (Lowest Priority - Catch-alls)
+    # ============================================================
+    
+    # Rule 13: Fallback - Any lifecycle, no matching rules → WATCH
+    - rule_id: "FALLBACK_WATCH"
+      priority: 99
+      lifecycle_state: null  # Matches any lifecycle state
+      conditions:
+        # Matches if no other rule matched
+      outputs:
+        posture: "WATCH"
+        momentum: "FLAT"
+        risk_factors: []
+        opportunities: []
+        unknowns:
+          - type: "STATE_EVALUATION"
+            description: "Account state unclear - needs evaluation"
+            introduced_at: "${now}"
+            review_after: "${now + 7 days}"
+      ttl_days: 7  # Quick re-evaluation
+
+# ============================================================
+# Rule Evaluation Metadata
+# ============================================================
+
+evaluation:
+  # Rule evaluation is deterministic and order-stable
+  # Rules are evaluated in priority order (1-99, lower = first)
+  # First matching rule wins
+  # All conditions must match for a rule to apply
+  
+  # Condition operators:
+  # - equals: Exact match
+  # - greater_than: Numeric comparison
+  # - less_than: Numeric comparison
+  # - in: Array membership
+  # - exists: Property exists
+  # - not_exists: Property does not exist
+  
+  # Signal property access:
+  # - signal.data.{property_name} for signal data properties
+  # - signal.metadata.{property_name} for signal metadata
+  
+  # Unknown TTL semantics:
+  # - introduced_at: ISO timestamp when unknown was introduced
+  # - expires_at: ISO timestamp when unknown expires (null = never)
+  # - review_after: ISO timestamp when unknown should be reviewed (alternative to expires_at)
+  
+  # Posture state meanings:
+  # - OK: Healthy, stable, no action needed
+  # - WATCH: Requires attention, monitor closely
+  # - AT_RISK: Risk factors present, intervention may be needed
+  # - EXPAND: Opportunity for growth/expansion
+  # - DORMANT: Inactive, no current engagement
+  
+  # Momentum meanings:
+  # - UP: Positive trajectory
+  # - FLAT: Stable, no change
+  # - DOWN: Negative trajectory
