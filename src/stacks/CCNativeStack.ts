@@ -624,6 +624,18 @@ export class CCNativeStack extends cdk.Stack {
       description: 'VPC ID for Neptune cluster',
     });
 
+    // Output subnet IDs for test runner setup
+    new cdk.CfnOutput(this, 'NeptuneSubnetIds', {
+      value: this.vpc.isolatedSubnets.map(subnet => subnet.subnetId).join(','),
+      description: 'Comma-separated list of Neptune subnet IDs (for test runner setup)',
+    });
+
+    // Output first subnet ID for convenience (most common use case)
+    new cdk.CfnOutput(this, 'NeptuneSubnetId', {
+      value: this.vpc.isolatedSubnets[0].subnetId,
+      description: 'First Neptune subnet ID (for test runner setup)',
+    });
+
     // Phase 1: Perception Lambda Functions
     this.createPerceptionHandlers();
   }

@@ -20,6 +20,18 @@ This is the most straightforward approach for running tests.
 
 ### Step 1: Get VPC Information
 
+The VPC ID and subnet IDs are automatically stored in your `.env` file after running `./deploy`. You can use them directly:
+
+```bash
+# Load from .env file
+source .env
+echo "VPC ID: $VPC_ID"
+echo "Subnet IDs: $NEPTUNE_SUBNET_IDS"
+echo "First Subnet ID: $NEPTUNE_SUBNET_ID"
+```
+
+Alternatively, you can query them from CloudFormation:
+
 ```bash
 # Get VPC ID from stack outputs
 aws cloudformation describe-stacks \
@@ -29,7 +41,15 @@ aws cloudformation describe-stacks \
   --profile cc-native-account \
   --region us-west-2
 
-# Get subnet IDs
+# Get subnet IDs (comma-separated)
+aws cloudformation describe-stacks \
+  --stack-name CCNativeStack \
+  --query "Stacks[0].Outputs[?OutputKey=='NeptuneSubnetIds'].OutputValue" \
+  --output text \
+  --profile cc-native-account \
+  --region us-west-2
+
+# Or get individual subnet details
 aws ec2 describe-subnets \
   --filters "Name=vpc-id,Values=<VPC_ID>" \
   --query "Subnets[*].[SubnetId,AvailabilityZone]" \

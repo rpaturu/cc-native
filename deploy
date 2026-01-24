@@ -141,6 +141,9 @@ ACCOUNT_POSTURE_STATE_TABLE_OUTPUT=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select
 GRAPH_MATERIALIZATION_STATUS_TABLE_OUTPUT=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="GraphMaterializationStatusTableName") | .OutputValue')
 NEPTUNE_CLUSTER_ENDPOINT_OUTPUT=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="NeptuneClusterEndpoint") | .OutputValue')
 NEPTUNE_CLUSTER_PORT_OUTPUT=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="NeptuneClusterPort") | .OutputValue')
+VPC_ID_OUTPUT=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="VpcId") | .OutputValue')
+NEPTUNE_SUBNET_IDS_OUTPUT=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="NeptuneSubnetIds") | .OutputValue')
+NEPTUNE_SUBNET_ID_OUTPUT=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="NeptuneSubnetId") | .OutputValue')
 AGENT_ROLE_ARN_OUTPUT=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="AgentRoleArn") | .OutputValue')
 USER_POOL_ID_OUTPUT=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="UserPoolId") | .OutputValue')
 USER_POOL_CLIENT_ID_OUTPUT=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="UserPoolClientId") | .OutputValue')
@@ -200,6 +203,11 @@ GRAPH_MATERIALIZATION_STATUS_TABLE_NAME=$GRAPH_MATERIALIZATION_STATUS_TABLE_OUTP
 # Neptune (Phase 2)
 NEPTUNE_CLUSTER_ENDPOINT=$NEPTUNE_CLUSTER_ENDPOINT_OUTPUT
 NEPTUNE_CLUSTER_PORT=$NEPTUNE_CLUSTER_PORT_OUTPUT
+
+# VPC Configuration (for test runner setup)
+VPC_ID=$VPC_ID_OUTPUT
+NEPTUNE_SUBNET_IDS=$NEPTUNE_SUBNET_IDS_OUTPUT
+NEPTUNE_SUBNET_ID=$NEPTUNE_SUBNET_ID_OUTPUT
 
 # IAM Roles
 AGENT_ROLE_ARN=$AGENT_ROLE_ARN_OUTPUT
