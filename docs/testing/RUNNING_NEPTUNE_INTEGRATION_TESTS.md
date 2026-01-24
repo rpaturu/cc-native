@@ -5,14 +5,23 @@ Neptune is deployed in **isolated VPC subnets** (no internet access), which mean
 ## Prerequisites
 
 1. **Infrastructure Deployed**: Run `./deploy` to deploy the CDK stack
+   - This creates the `.env` file with all required environment variables
+   - See [TEST_SCRIPT_DEPENDENCIES.md](./TEST_SCRIPT_DEPENDENCIES.md) for complete dependency list
+
 2. **Environment Variables**: The `.env` file should be populated with:
    - `NEPTUNE_CLUSTER_ENDPOINT`
    - `NEPTUNE_CLUSTER_PORT`
    - `ACCOUNT_POSTURE_STATE_TABLE_NAME`
    - `GRAPH_MATERIALIZATION_STATUS_TABLE_NAME`
+   - `VPC_ID` and `NEPTUNE_SUBNET_ID` (for test runner setup)
    - Other required AWS resource names
 
 3. **AWS Credentials**: Configured with the `cc-native-account` profile (or your profile name)
+   ```bash
+   aws sts get-caller-identity --profile cc-native-account
+   ```
+
+**Note**: The test scripts can automatically set up prerequisites (security group, IAM role, key pair) if you use `run-phase2-integration-tests.sh`. See [TEST_SCRIPT_DEPENDENCIES.md](./TEST_SCRIPT_DEPENDENCIES.md) for details.
 
 ## Setup and Run Integration Tests
 
