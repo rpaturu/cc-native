@@ -805,73 +805,42 @@ export interface RuleTriggerMetadata {
 
 ## 8. Event Handlers
 
-### 8.1 Step Functions State Machines
+### 8.1 Event-Driven Chain (EventBridge → Lambda)
 
 **File:** `src/stacks/CCNativeStack.ts` (additions)
 
-**Purpose:** Orchestrate graph materialization and synthesis
+**Purpose:** Route events to Phase 2 handlers (matching Phase 1 pattern)
 
-**State Machines:**
-
-**Phase2GraphMaterializerStateMachine:**
-```typescript
-{
-  StartAt: 'MaterializeSignal',
-  States: {
-    MaterializeSignal: {
-      Type: 'Task',
-      Resource: 'arn:aws:lambda:...:graph-materializer-handler',
-      Retry: [...],
-      Catch: [...],
-      Next: 'LogMaterialization'
-    },
-    LogMaterialization: {
-      Type: 'Task',
-      Resource: 'arn:aws:lambda:...:ledger-handler',
-      End: true
-    }
-  }
-}
-```
-
-**Phase2SynthesisEngineStateMachine:**
-```typescript
-{
-  StartAt: 'CheckGraphMaterialized',
-  States: {
-    CheckGraphMaterialized: {
-      Type: 'Task',
-      Resource: 'arn:aws:lambda:...:check-graph-handler',
-      Next: 'Synthesize'
-    },
-    Synthesize: {
-      Type: 'Task',
-      Resource: 'arn:aws:lambda:...:synthesis-engine-handler',
-      Retry: [...],
-      Catch: [...],
-      Next: 'LogSynthesis'
-    },
-    LogSynthesis: {
-      Type: 'Task',
-      Resource: 'arn:aws:lambda:...:ledger-handler',
-      End: true
-    }
-  }
-}
-```
+**Decision: Use EventBridge → Lambda directly (no Step Functions for event-driven path)**
+- Phase 1 uses EventBridge → Lambda with DLQs (no Step Functions)
+- Step Functions add operational overhead without clear benefit for simple event chains
+- Lambda already provides retry/DLQ support
+- Ledger already provides audit trails
+- Keep architecture consistent with Phase 1
 
 **EventBridge Integration (Event-Driven Chain, NOT Fan-Out):**
-- Rule 1: Route `SIGNAL_DETECTED` → `Phase2GraphMaterializerStateMachine`
-- Rule 2: Route `SIGNAL_CREATED` → `Phase2GraphMaterializerStateMachine`
-- Rule 3: Route `GRAPH_MATERIALIZED` → `Phase2SynthesisEngineStateMachine` (canonical path)
+- Rule 1: Route `SIGNAL_DETECTED` → `graph-materializer-handler` Lambda
+- Rule 2: Route `SIGNAL_CREATED` → `graph-materializer-handler` Lambda
+- Rule 3: Route `GRAPH_MATERIALIZED` → `synthesis-engine-handler` Lambda (canonical path)
 - **Critical:** Do NOT use fan-out pattern - EventBridge doesn't guarantee ordering across targets
 - Materializer emits `GRAPH_MATERIALIZED` event only after successful materialization
 - Synthesis handler triggers only on `GRAPH_MATERIALIZED` event (not directly on signal events)
 
+**Handler Configuration:**
+- Each Lambda has DLQ configured (matching Phase 1 pattern)
+- Retry attempts: 2 (configurable per handler)
+- Timeout: Appropriate for operation (materializer: 5 min, synthesis: 3 min)
+- Ledger logging happens within handlers (not separate Lambda)
+
+**Optional: Step Functions for Backfill Only**
+- If backfill workflow needs richer orchestration (checkpointing, parallel batches, etc.), consider Step Functions for backfill handler only
+- Event-driven path remains EventBridge → Lambda for simplicity and consistency
+
 **Acceptance Criteria:**
-- State machines orchestrate handlers correctly
-- Retries and error handling are configured
-- EventBridge routes events to both handlers
+- EventBridge routes events to handlers correctly
+- DLQs are configured for all handlers
+- Retries and error handling work via Lambda configuration
+- Architecture matches Phase 1 pattern (EventBridge → Lambda)
 
 ---
 
@@ -991,12 +960,11 @@ After Phase 2 is complete:
 
 **Estimated Implementation Statistics:**
 - **~25-30 TypeScript files** (graph + synthesis layer)
-- **3-4 Lambda handlers** deployed via CDK
-- **2 Step Functions state machines**
-- **2 DLQs** configured for error handling
+- **3 Lambda handlers** deployed via CDK (materializer, backfill, synthesis)
+- **2 DLQs** configured for error handling (matching Phase 1 pattern)
 - **1 Neptune cluster** (dev/stage)
-- **1 DynamoDB table** (AccountPostureState)
-- **EventBridge rules** for handler routing
+- **2 DynamoDB tables** (AccountPostureState, GraphMaterializationStatus)
+- **3 EventBridge rules** for handler routing (matching Phase 1 pattern)
 
 ---
 
