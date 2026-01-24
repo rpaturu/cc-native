@@ -12,7 +12,12 @@ PROFILE="${AWS_PROFILE:-cc-native-account}"
 REGION="${AWS_REGION:-us-west-2}"
 ACTION="${1:-help}"
 
-# Load configuration files
+# Load .env.local if it exists (for local overrides like GIT_REPO_URL, GIT_TOKEN)
+if [ -f .env.local ]; then
+  source .env.local
+fi
+
+# Load .env if it exists (for AWS configuration)
 if [ -f .env ]; then
   source .env
 fi
@@ -264,12 +269,15 @@ run_tests() {
   echo "Instance ID: $INSTANCE_ID"
   echo ""
 
-  # Load REPO_URL from environment or .env.test-runner
+  # Load REPO_URL from environment, .env.local, or .env.test-runner
+  # .env.local takes precedence (already loaded above)
+  # Then check .env.test-runner
   if [ -f .env.test-runner ]; then
     source .env.test-runner
   fi
 
-  REPO_URL="${REPO_URL:-}"
+  # Use GIT_REPO_URL from .env.local if REPO_URL not set
+  REPO_URL="${REPO_URL:-${GIT_REPO_URL:-}}"
   if [ -z "$REPO_URL" ]; then
     echo "⚠️  Warning: REPO_URL not set"
     echo "Tests will fail if repository is not already cloned on the instance"

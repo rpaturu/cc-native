@@ -10,12 +10,23 @@ set -e
 
 PROFILE="${AWS_PROFILE:-cc-native-account}"
 REGION="${AWS_REGION:-us-west-2}"
+
+# Load .env.local if it exists (for local overrides like GIT_REPO_URL, GIT_TOKEN)
+if [ -f .env.local ]; then
+  source .env.local
+fi
+
+# Load .env if it exists (for AWS configuration)
+if [ -f .env ]; then
+  source .env
+fi
+
 SKIP_PREREQUISITES="${SKIP_PREREQUISITES:-false}"
 SKIP_LAUNCH="${SKIP_LAUNCH:-false}"
-REPO_URL="${REPO_URL:-}"
+REPO_URL="${REPO_URL:-${GIT_REPO_URL:-}}"  # Use GIT_REPO_URL from .env.local if available
 DEPLOY_METHOD="${DEPLOY_METHOD:-clone}"  # clone, s3, or manual
 S3_BUCKET="${S3_BUCKET:-}"  # S3 bucket for code deployment
-GIT_TOKEN="${GIT_TOKEN:-}"  # Git token for private repos (HTTPS)
+GIT_TOKEN="${GIT_TOKEN:-}"  # Git token for private repos (HTTPS) - can come from .env.local
 GIT_SSH_KEY="${GIT_SSH_KEY:-}"  # Path to SSH key for private repos
 
 # Parse command-line arguments
@@ -133,12 +144,13 @@ if [ "$DEPLOY_METHOD" = "clone" ]; then
   if [ -n "$REPO_URL" ]; then
     echo "Repository URL: $REPO_URL"
     if [ -n "$GIT_TOKEN" ]; then
-      echo "Using Git token for authentication (HTTPS)"
+      echo "Using Git token for authentication (HTTPS) ${GIT_TOKEN:+[from .env.local]}"
     elif [ -n "$GIT_SSH_KEY" ]; then
       echo "Using SSH key: $GIT_SSH_KEY"
     fi
   else
-    echo "⚠️  Warning: REPO_URL not set - repository must already exist on instance"
+    echo "⚠️  Warning: REPO_URL/GIT_REPO_URL not set - repository must already exist on instance"
+    echo "   Set GIT_REPO_URL in .env.local or use --repo-url flag"
   fi
 elif [ "$DEPLOY_METHOD" = "s3" ]; then
   if [ -n "$S3_BUCKET" ]; then
