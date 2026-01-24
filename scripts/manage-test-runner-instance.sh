@@ -247,6 +247,172 @@ check_status() {
   show_connection_info $INSTANCE_ID
 }
 
+# Function to run tests on instance
+run_tests() {
+  echo "=========================================="
+  echo "Running Phase 2 Integration Tests"
+  echo "=========================================="
+  
+  INSTANCE_ID=$(get_instance_id)
+  
+  if [ -z "$INSTANCE_ID" ] || [ "$INSTANCE_ID" == "None" ]; then
+    echo "Error: No running instance found"
+    echo "Launch an instance first: ./scripts/manage-test-runner-instance.sh launch"
+    exit 1
+  fi
+
+  echo "Instance ID: $INSTANCE_ID"
+  echo ""
+
+  # Load REPO_URL from environment or .env.test-runner
+  if [ -f .env.test-runner ]; then
+    source .env.test-runner
+  fi
+
+  REPO_URL="${REPO_URL:-}"
+  if [ -z "$REPO_URL" ]; then
+    echo "⚠️  Warning: REPO_URL not set"
+    echo "Tests will fail if repository is not already cloned on the instance"
+    echo "Set REPO_URL environment variable or clone repository manually"
+    echo ""
+  fi
+
+  # Prepare test commands
+  TEST_COMMANDS_FILE="/tmp/test-commands-$$.json"
+  ESCAPED_REPO_URL=$(echo "$REPO_URL" | sed 's/"/\\"/g')
+
+  cat > $TEST_COMMANDS_FILE << EOF
+{
+  "commands": [
+    "cd ~ || exit 1",
+    "if ! command -v node &> /dev/null; then echo 'Installing Node.js 20...'; curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash; export NVM_DIR=\\\"\\\$HOME/.nvm\\\"; [ -s \\\"\\\$NVM_DIR/nvm.sh\\\" ] && . \\\"\\\$NVM_DIR/nvm.sh\\\"; nvm install 20; nvm use 20; fi",
+    "if [ ! -d \\\"cc-native\\\" ]; then if [ -z \\\"$ESCAPED_REPO_URL\\\" ]; then echo 'Error: Repository not found and REPO_URL not set'; exit 1; fi; echo 'Cloning repository...'; git clone \\\"$ESCAPED_REPO_URL\\\" cc-native; fi",
+    "cd cc-native || exit 1",
+    "if [ ! -d \\\"node_modules\\\" ]; then echo 'Installing dependencies...'; npm install; fi",
+    "echo 'Running Phase 2 integration tests...'",
+    "npm test -- src/tests/integration/phase2.test.ts"
+  ]
+}
+EOF
+
+  # Send command to instance
+  echo "Sending test command to instance..."
+  if [ -n "$REPO_URL" ]; then
+    echo "Repository URL: $REPO_URL"
+  fi
+
+  COMMAND_OUTPUT=$(aws ssm send-command \
+    --instance-ids "$INSTANCE_ID" \
+    --document-name "AWS-RunShellScript" \
+    --parameters file://$TEST_COMMANDS_FILE \
+    --profile $PROFILE \
+    --region $REGION \
+    --no-cli-pager 2>&1)
+
+  if [ $? -ne 0 ]; then
+    echo "❌ Failed to send command to instance"
+    echo "Error: $COMMAND_OUTPUT"
+    rm -f $TEST_COMMANDS_FILE
+    exit 1
+  fi
+
+  COMMAND_ID=$(echo "$COMMAND_OUTPUT" | grep -o '"CommandId":"[^"]*' | head -1 | cut -d'"' -f4 || echo "")
+
+  if [ -z "$COMMAND_ID" ]; then
+    echo "❌ Failed to get command ID from SSM"
+    rm -f $TEST_COMMANDS_FILE
+    exit 1
+  fi
+
+  echo "Command ID: $COMMAND_ID"
+  echo "Waiting for command to complete (this may take a few minutes)..."
+
+  # Wait for command to complete
+  MAX_WAIT=600  # 10 minutes
+  ELAPSED=0
+  while [ $ELAPSED -lt $MAX_WAIT ]; do
+    STATUS=$(aws ssm get-command-invocation \
+      --command-id "$COMMAND_ID" \
+      --instance-id "$INSTANCE_ID" \
+      --query "Status" \
+      --output text \
+      --profile $PROFILE \
+      --region $REGION \
+      --no-cli-pager 2>/dev/null || echo "Unknown")
+
+    if [ "$STATUS" = "Success" ] || [ "$STATUS" = "Failed" ] || [ "$STATUS" = "Cancelled" ] || [ "$STATUS" = "TimedOut" ]; then
+      break
+    fi
+    sleep 5
+    ELAPSED=$((ELAPSED + 5))
+    echo -n "."
+  done
+  echo ""
+
+  # Get command output
+  echo ""
+  echo "Test Output:"
+  echo "=========================================="
+  OUTPUT=$(aws ssm get-command-invocation \
+    --command-id "$COMMAND_ID" \
+    --instance-id "$INSTANCE_ID" \
+    --query "StandardOutputContent" \
+    --output text \
+    --profile $PROFILE \
+    --region $REGION \
+    --no-cli-pager 2>/dev/null || echo "")
+
+  echo "$OUTPUT"
+
+  # Get error output if any
+  ERROR_OUTPUT=$(aws ssm get-command-invocation \
+    --command-id "$COMMAND_ID" \
+    --instance-id "$INSTANCE_ID" \
+    --query "StandardErrorContent" \
+    --output text \
+    --profile $PROFILE \
+    --region $REGION \
+    --no-cli-pager 2>/dev/null || echo "")
+
+  if [ -n "$ERROR_OUTPUT" ] && [ "$ERROR_OUTPUT" != "None" ]; then
+    echo ""
+    echo "Error Output:"
+    echo "=========================================="
+    echo "$ERROR_OUTPUT"
+  fi
+
+  # Get exit code
+  EXIT_CODE=$(aws ssm get-command-invocation \
+    --command-id "$COMMAND_ID" \
+    --instance-id "$INSTANCE_ID" \
+    --query "ResponseCode" \
+    --output text \
+    --profile $PROFILE \
+    --region $REGION \
+    --no-cli-pager 2>/dev/null || echo "1")
+
+  # Clean up
+  rm -f $TEST_COMMANDS_FILE
+
+  echo ""
+  echo "=========================================="
+  if [ "$STATUS" = "Success" ] && [ "$EXIT_CODE" = "0" ]; then
+    echo "✅ All tests passed!"
+    echo "=========================================="
+    exit 0
+  else
+    echo "❌ Tests failed or encountered errors"
+    echo "=========================================="
+    echo ""
+    echo "Exit Code: $EXIT_CODE"
+    echo "Status: $STATUS"
+    echo ""
+    echo "Instance retained for debugging"
+    echo "Connect with: aws ssm start-session --target $INSTANCE_ID --profile $PROFILE --region $REGION"
+    exit 1
+  fi
+}
+
 # Function to teardown instance
 teardown_instance() {
   echo "=========================================="
@@ -306,6 +472,7 @@ Actions:
   launch    Launch and configure a new EC2 test runner instance
   status    Check the status of the test runner instance
   connect   Show connection instructions for the instance
+  test      Run Phase 2 integration tests on the instance
   teardown  Terminate the test runner instance
   help      Show this help message
 
@@ -318,6 +485,10 @@ Examples:
 
   # Show connection info
   ./scripts/manage-test-runner-instance.sh connect
+
+  # Run tests
+  export REPO_URL="https://github.com/your-org/cc-native.git"
+  ./scripts/manage-test-runner-instance.sh test
 
   # Terminate instance
   ./scripts/manage-test-runner-instance.sh teardown
@@ -339,6 +510,9 @@ case "$ACTION" in
     ;;
   connect)
     show_connection_info
+    ;;
+  test)
+    run_tests
     ;;
   teardown)
     teardown_instance
