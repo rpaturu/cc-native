@@ -855,22 +855,22 @@ export interface RuleTriggerMetadata {
 - Neptune subnet group
 - Neptune security group
 - IAM roles for Neptune access
-- Step Functions state machines (see 8.1)
 - Lambda functions:
   - `graph-materializer-handler`
   - `graph-backfill-handler`
   - `synthesis-engine-handler`
-  - `check-graph-handler`
 - Dead letter queues:
   - `graph-materializer-handler-dlq`
   - `synthesis-engine-handler-dlq`
-- DynamoDB table: `AccountPostureState` (see 7.1)
+- DynamoDB tables:
+  - `AccountPostureState` (see 7.1)
+  - `GraphMaterializationStatus` (for failure semantics enforcement)
 - EventBridge rules for handler routing
 
 **EventBridge Rules:**
-- Rule 1: Route `SIGNAL_DETECTED` → `Phase2GraphMaterializerStateMachine`
-- Rule 2: Route `SIGNAL_CREATED` → `Phase2GraphMaterializerStateMachine`
-- Rule 3: Route `GRAPH_MATERIALIZED` → `Phase2SynthesisEngineStateMachine` (or use ledger gate)
+- Rule 1: Route `SIGNAL_DETECTED` → `graph-materializer-handler` Lambda
+- Rule 2: Route `SIGNAL_CREATED` → `graph-materializer-handler` Lambda
+- Rule 3: Route `GRAPH_MATERIALIZED` → `synthesis-engine-handler` Lambda (canonical path)
 
 **Acceptance Criteria:**
 - All resources deploy via CDK
