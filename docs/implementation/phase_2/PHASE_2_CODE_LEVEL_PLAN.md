@@ -66,7 +66,7 @@
 - `neptune.SubnetGroup` - VPC subnets for Neptune
 - `neptune.ParameterGroup` - Cluster parameters
 - `ec2.SecurityGroup` - Security group for Neptune (VPC-only access)
-- `iam.Role` - IAM role for Step Functions/Lambda to access Neptune
+- `iam.Role` - IAM role for Lambda to access Neptune
 - `iam.Policy` - Neptune access policy (Gremlin queries)
 
 **Configuration:**
@@ -588,18 +588,27 @@ export interface RuleTriggerMetadata {
 **Purpose:** One-time backfill of Phase 1 signals into graph
 
 **Trigger:**
-- Manual invocation or Step Functions workflow
+- Manual invocation (Lambda function)
+- Can be invoked via AWS Console, CLI, or scheduled via EventBridge Scheduler
 
 **Logic:**
 1. Query signals by tenant/account/time (paginated)
 2. For each signal batch:
    - Call `GraphMaterializer.materializeBatch(signalIds, tenantId)`
    - Checkpoint progress (DynamoDB)
-3. Resume from checkpoint if interrupted
+3. Resume from checkpoint if interrupted (on retry or manual re-invocation)
 
 **Checkpointing:**
-- Store last processed `signalId` and `tenantId` in DynamoDB
-- Resume from checkpoint on retry
+- Store last processed `signalId` and `tenantId` in DynamoDB (`BackfillCheckpoint` table)
+- Resume from checkpoint on retry or re-invocation
+- Idempotent: re-processing same signals produces no duplicates (graph upserts are idempotent)
+
+**Why Lambda (not Step Functions):**
+- Simple batch processing with checkpointing doesn't require Step Functions orchestration
+- Lambda timeout (15 min) is sufficient for batch processing with pagination
+- Checkpointing in DynamoDB provides resumability
+- Consistent with Phase 1 architecture (no Step Functions)
+- Lower operational overhead
 
 **Acceptance Criteria:**
 - Backfill can run for a tenant without timeouts
