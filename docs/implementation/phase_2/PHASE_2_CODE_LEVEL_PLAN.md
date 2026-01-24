@@ -793,11 +793,13 @@ export interface RuleTriggerMetadata {
 ```
 
 **Handler Logic:**
-1. Extract accountId, tenantId from event
-2. Verify graph materialization succeeded (check `GraphMaterializationStatus` table - **Failure Semantics Rule**)
-   - Query `GraphMaterializationStatus` table for signal materialization status
-   - If status is not 'COMPLETED', do NOT run synthesis (prevents phantom posture updates)
-   - Ledger is for audit only, not for gating synthesis
+1. Extract accountId, tenantId, signalId from event
+2. Verify graph materialization succeeded - **Failure Semantics Rule (LOCKED)**
+   - Query `GraphMaterializationStatus` table for `SIGNAL#{tenantId}#{signalId}`
+   - If status is not 'COMPLETED', exit immediately (do NOT run synthesis)
+   - **Single enforcement path:** Only `GraphMaterializationStatus` table is checked
+   - **Ledger is NOT checked for gating** - ledger is for audit only, not for synthesis gating
+   - This prevents "phantom posture updates" without full evidence linkage
 3. Call `SynthesisEngine.synthesize(accountId, tenantId, eventTime)`
 4. Write `AccountPostureState` to DynamoDB (idempotent - conditional write with `inputs_hash` check)
 5. Upsert Posture/Risk/Unknown vertices + edges in Neptune
@@ -883,9 +885,15 @@ export interface RuleTriggerMetadata {
 - Timeout: Appropriate for operation (materializer: 5 min, synthesis: 3 min)
 - Ledger logging happens within handlers (not separate Lambda)
 
-**Optional: Step Functions for Backfill Only**
-- If backfill workflow needs richer orchestration (checkpointing, parallel batches, etc.), consider Step Functions for backfill handler only
-- Event-driven path remains EventBridge → Lambda for simplicity and consistency
+**Backfill Architecture Decision (LOCKED):**
+- Backfill uses Lambda with DynamoDB checkpointing (no Step Functions)
+- Lambda timeout (15 min) + pagination + checkpointing is sufficient for batch processing
+- Consistent with Phase 1 architecture (no Step Functions anywhere)
+- If backfill needs to process millions of signals, consider:
+  - Increasing Lambda timeout or memory
+  - Processing in smaller batches per invocation
+  - Using EventBridge Scheduler to invoke Lambda repeatedly with different time ranges
+- Step Functions would only add operational overhead without clear benefit
 
 **Acceptance Criteria:**
 - EventBridge routes events to handlers correctly
