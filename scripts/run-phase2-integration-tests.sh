@@ -1,7 +1,7 @@
 #!/bin/bash
 # run-phase2-integration-tests.sh
 # Complete workflow for running Phase 2 integration tests:
-# 1. Set up prerequisites (security group, IAM role, key pair)
+# 1. Set up prerequisites (security group, IAM role, key pair) - optional
 # 2. Launch EC2 test runner instance (or reuse existing)
 # 3. Configure instance and run tests remotely via SSM
 # 4. Conditionally teardown: only if all tests pass
@@ -14,9 +14,83 @@ SKIP_PREREQUISITES="${SKIP_PREREQUISITES:-false}"
 SKIP_LAUNCH="${SKIP_LAUNCH:-false}"
 REPO_URL="${REPO_URL:-}"
 
+# Parse command-line arguments
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    --skip-prerequisites)
+      SKIP_PREREQUISITES="true"
+      shift
+      ;;
+    --setup-prerequisites)
+      SKIP_PREREQUISITES="false"
+      shift
+      ;;
+    --skip-launch)
+      SKIP_LAUNCH="true"
+      shift
+      ;;
+    --repo-url)
+      REPO_URL="$2"
+      shift 2
+      ;;
+    --profile)
+      PROFILE="$2"
+      shift 2
+      ;;
+    --region)
+      REGION="$2"
+      shift 2
+      ;;
+    --help|-h)
+      echo "Usage: $0 [OPTIONS]"
+      echo ""
+      echo "Options:"
+      echo "  --skip-prerequisites    Skip prerequisites setup (use existing security group, IAM role, key pair)"
+      echo "  --setup-prerequisites   Explicitly run prerequisites setup (default: runs if not skipped)"
+      echo "  --skip-launch          Skip instance launch (use existing instance)"
+      echo "  --repo-url URL         Repository URL for cloning (required if repo not on instance)"
+      echo "  --profile PROFILE      AWS profile (default: cc-native-account)"
+      echo "  --region REGION        AWS region (default: us-west-2)"
+      echo "  --help, -h             Show this help message"
+      echo ""
+      echo "Environment variables:"
+      echo "  SKIP_PREREQUISITES     Skip prerequisites setup (true/false)"
+      echo "  SKIP_LAUNCH            Skip instance launch (true/false)"
+      echo "  REPO_URL               Repository URL for cloning"
+      echo "  AWS_PROFILE            AWS profile name"
+      echo "  AWS_REGION             AWS region"
+      echo ""
+      echo "Examples:"
+      echo "  # Full workflow (setup prerequisites, launch instance, run tests)"
+      echo "  $0 --repo-url https://github.com/your-org/cc-native.git"
+      echo ""
+      echo "  # Skip prerequisites (already set up)"
+      echo "  $0 --skip-prerequisites --repo-url https://github.com/your-org/cc-native.git"
+      echo ""
+      echo "  # Use existing instance and skip prerequisites"
+      echo "  $0 --skip-prerequisites --skip-launch --repo-url https://github.com/your-org/cc-native.git"
+      exit 0
+      ;;
+    *)
+      echo "Unknown option: $1"
+      echo "Use --help for usage information"
+      exit 1
+      ;;
+  esac
+done
+
 echo "=========================================="
 echo "Phase 2 Integration Test Workflow"
 echo "=========================================="
+echo "AWS Profile: $PROFILE"
+echo "AWS Region: $REGION"
+echo "Skip Prerequisites: $SKIP_PREREQUISITES"
+echo "Skip Launch: $SKIP_LAUNCH"
+if [ -n "$REPO_URL" ]; then
+  echo "Repository URL: $REPO_URL"
+else
+  echo "⚠️  Warning: REPO_URL not set - repository must already exist on instance"
+fi
 echo ""
 
 # Function to show manual instructions (fallback)

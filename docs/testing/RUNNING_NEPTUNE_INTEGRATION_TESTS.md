@@ -418,15 +418,12 @@ chmod +x setup-test-runner-prerequisites.sh
 Run the complete workflow with a single command:
 
 ```bash
-# Set repository URL (required for first run)
-export REPO_URL="https://github.com/your-org/cc-native.git"
-
-# Run complete workflow
-./scripts/run-phase2-integration-tests.sh
+# Full workflow (setup prerequisites, launch instance, run tests)
+./scripts/run-phase2-integration-tests.sh --repo-url https://github.com/your-org/cc-native.git
 ```
 
 This script will:
-1. Set up all prerequisites (security group, IAM role, key pair)
+1. Set up all prerequisites (security group, IAM role, key pair) - **optional, can be skipped**
 2. Launch the EC2 instance (or reuse existing if already running)
 3. Configure instance (install Node.js, clone repo, install dependencies)
 4. Run Phase 2 integration tests remotely via SSM
@@ -434,10 +431,36 @@ This script will:
    - ✅ **Tests pass** → Instance automatically terminated
    - ❌ **Tests fail** → Instance retained for debugging
 
-**Environment Variables**:
+**Command-Line Options**:
+- `--repo-url URL` - Git repository URL (required if repo not on instance)
+- `--skip-prerequisites` - Skip prerequisites setup (use existing security group, IAM role, key pair)
+- `--setup-prerequisites` - Explicitly run prerequisites setup (default: runs if not skipped)
+- `--skip-launch` - Skip instance launch (use existing instance)
+- `--profile PROFILE` - AWS profile (default: cc-native-account)
+- `--region REGION` - AWS region (default: us-west-2)
+- `--help, -h` - Show help message
+
+**Examples**:
+```bash
+# Full workflow (first time - sets up everything)
+./scripts/run-phase2-integration-tests.sh --repo-url https://github.com/your-org/cc-native.git
+
+# Skip prerequisites (already set up)
+./scripts/run-phase2-integration-tests.sh --skip-prerequisites --repo-url https://github.com/your-org/cc-native.git
+
+# Use existing instance and skip prerequisites
+./scripts/run-phase2-integration-tests.sh --skip-prerequisites --skip-launch --repo-url https://github.com/your-org/cc-native.git
+
+# Show all options
+./scripts/run-phase2-integration-tests.sh --help
+```
+
+**Environment Variables** (alternative to command-line options):
 - `REPO_URL` - Git repository URL (required for first run)
 - `SKIP_PREREQUISITES=true` - Skip prerequisites setup (use existing)
 - `SKIP_LAUNCH=true` - Skip launch (use existing instance)
+- `AWS_PROFILE` - AWS profile name
+- `AWS_REGION` - AWS region
 
 ### Option 2: Manual Step-by-Step
 
