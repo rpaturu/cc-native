@@ -168,9 +168,14 @@ const g = graph.traversal().withRemote(connection);
 - `SIGNAL#{tenant_id}#{signal_id}` (tenant-scoped; assumes signal_id is unique within tenant)
 - `EVIDENCE_SNAPSHOT#{tenant_id}#{evidence_snapshot_id}` (tenant-scoped; from EvidenceSnapshotRef.sha256 or unique ID)
 - `POSTURE#{tenant_id}#{account_id}#{posture_id}` (posture_id = inputs_hash, NOT timestamp - ensures determinism)
-- `RISK_FACTOR#{risk_factor_id}` (risk_factor_id = deterministic hash, globally unique)
-- `OPPORTUNITY#{opportunity_id}` (opportunity_id = deterministic hash, globally unique)
-- `UNKNOWN#{unknown_id}` (unknown_id = deterministic hash, globally unique)
+- `RISK_FACTOR#{risk_factor_id}` (risk_factor_id = SHA256 hash of: `{tenant_id, account_id, ruleset_version, inputs_hash, rule_id, type: "RISK_FACTOR", risk_type}`)
+- `OPPORTUNITY#{opportunity_id}` (opportunity_id = SHA256 hash of: `{tenant_id, account_id, ruleset_version, inputs_hash, rule_id, type: "OPPORTUNITY", opportunity_type}`)
+- `UNKNOWN#{unknown_id}` (unknown_id = SHA256 hash of: `{tenant_id, account_id, ruleset_version, inputs_hash, rule_id, type: "UNKNOWN", unknown_type}`)
+
+**Critical Rule: Deterministic Hash Composition (LOCKED)**
+- Risk/Opportunity/Unknown vertex IDs MUST include `tenant_id` in hash composition to prevent cross-tenant collisions
+- Hash components must be sorted lexicographically before hashing for determinism
+- Example: `SHA256(JSON.stringify({account_id, rule_id, ruleset_version, tenant_id, type, ...}.sort()))`
 
 **Critical Rule: Tenant-Scoped Vertex IDs (LOCKED)**
 - **Decision:** All vertex IDs MUST be tenant-scoped unless you can prove global uniqueness forever
@@ -187,9 +192,15 @@ const g = graph.traversal().withRemote(connection);
 **Required Properties (All Vertices):**
 - `tenant_id: string`
 - `entity_type: string` (e.g., "SIGNAL", "ACCOUNT", "POSTURE")
-- `created_at: string` (ISO timestamp)
-- `updated_at: string` (ISO timestamp)
+- `created_at: string` (ISO timestamp, snake_case)
+- `updated_at: string` (ISO timestamp, snake_case)
 - `schema_version: string` (e.g., "v1")
+
+**Critical Rule: Timestamp Field Naming Convention (LOCKED)**
+- **Signals (Phase 1):** Use `createdAt` (camelCase) - from `Timestamped` interface
+- **Graph vertices/edges:** Use `created_at`, `updated_at` (snake_case)
+- **Contract:** Never translate `createdAt` → `created_at` inside signal objects; only at graph boundary (when materializing signal to graph vertex)
+- This prevents field name confusion and maintains clear separation between Phase 1 signal structure and Phase 2 graph structure
 
 **Optional Properties (Per Vertex Type):**
 - SignalVertex: `signal_type`, `status`, `dedupeKey`, `detector_version`, `window_key`
@@ -518,9 +529,13 @@ export interface RuleTriggerMetadata {
 
 **Failure Semantics Rule (LOCKED):**
 - If graph materialization partially succeeds, synthesis MUST NOT run
-- **Enforcement:** Use separate `GraphMaterializationStatus` table (recommended - fast) OR ledger gate (check for `GRAPH_MATERIALIZATION_COMPLETED` event)
+- **Enforcement (LOCKED):** Use `GraphMaterializationStatus` table as authoritative gating mechanism
+  - Status table is fast (single DDB read) and cost-effective
+  - Ledger is used for audit only (not for gating synthesis)
+  - Synthesis handler checks `GraphMaterializationStatus` table before running
 - **Do NOT mutate signal record** (avoids write contention and mixing responsibilities)
 - **Do NOT use `graph_materialized=true` flag** - this option is removed entirely
+- **Do NOT use ledger gate for synthesis gating** - status table is the single enforcement path
 - Prevents "phantom posture updates" without full evidence linkage
 
 **Error Handling:**
@@ -610,8 +625,17 @@ export interface RuleTriggerMetadata {
 - Consistent with Phase 1 architecture (no Step Functions)
 - Lower operational overhead
 
+**Backfill Batch Size & Time Limits (LOCKED):**
+- **Batch size:** 50-200 signals per invocation (fits Neptune write rate, prevents timeouts)
+- **Time limit:** Stop processing at 12 minutes, checkpoint, re-invoke
+- **Rationale:** Prevents "works in dev, times out in stage" - explicit contract prevents production failures
+- **Checkpoint frequency:** After each batch (every 50-200 signals) or every 2 minutes, whichever comes first
+- **Resumability:** On re-invocation, read checkpoint and continue from last processed `signalId`
+
 **Acceptance Criteria:**
-- Backfill can run for a tenant without timeouts
+- Backfill can run for a tenant without timeouts (respects 12-minute time limit per invocation)
+- Batch size is capped at 50-200 signals per invocation
+- Checkpointing happens after each batch or every 2 minutes (whichever comes first)
 - Backfill is resumable and idempotent
 - Post-run: graph node/edge counts match expectation for sample accounts
 
@@ -762,9 +786,12 @@ export interface RuleTriggerMetadata {
 
 **Handler Logic:**
 1. Extract accountId, tenantId from event
-2. Verify graph materialization succeeded (check `GraphMaterializationStatus` table or ledger for `GRAPH_MATERIALIZATION_COMPLETED` event) - **Failure Semantics Rule**
+2. Verify graph materialization succeeded (check `GraphMaterializationStatus` table - **Failure Semantics Rule**)
+   - Query `GraphMaterializationStatus` table for signal materialization status
+   - If status is not 'COMPLETED', do NOT run synthesis (prevents phantom posture updates)
+   - Ledger is for audit only, not for gating synthesis
 3. Call `SynthesisEngine.synthesize(accountId, tenantId, eventTime)`
-4. Write `AccountPostureState` to DynamoDB (idempotent - only if `inputs_hash` changed)
+4. Write `AccountPostureState` to DynamoDB (idempotent - conditional write with `inputs_hash` check)
 5. Upsert Posture/Risk/Unknown vertices + edges in Neptune
 6. Emit ledger events: `POSTURE_UPDATED`, `RISK_FACTOR_EMITTED`, `UNKNOWN_EMITTED`
 
@@ -801,10 +828,15 @@ export interface RuleTriggerMetadata {
 - GSI (optional): `gsi1pk = TENANT#{tenant_id}`, `gsi1sk = POSTURE#{posture}#{updated_at}`
 - Attributes: All fields from `AccountPostureStateV1`
 
-**Idempotent Upsert:**
+**Idempotent Upsert (Churn Prevention - LOCKED):**
 - Use `inputs_hash` as idempotency key
+- **DDB Conditional Write Expression (enforces churn prevention under concurrency):**
+  ```typescript
+  ConditionExpression: 'attribute_not_exists(inputs_hash) OR inputs_hash <> :new_inputs_hash'
+  ```
 - Only update if `inputs_hash` changes (avoid churn)
 - **Churn Prevention:** If only `event.as_of_time` changes but signals/lifecycle don't, `inputs_hash` is unchanged → no DDB write
+- This conditional write prevents concurrent writes from causing unnecessary updates when inputs_hash is unchanged
 
 **Acceptance Criteria:**
 - Returns posture state within low latency (single DDB read)
@@ -995,9 +1027,11 @@ After Phase 2 is complete:
 
 3. **Failure Semantics:** ✅ **Enforced (LOCKED)**
    - If graph materialization partially succeeds, synthesis MUST NOT run
-   - Enforce via separate `GraphMaterializationStatus` table (recommended - fast) OR ledger gate
+   - Enforce via `GraphMaterializationStatus` table as authoritative gating mechanism (fast, cost-effective)
+   - Ledger is for audit only, not for gating synthesis
    - **Do NOT mutate signal record** (avoids write contention and mixing responsibilities)
    - **Do NOT use `graph_materialized=true` flag** - this option is removed entirely
+   - **Do NOT use ledger gate for synthesis gating** - status table is the single enforcement path
 
 4. **Evidence Resolution:** ✅ **IDs-first Contract**
    - Engine MUST resolve to `evidence_signal_ids[]` and `evidence_snapshot_refs[]`
