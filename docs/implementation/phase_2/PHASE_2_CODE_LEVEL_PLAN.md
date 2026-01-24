@@ -172,16 +172,17 @@ const g = graph.traversal().withRemote(connection);
 - `OPPORTUNITY#{opportunity_id}` (opportunity_id = deterministic hash, globally unique)
 - `UNKNOWN#{unknown_id}` (unknown_id = deterministic hash, globally unique)
 
-**Critical Assumption:**
-- If `signal_id` and `evidence_snapshot_id` are globally unique across tenants, tenant-scoping can be omitted
-- **Document explicitly:** Either tenant-scope all IDs OR declare global uniqueness as a hard assumption
+**Critical Rule: Tenant-Scoped Vertex IDs (LOCKED)**
+- **Decision:** All vertex IDs MUST be tenant-scoped unless you can prove global uniqueness forever
+- Multi-tenant collisions in graph IDs are catastrophic and hard to unwind
+- **Canonical format:** `SIGNAL#{tenant_id}#{signal_id}` and `EVIDENCE_SNAPSHOT#{tenant_id}#{evidence_snapshot_id}`
 - Recommendation: Tenant-scope for safety unless 100% certain of global uniqueness
+- If global uniqueness is assumed, document it as a hard assumption with rationale
 
 **Critical Rule: Signal Identity**
 - Vertex ID = `SIGNAL#{tenant_id}#{signal_id}` (tenant-scoped; from Phase 1 signal record)
 - `dedupeKey` stored as a **property**, not used for vertex identity
 - Prevents accidental graph collapse when signals look similar
-- If signal_id is globally unique, tenant-scoping can be omitted (document assumption explicitly)
 
 **Required Properties (All Vertices):**
 - `tenant_id: string`
@@ -515,10 +516,11 @@ export interface RuleTriggerMetadata {
 - Edges are idempotent via coalesce pattern
 - Replaying same event produces no duplicates
 
-**Failure Semantics Rule:**
+**Failure Semantics Rule (LOCKED):**
 - If graph materialization partially succeeds, synthesis MUST NOT run
-- Enforce via separate `GraphMaterializationStatus` table or ledger gate (check for `GRAPH_MATERIALIZATION_COMPLETED` event)
-- Do NOT mutate signal record (avoids write contention and mixing responsibilities)
+- **Enforcement:** Use separate `GraphMaterializationStatus` table (recommended - fast) OR ledger gate (check for `GRAPH_MATERIALIZATION_COMPLETED` event)
+- **Do NOT mutate signal record** (avoids write contention and mixing responsibilities)
+- **Do NOT use `graph_materialized=true` flag** - this option is removed entirely
 - Prevents "phantom posture updates" without full evidence linkage
 
 **Error Handling:**
@@ -977,15 +979,16 @@ After Phase 2 is complete:
    - Document all query patterns in `GRAPH_CONVENTIONS.md`
    - No OpenCypher queries
 
-2. **Signal Identity:** ✅ **Separated from dedupeKey**
+2. **Signal Identity:** ✅ **Separated from dedupeKey (LOCKED - Tenant-Scoped)**
    - Vertex ID = `SIGNAL#{tenant_id}#{signal_id}` (tenant-scoped; from Phase 1)
    - `dedupeKey` stored as property, not used for vertex identity
-   - If signal_id is globally unique, tenant-scoping can be omitted (document assumption explicitly)
+   - **Decision:** Tenant-scope all vertex IDs unless you can prove global uniqueness forever
 
-3. **Failure Semantics:** ✅ **Enforced**
+3. **Failure Semantics:** ✅ **Enforced (LOCKED)**
    - If graph materialization partially succeeds, synthesis MUST NOT run
-   - Enforce via separate `GraphMaterializationStatus` table (recommended) or ledger gate
-   - Do NOT mutate signal record (avoids write contention and mixing responsibilities)
+   - Enforce via separate `GraphMaterializationStatus` table (recommended - fast) OR ledger gate
+   - **Do NOT mutate signal record** (avoids write contention and mixing responsibilities)
+   - **Do NOT use `graph_materialized=true` flag** - this option is removed entirely
 
 4. **Evidence Resolution:** ✅ **IDs-first Contract**
    - Engine MUST resolve to `evidence_signal_ids[]` and `evidence_snapshot_refs[]`
