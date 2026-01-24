@@ -23,10 +23,10 @@ ruleset:
   #   - signal_type: Signal type enum
   #   - status: ACTIVE | SUPPRESSED | EXPIRED
   #   - where: Array of property predicates (all must match)
-  #     - property: Path to property (e.g., "trend_direction" in signal.context, "createdAt" for timestamps)
+  #     - property: Path to property (e.g., "trend_direction" in signal.context, "createdAt" for time-based comparisons)
   #     - operator: "equals", "greater_than", "less_than", "less_than_or_equal", "within_last_days", "in", "exists", "not_exists"
   #     - value: Comparison value
-  #     - Timestamp property path: Use "createdAt" (signal.createdAt, ISO timestamp when signal was created)
+  #     - Time-based property path: Use "createdAt" (signal.createdAt, ISO timestamp when signal was created)
   #     - Context property path: Use "context.{property_name}" (e.g., "context.trend_direction")
   # - excluded_signals: Array of signal conditions (none must match) - same schema as required_signals
   # - computed_predicates: Array of computed conditions (evaluated by engine, not signal properties)
@@ -464,7 +464,7 @@ evaluation:
   # - greater_than: Numeric comparison
   # - less_than: Numeric comparison
   # - less_than_or_equal: Numeric comparison
-  # - within_last_days: Timestamp comparison (signal.createdAt >= event.as_of_time - N days)
+  # - within_last_days: Time-based comparison (signal.createdAt >= event.as_of_time - N days)
   #   - Property path: "createdAt" (signal.createdAt, ISO timestamp when signal was created)
   # - in: Array membership
   # - exists: Property exists
@@ -482,7 +482,7 @@ evaluation:
   # Signal property access:
   # - signal.context.{property_name} for signal context properties (e.g., "context.trend_direction")
   # - signal.metadata.{property_name} for signal metadata (e.g., "metadata.confidence")
-  # - signal.createdAt for timestamp comparisons (ISO timestamp when signal was created)
+  # - signal.createdAt for time-based comparisons (ISO timestamp when signal was created)
   
   # Unknown TTL semantics:
   # - introduced_at: ISO timestamp when unknown was introduced
