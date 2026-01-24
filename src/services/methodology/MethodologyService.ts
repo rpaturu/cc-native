@@ -78,15 +78,14 @@ export class MethodologyService implements IMethodologyService {
       const schemaHash = this.computeSchemaHash(methodology);
       methodology.schema_hash = schemaHash;
 
-      // Store in Schema Registry (S3)
+      // Store in Schema Registry (S3) - versioned for history, Object Lock removed for development flexibility
       const s3Key = `methodologies/${input.methodology_id}/${version}.json`;
       await this.s3Client.send(new PutObjectCommand({
         Bucket: this.schemaBucket,
         Key: s3Key,
         Body: JSON.stringify(methodology, null, 2),
         ContentType: 'application/json',
-        ObjectLockMode: 'COMPLIANCE',
-        ObjectLockRetainUntilDate: this.getRetentionDate(),
+        // Object Lock removed for development flexibility - can be added back for production compliance
       }));
 
       methodology.schema_s3_key = s3Key;
@@ -374,9 +373,4 @@ export class MethodologyService implements IMethodologyService {
   /**
    * Get retention date (7 years)
    */
-  private getRetentionDate(): Date {
-    const date = new Date();
-    date.setFullYear(date.getFullYear() + 7);
-    return date;
-  }
 }

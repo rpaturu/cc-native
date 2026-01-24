@@ -11,7 +11,8 @@ import { v4 as uuidv4 } from 'uuid';
 /**
  * SnapshotService - Create and retrieve immutable snapshots
  * 
- * Snapshots are stored in S3 (immutable, Object Lock) and indexed in DynamoDB.
+ * Snapshots are stored in S3 (versioned for history) and indexed in DynamoDB.
+ * Object Lock removed for development flexibility - can be added back for production compliance.
  */
 export class SnapshotService implements ISnapshotService {
   private s3Client: S3Client;
@@ -88,20 +89,15 @@ export class SnapshotService implements ISnapshotService {
         schemaHash: '', // Will be set from schema registry in future
       };
 
-      // Store in S3 (immutable with Object Lock)
+      // Store in S3 (versioned for history, Object Lock removed for development flexibility)
       const s3Key = `snapshots/${entityType}/${entityId}/${snapshotId}.json`;
-      
-      // Calculate retention date (7 years from now)
-      const retentionDate = new Date();
-      retentionDate.setFullYear(retentionDate.getFullYear() + 7);
       
       await this.s3Client.send(new PutObjectCommand({
         Bucket: this.snapshotsBucket,
         Key: s3Key,
         Body: JSON.stringify(snapshot, null, 2),
         ContentType: 'application/json',
-        ObjectLockMode: 'COMPLIANCE',
-        ObjectLockRetainUntilDate: retentionDate,
+        // Object Lock removed for development flexibility - can be added back for production compliance
       }));
 
       // Get version ID if versioning is enabled

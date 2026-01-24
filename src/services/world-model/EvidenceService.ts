@@ -34,7 +34,8 @@ export class EvidenceService implements IEvidenceService {
   }
 
   /**
-   * Store immutable evidence (append-only)
+   * Store evidence (append-only, versioned for history)
+   * Object Lock removed for development flexibility - can be added back for production compliance.
    */
   async store(evidence: Omit<EvidenceRecord, 'evidenceId' | 's3Location' | 's3VersionId' | 'timestamp'>): Promise<EvidenceRecord> {
     const evidenceId = `evt_${Date.now()}_${uuidv4()}`;
@@ -48,20 +49,15 @@ export class EvidenceService implements IEvidenceService {
     };
 
     try {
-      // Store in S3 (immutable with Object Lock)
+      // Store in S3 (versioned for history, Object Lock removed for development flexibility)
       const s3Key = `evidence/${evidence.entityType}/${evidence.entityId}/${evidenceId}.json`;
-      
-      // Calculate retention date (7 years from now)
-      const retentionDate = new Date();
-      retentionDate.setFullYear(retentionDate.getFullYear() + 7);
       
       await this.s3Client.send(new PutObjectCommand({
         Bucket: this.evidenceBucket,
         Key: s3Key,
         Body: JSON.stringify(evidenceRecord, null, 2),
         ContentType: 'application/json',
-        ObjectLockMode: 'COMPLIANCE',
-        ObjectLockRetainUntilDate: retentionDate,
+        // Object Lock removed for development flexibility - can be added back for production compliance
       }));
 
       // Get version ID if versioning is enabled

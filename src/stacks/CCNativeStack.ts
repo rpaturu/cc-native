@@ -9,19 +9,30 @@ import * as cognito from 'aws-cdk-lib/aws-cognito';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as lambdaNodejs from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
+import * as ec2 from 'aws-cdk-lib/aws-ec2';
+import * as neptune from 'aws-cdk-lib/aws-neptune';
 import { Construct } from 'constructs';
 
 export interface CCNativeStackProps extends cdk.StackProps {
   // Add any custom props here
 }
 
+/**
+ * Internal properties for Neptune infrastructure
+ * These are not exposed as readonly public properties
+ */
+interface NeptuneInternalProperties {
+  neptuneLambdaSecurityGroup: ec2.SecurityGroup;
+  neptuneSubnets: string[];
+}
+
 export class CCNativeStack extends cdk.Stack {
   // S3 Buckets (World Model Architecture: S3 as Truth)
-  public readonly evidenceLedgerBucket: s3.IBucket;        // Immutable evidence (Object Lock)
-  public readonly worldStateSnapshotsBucket: s3.IBucket;   // Immutable snapshots (Object Lock)
-  public readonly schemaRegistryBucket: s3.IBucket;       // Schema definitions (Object Lock)
+  public readonly evidenceLedgerBucket: s3.IBucket;        // Evidence storage (versioned)
+  public readonly worldStateSnapshotsBucket: s3.IBucket;   // World state snapshots (versioned)
+  public readonly schemaRegistryBucket: s3.IBucket;       // Schema definitions (versioned)
   public readonly artifactsBucket: s3.IBucket;             // Artifacts (versioned)
-  public readonly ledgerArchivesBucket: s3.IBucket;        // Execution ledger archives (Object Lock)
+  public readonly ledgerArchivesBucket: s3.IBucket;        // Execution ledger archives (versioned)
 
   // DynamoDB Tables (World Model Architecture: DynamoDB as Belief)
   // World Model Tables
@@ -63,106 +74,68 @@ export class CCNativeStack extends cdk.Stack {
   public readonly userPoolClient: cognito.UserPoolClient;
 
   // Phase 1: Perception Lambda Functions
-  public readonly connectorPollHandler!: lambda.Function;
-  public readonly signalDetectionHandler!: lambda.Function;
-  public readonly lifecycleInferenceHandler!: lambda.Function;
+  public readonly connectorPollHandler: lambda.Function;
+  public readonly signalDetectionHandler: lambda.Function;
+  public readonly lifecycleInferenceHandler: lambda.Function;
 
   // Phase 1: DLQs for handlers
-  public readonly connectorPollDlq!: sqs.Queue;
-  public readonly signalDetectionDlq!: sqs.Queue;
-  public readonly lifecycleInferenceDlq!: sqs.Queue;
+  public readonly connectorPollDlq: sqs.Queue;
+  public readonly signalDetectionDlq: sqs.Queue;
+  public readonly lifecycleInferenceDlq: sqs.Queue;
+
+  // Phase 2: Neptune Graph Infrastructure
+  public readonly vpc: ec2.Vpc;
+  public readonly neptuneCluster: neptune.CfnDBCluster;
+  public readonly neptuneSecurityGroup: ec2.SecurityGroup;
+  public readonly neptuneAccessRole: iam.Role;
+
+  // Phase 2: DynamoDB Tables
+  public readonly accountPostureStateTable: dynamodb.Table;
+  public readonly graphMaterializationStatusTable: dynamodb.Table;
+
+  // Phase 2: Lambda Functions
+  public readonly graphMaterializerHandler: lambda.Function;
+  public readonly synthesisEngineHandler: lambda.Function;
+
+  // Phase 2: DLQs
+  public readonly graphMaterializerDlq: sqs.Queue;
+  public readonly synthesisEngineDlq: sqs.Queue;
 
 
   constructor(scope: Construct, id: string, props?: CCNativeStackProps) {
     super(scope, id, props);
 
-    // S3 Buckets (World Model: S3 as Immutable Truth)
+    // S3 Buckets (World Model: S3 as Truth - versioned for history)
     // Support using existing buckets from .env.local (via context) or create new ones
-    
-    // Evidence Ledger Bucket
-    const evidenceLedgerBucketName = this.node.tryGetContext('evidenceLedgerBucket') as string | undefined;
-    const evidenceLedgerBucketNameFinal = evidenceLedgerBucketName || 
-      `cc-native-evidence-ledger-${this.account}-${this.region}`;
-    
-    if (evidenceLedgerBucketName) {
-      // Use existing bucket
-      this.evidenceLedgerBucket = s3.Bucket.fromBucketName(this, 'EvidenceLedgerBucket', evidenceLedgerBucketName);
-    } else {
-      // Create new bucket
-      this.evidenceLedgerBucket = new s3.Bucket(this, 'EvidenceLedgerBucket', {
-        bucketName: evidenceLedgerBucketNameFinal,
-        versioned: true,
-        encryption: s3.BucketEncryption.S3_MANAGED,
-        objectLockEnabled: true,
-        objectLockDefaultRetention: s3.ObjectLockRetention.compliance(cdk.Duration.days(2555)), // 7 years
-      });
-    }
+    this.evidenceLedgerBucket = this.createOrImportBucket(
+      'evidenceLedgerBucket',
+      'EvidenceLedgerBucket',
+      `cc-native-evidence-ledger-${this.account}-${this.region}`
+    );
 
-    // World State Snapshots (immutable snapshots)
-    const worldStateSnapshotsBucketName = this.node.tryGetContext('worldStateSnapshotsBucket') as string | undefined;
-    const worldStateSnapshotsBucketNameFinal = worldStateSnapshotsBucketName || 
-      `cc-native-world-state-snapshots-${this.account}-${this.region}`;
-    
-    if (worldStateSnapshotsBucketName) {
-      this.worldStateSnapshotsBucket = s3.Bucket.fromBucketName(this, 'WorldStateSnapshotsBucket', worldStateSnapshotsBucketName);
-    } else {
-      this.worldStateSnapshotsBucket = new s3.Bucket(this, 'WorldStateSnapshotsBucket', {
-        bucketName: worldStateSnapshotsBucketNameFinal,
-        versioned: true,
-        encryption: s3.BucketEncryption.S3_MANAGED,
-        objectLockEnabled: true,
-        objectLockDefaultRetention: s3.ObjectLockRetention.compliance(cdk.Duration.days(2555)), // 7 years
-      });
-    }
+    this.worldStateSnapshotsBucket = this.createOrImportBucket(
+      'worldStateSnapshotsBucket',
+      'WorldStateSnapshotsBucket',
+      `cc-native-world-state-snapshots-${this.account}-${this.region}`
+    );
 
-    // Schema Registry (immutable schema definitions)
-    const schemaRegistryBucketName = this.node.tryGetContext('schemaRegistryBucket') as string | undefined;
-    const schemaRegistryBucketNameFinal = schemaRegistryBucketName || 
-      `cc-native-schema-registry-${this.account}-${this.region}`;
-    
-    if (schemaRegistryBucketName) {
-      this.schemaRegistryBucket = s3.Bucket.fromBucketName(this, 'SchemaRegistryBucket', schemaRegistryBucketName);
-    } else {
-      this.schemaRegistryBucket = new s3.Bucket(this, 'SchemaRegistryBucket', {
-        bucketName: schemaRegistryBucketNameFinal,
-        versioned: true,
-        encryption: s3.BucketEncryption.S3_MANAGED,
-        objectLockEnabled: true,
-        objectLockDefaultRetention: s3.ObjectLockRetention.compliance(cdk.Duration.days(2555)), // 7 years
-      });
-    }
+    this.schemaRegistryBucket = this.createOrImportBucket(
+      'schemaRegistryBucket',
+      'SchemaRegistryBucket',
+      `cc-native-schema-registry-${this.account}-${this.region}`
+    );
 
-    // Artifacts (versioned, no Object Lock)
-    const artifactsBucketName = this.node.tryGetContext('artifactsBucket') as string | undefined;
-    const artifactsBucketNameFinal = artifactsBucketName || 
-      `cc-native-artifacts-${this.account}-${this.region}`;
-    
-    if (artifactsBucketName) {
-      this.artifactsBucket = s3.Bucket.fromBucketName(this, 'ArtifactsBucket', artifactsBucketName);
-    } else {
-      this.artifactsBucket = new s3.Bucket(this, 'ArtifactsBucket', {
-        bucketName: artifactsBucketNameFinal,
-        versioned: true,
-        encryption: s3.BucketEncryption.S3_MANAGED,
-      });
-    }
+    this.artifactsBucket = this.createOrImportBucket(
+      'artifactsBucket',
+      'ArtifactsBucket',
+      `cc-native-artifacts-${this.account}-${this.region}`
+    );
 
-    // Execution Ledger Archives (immutable execution ledger)
-    const ledgerArchivesBucketName = this.node.tryGetContext('ledgerArchivesBucket') as string | undefined;
-    const ledgerArchivesBucketNameFinal = ledgerArchivesBucketName || 
-      `cc-native-ledger-archives-${this.account}-${this.region}`;
-    
-    if (ledgerArchivesBucketName) {
-      this.ledgerArchivesBucket = s3.Bucket.fromBucketName(this, 'LedgerArchivesBucket', ledgerArchivesBucketName);
-    } else {
-      this.ledgerArchivesBucket = new s3.Bucket(this, 'LedgerArchivesBucket', {
-        bucketName: ledgerArchivesBucketNameFinal,
-        versioned: true,
-        encryption: s3.BucketEncryption.S3_MANAGED,
-        objectLockEnabled: true,
-        objectLockDefaultRetention: s3.ObjectLockRetention.compliance(cdk.Duration.days(2555)), // 7 years
-      });
-    }
+    this.ledgerArchivesBucket = this.createOrImportBucket(
+      'ledgerArchivesBucket',
+      'LedgerArchivesBucket',
+      `cc-native-ledger-archives-${this.account}-${this.region}`
+    );
 
     // DynamoDB Tables (World Model: DynamoDB as Computed Belief)
     
@@ -453,8 +426,8 @@ export class CCNativeStack extends cdk.Stack {
       effect: iam.Effect.ALLOW,
       actions: ['s3:GetObject'],
       resources: [
-        `arn:aws:s3:::${evidenceLedgerBucketNameFinal}/evidence/*`,
-        `arn:aws:s3:::${worldStateSnapshotsBucketNameFinal}/snapshots/*`,
+        `arn:aws:s3:::${this.evidenceLedgerBucket.bucketName}/evidence/*`,
+        `arn:aws:s3:::${this.worldStateSnapshotsBucket.bucketName}/snapshots/*`,
       ],
     }));
 
@@ -506,31 +479,40 @@ export class CCNativeStack extends cdk.Stack {
       preventUserExistenceErrors: true,
     });
 
+    // Phase 2: Neptune Graph Infrastructure
+    this.createNeptuneInfrastructure();
+
+    // Phase 2: DynamoDB Tables
+    this.createPhase2Tables();
+
+    // Phase 2: Lambda Functions and EventBridge Rules
+    this.createPhase2Handlers();
+
     // Stack Outputs
-    // World Model S3 Buckets (use stored bucket name variables)
+    // World Model S3 Buckets
     new cdk.CfnOutput(this, 'EvidenceLedgerBucketName', {
-      value: evidenceLedgerBucketNameFinal,
-      description: 'S3 bucket for immutable evidence ledger (World Model truth)',
+      value: this.evidenceLedgerBucket.bucketName,
+      description: 'S3 bucket for evidence ledger (versioned, World Model truth)',
     });
 
     new cdk.CfnOutput(this, 'WorldStateSnapshotsBucketName', {
-      value: worldStateSnapshotsBucketNameFinal,
-      description: 'S3 bucket for immutable world state snapshots',
+      value: this.worldStateSnapshotsBucket.bucketName,
+      description: 'S3 bucket for world state snapshots (versioned)',
     });
 
     new cdk.CfnOutput(this, 'SchemaRegistryBucketName', {
-      value: schemaRegistryBucketNameFinal,
-      description: 'S3 bucket for immutable schema registry definitions',
+      value: this.schemaRegistryBucket.bucketName,
+      description: 'S3 bucket for schema registry definitions (versioned)',
     });
 
     // Application S3 Buckets
     new cdk.CfnOutput(this, 'ArtifactsBucketName', {
-      value: artifactsBucketNameFinal,
+      value: this.artifactsBucket.bucketName,
       description: 'S3 bucket for artifacts (briefs, summaries, etc.)',
     });
 
     new cdk.CfnOutput(this, 'LedgerArchivesBucketName', {
-      value: ledgerArchivesBucketNameFinal,
+      value: this.ledgerArchivesBucket.bucketName,
       description: 'S3 bucket for execution ledger archives',
     });
 
@@ -616,16 +598,226 @@ export class CCNativeStack extends cdk.Stack {
       description: 'Cognito User Pool Client ID',
     });
 
+    // Phase 2: Neptune Outputs
+    new cdk.CfnOutput(this, 'NeptuneClusterEndpoint', {
+      value: this.neptuneCluster.attrEndpoint,
+      description: 'Neptune cluster endpoint (Gremlin)',
+    });
+
+    new cdk.CfnOutput(this, 'NeptuneClusterPort', {
+      value: this.neptuneCluster.attrPort,
+      description: 'Neptune cluster port (Gremlin)',
+    });
+
+    new cdk.CfnOutput(this, 'NeptuneClusterIdentifier', {
+      value: this.neptuneCluster.ref,
+      description: 'Neptune cluster identifier',
+    });
+
+    new cdk.CfnOutput(this, 'NeptuneAccessRoleArn', {
+      value: this.neptuneAccessRole.roleArn,
+      description: 'IAM role ARN for accessing Neptune cluster',
+    });
+
+    new cdk.CfnOutput(this, 'VpcId', {
+      value: this.vpc.vpcId,
+      description: 'VPC ID for Neptune cluster',
+    });
+
     // Phase 1: Perception Lambda Functions
     this.createPerceptionHandlers();
+  }
+
+  /**
+   * Helper method to create or import S3 bucket
+   * Reduces code duplication for bucket creation
+   */
+  private createOrImportBucket(
+    contextKey: string,
+    constructId: string,
+    defaultBucketName: string
+  ): s3.IBucket {
+    const bucketName = this.node.tryGetContext(contextKey) as string | undefined;
+    const bucketNameFinal = bucketName || defaultBucketName;
+
+    if (bucketName) {
+      // Use existing bucket
+      return s3.Bucket.fromBucketName(this, constructId, bucketName);
+    } else {
+      // Create new bucket with standard configuration
+      return new s3.Bucket(this, constructId, {
+        bucketName: bucketNameFinal,
+        versioned: true,
+        encryption: s3.BucketEncryption.S3_MANAGED,
+        enforceSSL: true, // Require SSL/TLS for all requests (CWE-319)
+        // Object Lock removed for development flexibility - can be added back for production compliance
+      });
+    }
+  }
+
+  /**
+   * Create Phase 2 Neptune graph infrastructure
+   */
+  private createNeptuneInfrastructure(): void {
+    // Create VPC with isolated subnets for Neptune
+    // Neptune requires at least 2 AZs, so we'll create subnets in 2 AZs
+    // Note: Neptune doesn't need internet access, so isolated subnets are fine
+    const vpc = new ec2.Vpc(this, 'CCNativeVpc', {
+      vpcName: 'cc-native-vpc',
+      maxAzs: 2, // Neptune requires at least 2 AZs
+      natGateways: 0, // No NAT gateways needed - Neptune doesn't need internet access
+      subnetConfiguration: [
+        {
+          cidrMask: 24,
+          name: 'NeptuneIsolated',
+          subnetType: ec2.SubnetType.PRIVATE_ISOLATED, // Isolated subnets (no internet, no NAT)
+        },
+      ],
+    });
+    // Assign directly - TypeScript allows assignment to readonly properties during construction
+    (this as CCNativeStack & { vpc: ec2.Vpc }).vpc = vpc;
+
+    // Security group for Neptune cluster
+    const neptuneSecurityGroup = new ec2.SecurityGroup(this, 'NeptuneSecurityGroup', {
+      vpc: vpc,
+      description: 'Security group for Neptune cluster (VPC-only access)',
+      allowAllOutbound: false, // Restrict outbound traffic
+    });
+    // Assign directly - TypeScript allows assignment to readonly properties during construction
+    (this as CCNativeStack & { neptuneSecurityGroup: ec2.SecurityGroup }).neptuneSecurityGroup = neptuneSecurityGroup;
+
+    // Security group for Lambda functions to access Neptune
+    const lambdaSecurityGroup = new ec2.SecurityGroup(this, 'NeptuneLambdaSecurityGroup', {
+      vpc: vpc,
+      description: 'Security group for Lambda functions accessing Neptune',
+      allowAllOutbound: true,
+    });
+
+    // Allow Lambda to connect to Neptune on Gremlin port (8182)
+    neptuneSecurityGroup.addIngressRule(
+      lambdaSecurityGroup,
+      ec2.Port.tcp(8182),
+      'Allow Gremlin connections from Lambda'
+    );
+
+    // Neptune Subnet Group (L1 construct)
+    const neptuneSubnetGroup = new neptune.CfnDBSubnetGroup(this, 'NeptuneSubnetGroup', {
+      dbSubnetGroupName: 'cc-native-neptune-subnet-group',
+      dbSubnetGroupDescription: 'Subnet group for Neptune cluster',
+      subnetIds: vpc.isolatedSubnets.map(subnet => subnet.subnetId),
+      tags: [
+        { key: 'Name', value: 'cc-native-neptune-subnet-group' },
+      ],
+    });
+
+    // Neptune Parameter Group (L1 construct)
+    const neptuneParameterGroup = new neptune.CfnDBClusterParameterGroup(this, 'NeptuneParameterGroup', {
+      description: 'Parameter group for Neptune cluster',
+      family: 'neptune1.4', // Neptune engine family (updated to 1.4 for current Neptune service version)
+      parameters: {
+        neptune_query_timeout: '120000', // 2 minutes
+        neptune_enable_audit_log: '1',
+      },
+    });
+
+    // Neptune Cluster (L1 construct) - must be created before instances
+    const neptuneCluster = new neptune.CfnDBCluster(this, 'NeptuneCluster', {
+      dbClusterIdentifier: 'cc-native-neptune-cluster',
+      dbSubnetGroupName: neptuneSubnetGroup.ref,
+      dbClusterParameterGroupName: neptuneParameterGroup.ref,
+      vpcSecurityGroupIds: [neptuneSecurityGroup.securityGroupId],
+      backupRetentionPeriod: 7,
+      preferredBackupWindow: '03:00-04:00',
+      preferredMaintenanceWindow: 'sun:04:00-sun:05:00',
+      storageEncrypted: true,
+      deletionProtection: false, // Disable for development
+      iamAuthEnabled: true, // Enable IAM authentication
+      tags: [
+        { key: 'Name', value: 'cc-native-neptune-cluster' },
+      ],
+    });
+
+    // Neptune Cluster Instance (L1 construct) - must reference cluster
+    // Note: Security groups and cluster parameter group are inherited from the cluster
+    // Do NOT set dbParameterGroupName - instances inherit cluster-level parameters
+    const neptuneInstance = new neptune.CfnDBInstance(this, 'NeptuneInstance', {
+      dbInstanceIdentifier: 'cc-native-neptune-instance',
+      dbInstanceClass: 'db.r5.large', // Instance type for development
+      dbClusterIdentifier: neptuneCluster.ref,
+      dbSubnetGroupName: neptuneSubnetGroup.ref,
+      // dbParameterGroupName removed - instances inherit cluster parameter group
+      publiclyAccessible: false,
+      tags: [
+        { key: 'Name', value: 'cc-native-neptune-instance' },
+      ],
+    });
+
+    // Instance depends on cluster
+    neptuneInstance.addDependency(neptuneCluster);
+
+    // Assign directly - TypeScript allows assignment to readonly properties during construction
+    (this as CCNativeStack & { neptuneCluster: neptune.CfnDBCluster }).neptuneCluster = neptuneCluster;
+
+    // IAM Role for Lambda functions to access Neptune
+    const neptuneAccessRole = new iam.Role(this, 'NeptuneAccessRole', {
+      roleName: 'cc-native-neptune-access-role',
+      assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
+      description: 'IAM role for Lambda functions to access Neptune cluster',
+    });
+    // Assign directly - TypeScript allows assignment to readonly properties during construction
+    (this as CCNativeStack & { neptuneAccessRole: iam.Role }).neptuneAccessRole = neptuneAccessRole;
+
+    // Grant Neptune access permissions
+    neptuneAccessRole.addToPolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: [
+        'neptune-db:connect',
+        'neptune-db:ReadDataViaQuery',
+        'neptune-db:WriteDataViaQuery',
+      ],
+      resources: [
+        `arn:aws:neptune-db:${this.region}:${this.account}:${neptuneCluster.ref}/*`,
+      ],
+    }));
+
+    // Add VPC configuration to Lambda (will be used by Phase 2 handlers)
+    // Store security group and subnet IDs for later use
+    // These are internal properties, not exposed as readonly
+    (this as unknown as CCNativeStack & NeptuneInternalProperties).neptuneLambdaSecurityGroup = lambdaSecurityGroup;
+    (this as unknown as CCNativeStack & NeptuneInternalProperties).neptuneSubnets = vpc.isolatedSubnets.map(subnet => subnet.subnetId);
+  }
+
+  /**
+   * Helper method to create a Lambda function with standard configuration
+   * Reduces code duplication for Lambda creation
+   */
+  private createLambdaFunction(
+    id: string,
+    functionName: string,
+    entry: string,
+    environment: Record<string, string>,
+    deadLetterQueue: sqs.Queue,
+    timeout: cdk.Duration,
+    memorySize: number
+  ): lambda.Function {
+    return new lambdaNodejs.NodejsFunction(this, id, {
+      functionName,
+      entry,
+      handler: 'handler',
+      runtime: lambda.Runtime.NODEJS_20_X,
+      timeout,
+      memorySize,
+      environment,
+      deadLetterQueue,
+      deadLetterQueueEnabled: true,
+      retryAttempts: 2,
+    });
   }
 
   /**
    * Create Phase 1 perception handlers with DLQs and EventBridge rules
    */
   private createPerceptionHandlers(): void {
-    // Use type assertion to allow assignment
-    const self = this as any;
     // Common environment variables for all handlers
     // Note: AWS_REGION is automatically set by Lambda runtime and cannot be set manually
     const commonEnv = {
@@ -638,81 +830,75 @@ export class CCNativeStack extends cdk.Stack {
       // AWS_REGION is automatically available via process.env.AWS_REGION in Lambda
     };
 
-    // Create DLQs
-    self.connectorPollDlq = new sqs.Queue(this, 'ConnectorPollDlq', {
+    // Create DLQs - assign directly to readonly properties
+    (this as CCNativeStack & { connectorPollDlq: sqs.Queue }).connectorPollDlq = new sqs.Queue(this, 'ConnectorPollDlq', {
       queueName: 'cc-native-connector-poll-handler-dlq',
       retentionPeriod: cdk.Duration.days(14),
     });
 
-    self.signalDetectionDlq = new sqs.Queue(this, 'SignalDetectionDlq', {
+    (this as CCNativeStack & { signalDetectionDlq: sqs.Queue }).signalDetectionDlq = new sqs.Queue(this, 'SignalDetectionDlq', {
       queueName: 'cc-native-signal-detection-handler-dlq',
       retentionPeriod: cdk.Duration.days(14),
     });
 
-    self.lifecycleInferenceDlq = new sqs.Queue(this, 'LifecycleInferenceDlq', {
+    (this as CCNativeStack & { lifecycleInferenceDlq: sqs.Queue }).lifecycleInferenceDlq = new sqs.Queue(this, 'LifecycleInferenceDlq', {
       queueName: 'cc-native-lifecycle-inference-handler-dlq',
       retentionPeriod: cdk.Duration.days(14),
     });
 
     // Connector Poll Handler
-    self.connectorPollHandler = new lambdaNodejs.NodejsFunction(this, 'ConnectorPollHandler', {
-      functionName: 'cc-native-connector-poll-handler',
-      entry: 'src/handlers/perception/connector-poll-handler.ts',
-      handler: 'handler',
-      runtime: lambda.Runtime.NODEJS_20_X,
-      timeout: cdk.Duration.minutes(15),
-      memorySize: 512,
-      environment: commonEnv,
-      deadLetterQueue: this.connectorPollDlq,
-      deadLetterQueueEnabled: true,
-      retryAttempts: 2,
-    });
+    const connectorPollHandler = this.createLambdaFunction(
+      'ConnectorPollHandler',
+      'cc-native-connector-poll-handler',
+      'src/handlers/perception/connector-poll-handler.ts',
+      commonEnv,
+      this.connectorPollDlq,
+      cdk.Duration.minutes(15),
+      512
+    );
+    (this as CCNativeStack & { connectorPollHandler: lambda.Function }).connectorPollHandler = connectorPollHandler;
 
     // Grant permissions
-    this.evidenceLedgerBucket.grantReadWrite(self.connectorPollHandler);
-    this.evidenceIndexTable.grantReadWriteData(self.connectorPollHandler);
-    this.eventBus.grantPutEventsTo(self.connectorPollHandler);
+    this.evidenceLedgerBucket.grantReadWrite(connectorPollHandler);
+    this.evidenceIndexTable.grantReadWriteData(connectorPollHandler);
+    this.eventBus.grantPutEventsTo(connectorPollHandler);
 
     // Signal Detection Handler
-    self.signalDetectionHandler = new lambdaNodejs.NodejsFunction(this, 'SignalDetectionHandler', {
-      functionName: 'cc-native-signal-detection-handler',
-      entry: 'src/handlers/perception/signal-detection-handler.ts',
-      handler: 'handler',
-      runtime: lambda.Runtime.NODEJS_20_X,
-      timeout: cdk.Duration.minutes(15),
-      memorySize: 1024,
-      environment: commonEnv,
-      deadLetterQueue: this.signalDetectionDlq,
-      deadLetterQueueEnabled: true,
-      retryAttempts: 2,
-    });
+    const signalDetectionHandler = this.createLambdaFunction(
+      'SignalDetectionHandler',
+      'cc-native-signal-detection-handler',
+      'src/handlers/perception/signal-detection-handler.ts',
+      commonEnv,
+      this.signalDetectionDlq,
+      cdk.Duration.minutes(15),
+      1024
+    );
+    (this as CCNativeStack & { signalDetectionHandler: lambda.Function }).signalDetectionHandler = signalDetectionHandler;
 
     // Grant permissions
-    this.evidenceLedgerBucket.grantRead(self.signalDetectionHandler);
-    this.signalsTable.grantReadWriteData(self.signalDetectionHandler);
-    this.accountsTable.grantReadWriteData(self.signalDetectionHandler);
-    this.ledgerTable.grantWriteData(self.signalDetectionHandler);
-    this.eventBus.grantPutEventsTo(self.signalDetectionHandler);
+    this.evidenceLedgerBucket.grantRead(signalDetectionHandler);
+    this.signalsTable.grantReadWriteData(signalDetectionHandler);
+    this.accountsTable.grantReadWriteData(signalDetectionHandler);
+    this.ledgerTable.grantWriteData(signalDetectionHandler);
+    this.eventBus.grantPutEventsTo(signalDetectionHandler);
 
     // Lifecycle Inference Handler
-    self.lifecycleInferenceHandler = new lambdaNodejs.NodejsFunction(this, 'LifecycleInferenceHandler', {
-      functionName: 'cc-native-lifecycle-inference-handler',
-      entry: 'src/handlers/perception/lifecycle-inference-handler.ts',
-      handler: 'handler',
-      runtime: lambda.Runtime.NODEJS_20_X,
-      timeout: cdk.Duration.minutes(5),
-      memorySize: 512,
-      environment: commonEnv,
-      deadLetterQueue: this.lifecycleInferenceDlq,
-      deadLetterQueueEnabled: true,
-      retryAttempts: 2,
-    });
+    const lifecycleInferenceHandler = this.createLambdaFunction(
+      'LifecycleInferenceHandler',
+      'cc-native-lifecycle-inference-handler',
+      'src/handlers/perception/lifecycle-inference-handler.ts',
+      commonEnv,
+      this.lifecycleInferenceDlq,
+      cdk.Duration.minutes(5),
+      512
+    );
+    (this as CCNativeStack & { lifecycleInferenceHandler: lambda.Function }).lifecycleInferenceHandler = lifecycleInferenceHandler;
 
     // Grant permissions
-    this.accountsTable.grantReadWriteData(self.lifecycleInferenceHandler);
-    this.signalsTable.grantReadData(self.lifecycleInferenceHandler);
-    this.ledgerTable.grantWriteData(self.lifecycleInferenceHandler);
-    this.eventBus.grantPutEventsTo(self.lifecycleInferenceHandler);
+    this.accountsTable.grantReadWriteData(lifecycleInferenceHandler);
+    this.signalsTable.grantReadData(lifecycleInferenceHandler);
+    this.ledgerTable.grantWriteData(lifecycleInferenceHandler);
+    this.eventBus.grantPutEventsTo(lifecycleInferenceHandler);
 
     // EventBridge Rules
 
@@ -724,8 +910,8 @@ export class CCNativeStack extends cdk.Stack {
         detailType: ['CONNECTOR_POLL_COMPLETED'],
       },
       targets: [
-        new eventsTargets.LambdaFunction(self.signalDetectionHandler, {
-          deadLetterQueue: self.signalDetectionDlq,
+        new eventsTargets.LambdaFunction(signalDetectionHandler, {
+          deadLetterQueue: this.signalDetectionDlq,
           retryAttempts: 2,
         }),
       ],
@@ -739,8 +925,8 @@ export class CCNativeStack extends cdk.Stack {
         detailType: ['SIGNAL_DETECTED', 'SIGNAL_CREATED'],
       },
       targets: [
-        new eventsTargets.LambdaFunction(self.lifecycleInferenceHandler, {
-          deadLetterQueue: self.lifecycleInferenceDlq,
+        new eventsTargets.LambdaFunction(lifecycleInferenceHandler, {
+          deadLetterQueue: this.lifecycleInferenceDlq,
           retryAttempts: 2,
         }),
       ],
@@ -748,18 +934,233 @@ export class CCNativeStack extends cdk.Stack {
 
     // Outputs
     new cdk.CfnOutput(this, 'ConnectorPollHandlerArn', {
-      value: self.connectorPollHandler.functionArn,
+      value: connectorPollHandler.functionArn,
       description: 'ARN of connector poll handler Lambda function',
     });
 
     new cdk.CfnOutput(this, 'SignalDetectionHandlerArn', {
-      value: self.signalDetectionHandler.functionArn,
+      value: signalDetectionHandler.functionArn,
       description: 'ARN of signal detection handler Lambda function',
     });
 
     new cdk.CfnOutput(this, 'LifecycleInferenceHandlerArn', {
-      value: self.lifecycleInferenceHandler.functionArn,
+      value: lifecycleInferenceHandler.functionArn,
       description: 'ARN of lifecycle inference handler Lambda function',
+    });
+  }
+
+  /**
+   * Create Phase 2 DynamoDB tables
+   */
+  private createPhase2Tables(): void {
+    // Account Posture State Table
+    const accountPostureStateTable = new dynamodb.Table(this, 'AccountPostureStateTable', {
+      tableName: 'cc-native-account-posture-state',
+      partitionKey: { name: 'pk', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'sk', type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      pointInTimeRecoverySpecification: {
+        pointInTimeRecoveryEnabled: true,
+      },
+    });
+
+    // Add GSI for tenant + posture queries
+    accountPostureStateTable.addGlobalSecondaryIndex({
+      indexName: 'tenant-posture-index',
+      partitionKey: { name: 'gsi1pk', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'gsi1sk', type: dynamodb.AttributeType.STRING },
+    });
+
+    // Assign to readonly property
+    (this as CCNativeStack & { accountPostureStateTable: dynamodb.Table }).accountPostureStateTable = accountPostureStateTable;
+
+    // Graph Materialization Status Table
+    // This is the ONLY authoritative gating mechanism for synthesis
+    const graphMaterializationStatusTable = new dynamodb.Table(this, 'GraphMaterializationStatusTable', {
+      tableName: 'cc-native-graph-materialization-status',
+      partitionKey: { name: 'pk', type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      pointInTimeRecoverySpecification: {
+        pointInTimeRecoveryEnabled: true,
+      },
+    });
+
+    // Assign to readonly property
+    (this as CCNativeStack & { graphMaterializationStatusTable: dynamodb.Table }).graphMaterializationStatusTable = graphMaterializationStatusTable;
+  }
+
+  /**
+   * Create Phase 2 Lambda handlers with DLQs and EventBridge rules
+   */
+  private createPhase2Handlers(): void {
+    // Get Neptune Lambda security group and subnets from internal properties
+    const neptuneLambdaSecurityGroup = (this as any).neptuneLambdaSecurityGroup as ec2.SecurityGroup;
+    const neptuneSubnets = (this as any).neptuneSubnets as string[];
+
+    // Common environment variables for Phase 2 handlers
+    const phase2Env = {
+      ACCOUNTS_TABLE_NAME: this.accountsTable.tableName,
+      SIGNALS_TABLE_NAME: this.signalsTable.tableName,
+      LEDGER_TABLE_NAME: this.ledgerTable.tableName,
+      EVENT_BUS_NAME: this.eventBus.eventBusName,
+      NEPTUNE_CLUSTER_ENDPOINT: this.neptuneCluster.attrEndpoint,
+      NEPTUNE_CLUSTER_PORT: this.neptuneCluster.attrPort,
+      ACCOUNT_POSTURE_STATE_TABLE_NAME: this.accountPostureStateTable.tableName,
+      GRAPH_MATERIALIZATION_STATUS_TABLE_NAME: this.graphMaterializationStatusTable.tableName,
+      // AWS_REGION is automatically available via process.env.AWS_REGION in Lambda
+    };
+
+    // Create DLQs for Phase 2 handlers
+    (this as CCNativeStack & { graphMaterializerDlq: sqs.Queue }).graphMaterializerDlq = new sqs.Queue(this, 'GraphMaterializerDlq', {
+      queueName: 'cc-native-graph-materializer-handler-dlq',
+      retentionPeriod: cdk.Duration.days(14),
+    });
+
+    (this as CCNativeStack & { synthesisEngineDlq: sqs.Queue }).synthesisEngineDlq = new sqs.Queue(this, 'SynthesisEngineDlq', {
+      queueName: 'cc-native-synthesis-engine-handler-dlq',
+      retentionPeriod: cdk.Duration.days(14),
+    });
+
+    // Graph Materializer Handler
+    const graphMaterializerHandler = new lambdaNodejs.NodejsFunction(this, 'GraphMaterializerHandler', {
+      functionName: 'cc-native-graph-materializer-handler',
+      entry: 'src/handlers/phase2/graph-materializer-handler.ts',
+      handler: 'handler',
+      runtime: lambda.Runtime.NODEJS_20_X,
+      timeout: cdk.Duration.minutes(5),
+      memorySize: 1024,
+      environment: phase2Env,
+      deadLetterQueue: this.graphMaterializerDlq,
+      deadLetterQueueEnabled: true,
+      retryAttempts: 2,
+      // VPC configuration for Neptune access
+      vpc: this.vpc,
+      vpcSubnets: { subnets: this.vpc.isolatedSubnets },
+      securityGroups: [neptuneLambdaSecurityGroup],
+    });
+    (this as CCNativeStack & { graphMaterializerHandler: lambda.Function }).graphMaterializerHandler = graphMaterializerHandler;
+
+    // Grant permissions for Graph Materializer
+    this.signalsTable.grantReadData(graphMaterializerHandler);
+    this.accountsTable.grantReadData(graphMaterializerHandler);
+    this.graphMaterializationStatusTable.grantReadWriteData(graphMaterializerHandler);
+    this.ledgerTable.grantWriteData(graphMaterializerHandler);
+    this.eventBus.grantPutEventsTo(graphMaterializerHandler);
+    graphMaterializerHandler.addToRolePolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: [
+        'neptune-db:connect',
+        'neptune-db:ReadDataViaQuery',
+        'neptune-db:WriteDataViaQuery',
+      ],
+      resources: [
+        `arn:aws:neptune-db:${this.region}:${this.account}:${this.neptuneCluster.ref}/*`,
+      ],
+    }));
+
+    // Synthesis Engine Handler
+    const synthesisEngineHandler = new lambdaNodejs.NodejsFunction(this, 'SynthesisEngineHandler', {
+      functionName: 'cc-native-synthesis-engine-handler',
+      entry: 'src/handlers/phase2/synthesis-engine-handler.ts',
+      handler: 'handler',
+      runtime: lambda.Runtime.NODEJS_20_X,
+      timeout: cdk.Duration.minutes(3),
+      memorySize: 1024,
+      environment: phase2Env,
+      deadLetterQueue: this.synthesisEngineDlq,
+      deadLetterQueueEnabled: true,
+      retryAttempts: 2,
+      // VPC configuration for Neptune access
+      vpc: this.vpc,
+      vpcSubnets: { subnets: this.vpc.isolatedSubnets },
+      securityGroups: [neptuneLambdaSecurityGroup],
+    });
+    (this as CCNativeStack & { synthesisEngineHandler: lambda.Function }).synthesisEngineHandler = synthesisEngineHandler;
+
+    // Grant permissions for Synthesis Engine
+    this.signalsTable.grantReadData(synthesisEngineHandler);
+    this.accountsTable.grantReadData(synthesisEngineHandler);
+    this.accountPostureStateTable.grantReadWriteData(synthesisEngineHandler);
+    this.graphMaterializationStatusTable.grantReadData(synthesisEngineHandler);
+    this.ledgerTable.grantWriteData(synthesisEngineHandler);
+    synthesisEngineHandler.addToRolePolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: [
+        'neptune-db:connect',
+        'neptune-db:ReadDataViaQuery',
+        'neptune-db:WriteDataViaQuery',
+      ],
+      resources: [
+        `arn:aws:neptune-db:${this.region}:${this.account}:${this.neptuneCluster.ref}/*`,
+      ],
+    }));
+
+    // EventBridge Rules for Phase 2
+
+    // Rule 3: SIGNAL_DETECTED → graph-materializer-handler
+    new events.Rule(this, 'SignalDetectedToGraphMaterializerRule', {
+      eventBus: this.eventBus,
+      eventPattern: {
+        source: ['cc-native.perception'],
+        detailType: ['SIGNAL_DETECTED'],
+      },
+      targets: [
+        new eventsTargets.LambdaFunction(graphMaterializerHandler, {
+          deadLetterQueue: this.graphMaterializerDlq,
+          retryAttempts: 2,
+        }),
+      ],
+    });
+
+    // Rule 4: SIGNAL_CREATED → graph-materializer-handler
+    new events.Rule(this, 'SignalCreatedToGraphMaterializerRule', {
+      eventBus: this.eventBus,
+      eventPattern: {
+        source: ['cc-native.perception'],
+        detailType: ['SIGNAL_CREATED'],
+      },
+      targets: [
+        new eventsTargets.LambdaFunction(graphMaterializerHandler, {
+          deadLetterQueue: this.graphMaterializerDlq,
+          retryAttempts: 2,
+        }),
+      ],
+    });
+
+    // Rule 5: GRAPH_MATERIALIZED → synthesis-engine-handler (canonical path)
+    new events.Rule(this, 'GraphMaterializedToSynthesisRule', {
+      eventBus: this.eventBus,
+      eventPattern: {
+        source: ['cc-native.graph'],
+        detailType: ['GRAPH_MATERIALIZED'],
+      },
+      targets: [
+        new eventsTargets.LambdaFunction(synthesisEngineHandler, {
+          deadLetterQueue: this.synthesisEngineDlq,
+          retryAttempts: 2,
+        }),
+      ],
+    });
+
+    // Phase 2 Outputs
+    new cdk.CfnOutput(this, 'GraphMaterializerHandlerArn', {
+      value: graphMaterializerHandler.functionArn,
+      description: 'ARN of graph materializer handler Lambda function',
+    });
+
+    new cdk.CfnOutput(this, 'SynthesisEngineHandlerArn', {
+      value: synthesisEngineHandler.functionArn,
+      description: 'ARN of synthesis engine handler Lambda function',
+    });
+
+    new cdk.CfnOutput(this, 'AccountPostureStateTableName', {
+      value: this.accountPostureStateTable.tableName,
+      description: 'DynamoDB table for account posture state read model',
+    });
+
+    new cdk.CfnOutput(this, 'GraphMaterializationStatusTableName', {
+      value: this.graphMaterializationStatusTable.tableName,
+      description: 'DynamoDB table for graph materialization status (synthesis gating)',
     });
   }
 }
