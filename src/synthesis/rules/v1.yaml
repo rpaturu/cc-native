@@ -62,7 +62,7 @@ ruleset:
               - "SUPPORT_RISK_EMERGING"
         opportunities: []
         unknowns: []
-      ttl_days: null  # Permanent until resolved
+      output_ttl_days: null  # Permanent until resolved
     
     # Rule 2: CUSTOMER - Renewal window + usage decline → AT_RISK
     - rule_id: "CUSTOMER_RENEWAL_USAGE_DECLINE"
@@ -90,7 +90,7 @@ ruleset:
               - "USAGE_TREND_CHANGE"
         opportunities: []
         unknowns: []
-      ttl_days: null  # Permanent until resolved
+      output_ttl_days: null  # Permanent until resolved
     
     # Rule 3: CUSTOMER - Strong usage growth → EXPAND
     - rule_id: "CUSTOMER_USAGE_GROWTH"
@@ -145,9 +145,8 @@ ruleset:
         unknowns:
           - type: "RENEWAL_INTENT"
             description: "Renewal window active - intent unclear"
-            introduced_at: "${now}"
-            review_after: "${now + 30 days}"
-      ttl_days: 90  # Review after renewal window
+            # Timestamps (introduced_at, review_after) are stamped by engine using event.as_of_time
+      output_ttl_days: 90  # Review after renewal window
     
     # Rule 5: CUSTOMER - Support risk without renewal → WATCH
     - rule_id: "CUSTOMER_SUPPORT_RISK"
@@ -328,16 +327,20 @@ ruleset:
     # PROSPECT LIFECYCLE RULES
     # ============================================================
     
-    # Rule 10: PROSPECT - Activation + no engagement → WATCH
+    # Rule 12: PROSPECT - Activation + no engagement (computed) → WATCH
     - rule_id: "PROSPECT_ACTIVATION_NO_ENGAGEMENT"
-      priority: 10
+      priority: 12
       lifecycle_state: "PROSPECT"
       conditions:
         required_signals:
           - signal_type: "ACCOUNT_ACTIVATION_DETECTED"
             status: "ACTIVE"
-          - signal_type: "NO_ENGAGEMENT_PRESENT"
-            status: "ACTIVE"
+        # No engagement: computed predicate (no engagement signals in last 30 days)
+        # Engine evaluates: absence of FIRST_ENGAGEMENT_OCCURRED or any engagement-related signals
+        computed_predicates:
+          - name: "no_engagement_in_days"
+            operator: "equals"
+            value: 30  # No engagement signals in last 30 days
       outputs:
         posture: "WATCH"
         momentum: "FLAT"
@@ -354,17 +357,19 @@ ruleset:
             # Timestamps (introduced_at, review_after) are stamped by engine using event.as_of_time
       output_ttl_days: 90  # Re-evaluate quarterly
     
-    # Rule 11: PROSPECT - Activation only → WATCH
+    # Rule 13: PROSPECT - Activation only → WATCH
     - rule_id: "PROSPECT_ACTIVATION"
-      priority: 11
+      priority: 13
       lifecycle_state: "PROSPECT"
       conditions:
         required_signals:
           - signal_type: "ACCOUNT_ACTIVATION_DETECTED"
             status: "ACTIVE"
-        excluded_signals:
-          - signal_type: "NO_ENGAGEMENT_PRESENT"
-            status: "ACTIVE"
+        # Has engagement: computed predicate (engagement signals exist in last 30 days)
+        computed_predicates:
+          - name: "has_engagement_in_days"
+            operator: "equals"
+            value: 30  # Has engagement signals in last 30 days
       outputs:
         posture: "WATCH"
         momentum: "FLAT"
