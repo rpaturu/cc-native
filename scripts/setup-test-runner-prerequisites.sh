@@ -250,6 +250,56 @@ echo "✓ IAM role and instance profile setup complete"
 echo ""
 
 # ==========================================
+# Step 3: Create or Reuse Key Pair
+# ==========================================
+echo "Step 3: Setting up key pair..."
+
+KEY_NAME="cc-native-test-runner-key"
+KEY_FILE="$HOME/.ssh/$KEY_NAME.pem"
+
+# Check if key pair already exists in AWS
+EXISTING_KEY=$(aws ec2 describe-key-pairs \
+  --key-names $KEY_NAME \
+  --profile $PROFILE \
+  --region $REGION \
+  --no-cli-pager 2>/dev/null || echo "")
+
+if [ -n "$EXISTING_KEY" ]; then
+  echo "  ✓ Key pair '$KEY_NAME' already exists in AWS"
+  
+  # Check if we have the local .pem file
+  if [ -f "$KEY_FILE" ]; then
+    echo "  ✓ Local key file found: $KEY_FILE"
+  else
+    echo "  ⚠️  Warning: Key pair exists in AWS but local file not found at $KEY_FILE"
+    echo "  You may need to download the key or use a different key pair"
+  fi
+else
+  # Create new key pair
+  echo "Creating new key pair '$KEY_NAME'..."
+  
+  # Ensure .ssh directory exists
+  mkdir -p "$HOME/.ssh"
+  
+  # Create key pair and save to file
+  aws ec2 create-key-pair \
+    --key-name $KEY_NAME \
+    --query "KeyMaterial" \
+    --output text \
+    --profile $PROFILE \
+    --region $REGION \
+    --no-cli-pager > "$KEY_FILE"
+  
+  # Set proper permissions
+  chmod 400 "$KEY_FILE"
+  
+  echo "  ✓ Key pair created and saved to: $KEY_FILE"
+fi
+
+echo "✓ Key pair setup complete"
+echo ""
+
+# ==========================================
 # Save configuration to .env.test-runner
 # ==========================================
 ENV_FILE=".env.test-runner"
@@ -261,6 +311,8 @@ TEST_RUNNER_SECURITY_GROUP_ID=$SG_ID
 TEST_RUNNER_MY_IP=$MY_IP
 TEST_RUNNER_IAM_ROLE_NAME=cc-native-test-runner-role
 TEST_RUNNER_INSTANCE_PROFILE_NAME=cc-native-test-instance-profile
+TEST_RUNNER_KEY_NAME=$KEY_NAME
+TEST_RUNNER_KEY_FILE=$KEY_FILE
 EOF
 
 if [ -n "$NEPTUNE_SG_ID" ] && [ "$NEPTUNE_SG_ID" != "None" ]; then
@@ -277,8 +329,12 @@ echo "Summary:"
 echo "  Security Group ID: $SG_ID"
 echo "  IAM Role: cc-native-test-runner-role"
 echo "  Instance Profile: cc-native-test-instance-profile"
+echo "  Key Pair: $KEY_NAME"
+if [ -f "$KEY_FILE" ]; then
+  echo "  Key File: $KEY_FILE"
+fi
 echo ""
 echo "You can load these variables with:"
 echo "  source $ENV_FILE"
 echo ""
-echo "Next step: Create a key pair (Step 2c) and launch EC2 instance (Step 3)"
+echo "Next step: Launch EC2 instance (Step 3)"

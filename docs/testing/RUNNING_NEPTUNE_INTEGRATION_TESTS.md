@@ -63,38 +63,17 @@ echo "IAM Role: $TEST_RUNNER_IAM_ROLE_NAME"
 echo "Instance Profile: $TEST_RUNNER_INSTANCE_PROFILE_NAME"
 ```
 
-#### Step 2b: Create or Import Key Pair
+#### Step 2b: Key Pair Setup
 
-**Option 1: Create a new key pair** (recommended for testing):
+The prerequisites script automatically handles key pair setup:
+- Creates a new key pair `cc-native-test-runner-key` if it doesn't exist
+- Reuses existing key pair if it's already in AWS
+- Saves the key to `~/.ssh/cc-native-test-runner-key.pem` (if creating new)
+- Stores key name in `.env.test-runner` for later use
 
-```bash
-# Create a new key pair
-aws ec2 create-key-pair \
-  --key-name cc-native-test-runner-key \
-  --query "KeyMaterial" \
-  --output text \
-  --profile cc-native-account \
-  --region us-west-2 > ~/.ssh/cc-native-test-runner-key.pem
-
-# Set proper permissions
-chmod 400 ~/.ssh/cc-native-test-runner-key.pem
-
-echo "Key pair created: ~/.ssh/cc-native-test-runner-key.pem"
-```
-
-**Option 2: Use an existing key pair**:
-
-```bash
-# List existing key pairs
-aws ec2 describe-key-pairs \
-  --profile cc-native-account \
-  --region us-west-2
-
-# Use an existing key name (replace with your key name)
-export KEY_NAME="your-existing-key-name"
-```
-
-**Note**: If you use an existing key pair, make sure you have the corresponding `.pem` file on your local machine.
+**Note**: If the key pair already exists in AWS but you don't have the local `.pem` file, you'll need to either:
+- Use a different key pair that you have locally, or
+- Download the key from AWS (if you have access to it)
 
 ### Step 3: Launch EC2 Instance
 
@@ -113,7 +92,7 @@ source .env.test-runner  # Created by setup-test-runner-security-group.sh
 # Set variables
 SUBNET_ID=$NEPTUNE_SUBNET_ID
 SECURITY_GROUP_ID=$TEST_RUNNER_SECURITY_GROUP_ID
-KEY_NAME="cc-native-test-runner-key"  # or your existing key name
+KEY_NAME=$TEST_RUNNER_KEY_NAME  # From .env.test-runner
 INSTANCE_PROFILE=$TEST_RUNNER_INSTANCE_PROFILE_NAME
 
 # Get latest Amazon Linux 2023 AMI ID for us-west-2
