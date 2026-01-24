@@ -224,6 +224,14 @@ aws iam put-role-policy \
   --profile $PROFILE \
   --no-cli-pager
 
+# Attach SSM managed instance core policy for Session Manager access
+echo "Attaching SSM managed instance core policy..."
+aws iam attach-role-policy \
+  --role-name cc-native-test-runner-role \
+  --policy-arn arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore \
+  --profile $PROFILE \
+  --no-cli-pager 2>/dev/null || echo "  ✓ SSM policy may already be attached"
+
 # Clean up temp file
 rm -f $POLICY_FILE
 

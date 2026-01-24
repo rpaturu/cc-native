@@ -139,16 +139,29 @@ show_connection_info() {
   fi
 
   # Get instance details
-  INSTANCE_INFO=$(aws ec2 describe-instances \
+  PUBLIC_IP=$(aws ec2 describe-instances \
     --instance-ids $INSTANCE_ID \
-    --query "Reservations[0].Instances[0]" \
+    --query "Reservations[0].Instances[0].PublicIpAddress" \
+    --output text \
     --profile $PROFILE \
     --region $REGION \
     --no-cli-pager)
 
-  PUBLIC_IP=$(echo "$INSTANCE_INFO" | jq -r '.PublicIpAddress // "None"')
-  PRIVATE_IP=$(echo "$INSTANCE_INFO" | jq -r '.PrivateIpAddress // "None"')
-  STATE=$(echo "$INSTANCE_INFO" | jq -r '.State.Name // "unknown"')
+  PRIVATE_IP=$(aws ec2 describe-instances \
+    --instance-ids $INSTANCE_ID \
+    --query "Reservations[0].Instances[0].PrivateIpAddress" \
+    --output text \
+    --profile $PROFILE \
+    --region $REGION \
+    --no-cli-pager)
+
+  STATE=$(aws ec2 describe-instances \
+    --instance-ids $INSTANCE_ID \
+    --query "Reservations[0].Instances[0].State.Name" \
+    --output text \
+    --profile $PROFILE \
+    --region $REGION \
+    --no-cli-pager)
 
   echo "Instance Status:"
   echo "  Instance ID: $INSTANCE_ID"

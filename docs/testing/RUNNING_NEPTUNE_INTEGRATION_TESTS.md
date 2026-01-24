@@ -162,27 +162,6 @@ This will:
 - Wait for termination to complete
 - Remove the instance ID from `.env.test-runner`
 
-## Complete Workflow
-
-Here's the complete workflow for running integration tests:
-
-```bash
-# 1. Set up prerequisites (security group, IAM role, key pair)
-./scripts/setup-test-runner-prerequisites.sh
-
-# 2. Launch EC2 instance
-./scripts/manage-test-runner-instance.sh launch
-
-# 3. Connect to instance (via Session Manager)
-source .env.test-runner
-aws ssm start-session --target $TEST_RUNNER_INSTANCE_ID --profile cc-native-account --region us-west-2
-
-# 4. On the instance: Configure and run tests
-# (Install Node.js, clone repo, run tests as shown in Step 4)
-
-# 5. Teardown instance when done
-./scripts/manage-test-runner-instance.sh teardown
-```
 
 
 ## Troubleshooting
@@ -434,7 +413,21 @@ chmod +x setup-test-runner-prerequisites.sh
 
 ## Quick Start
 
-Run the complete workflow:
+### Option 1: Automated Workflow Script
+
+Run the complete workflow with a single command:
+
+```bash
+./scripts/run-phase2-integration-tests.sh
+```
+
+This script will:
+1. Set up all prerequisites (security group, IAM role, key pair)
+2. Launch the EC2 instance
+3. Show connection and test instructions
+4. Optionally teardown when done (set `TEARDOWN=true`)
+
+### Option 2: Manual Step-by-Step
 
 ```bash
 # 1. Set up prerequisites
