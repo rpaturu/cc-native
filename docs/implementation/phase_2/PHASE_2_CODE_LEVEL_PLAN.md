@@ -82,10 +82,17 @@
 - `neptune-db:ReadDataViaQuery`
 - `neptune-db:WriteDataViaQuery`
 
+**Neptune Auth Mode Validation (LOCKED):**
+- IAM permissions listed above are for IAM auth mode (Data API endpoints or IAM-signed Gremlin)
+- If using Gremlin over websockets in VPC with no IAM signing, these IAM policies may be irrelevant
+- **During setup:** Validate actual Neptune auth mode and adjust IAM policies accordingly
+- Default: Use IAM auth for security and auditability
+
 **Acceptance Criteria:**
 - Cluster deploys via CDK
 - Connectivity test utility can connect via VPC
-- IAM role can execute Gremlin queries
+- IAM role can execute Gremlin queries (if using IAM auth)
+- Auth mode is validated and IAM policies match actual auth configuration
 - No public internet access
 
 ---
@@ -430,11 +437,12 @@ export interface UnknownV1 {
 }
 ```
 
-**Critical Rule: Unknown Timestamp Determinism**
+**Critical Rule: Unknown Timestamp Determinism (LOCKED)**
 - `introduced_at`, `expires_at`, and `review_after` are derived from `event.as_of_time` (not wall clock)
 - These timestamps are **excluded from semantic-equality checks** (non-deterministic fields)
 - Engine stamps them deterministically using `event.as_of_time` and fixed functions
 - This ensures replayability: same event → same timestamps
+- **Equality Function Contract:** When comparing posture outputs for determinism, equality function MUST explicitly ignore `introduced_at`, `expires_at`, and `review_after` fields (not just documented - enforced in code)
 
 **AccountPostureStateV1:**
 ```typescript
@@ -579,7 +587,7 @@ export interface RuleTriggerMetadata {
 1. Extract signalId from event
 2. Call `GraphMaterializer.materializeSignal(signalId, tenantId)`
 3. Log to ledger: `GRAPH_MATERIALIZATION_STARTED`, `GRAPH_MATERIALIZATION_COMPLETED`
-4. Write materialization status to `GraphMaterializationStatus` table (or verify ledger event)
+4. Write materialization status to `GraphMaterializationStatus` table (authoritative gating mechanism)
 5. Emit EventBridge event: `GRAPH_MATERIALIZED` (triggers synthesis engine)
 6. On failure: log `GRAPH_MATERIALIZATION_FAILED` and send to DLQ (do NOT emit `GRAPH_MATERIALIZED`)
 
