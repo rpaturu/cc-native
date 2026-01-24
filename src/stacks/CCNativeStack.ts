@@ -807,6 +807,34 @@ export class CCNativeStack extends cdk.Stack {
     // These are internal properties, not exposed as readonly
     (this as unknown as CCNativeStack & NeptuneInternalProperties).neptuneLambdaSecurityGroup = lambdaSecurityGroup;
     (this as unknown as CCNativeStack & NeptuneInternalProperties).neptuneSubnets = vpc.isolatedSubnets.map(subnet => subnet.subnetId);
+
+    // Create VPC endpoints for SSM (required for Session Manager in isolated subnets)
+    // These allow EC2 instances in isolated subnets to use SSM without internet access
+    // SSM requires 3 interface endpoints: ssm, ssmmessages, and ec2messages
+    new ec2.InterfaceVpcEndpoint(this, 'SSMEndpoint', {
+      vpc: vpc,
+      service: new ec2.InterfaceVpcEndpointService(`com.amazonaws.${this.region}.ssm`, 443),
+      privateDnsEnabled: true,
+    });
+
+    new ec2.InterfaceVpcEndpoint(this, 'SSMMessagesEndpoint', {
+      vpc: vpc,
+      service: new ec2.InterfaceVpcEndpointService(`com.amazonaws.${this.region}.ssmmessages`, 443),
+      privateDnsEnabled: true,
+    });
+
+    new ec2.InterfaceVpcEndpoint(this, 'EC2MessagesEndpoint', {
+      vpc: vpc,
+      service: new ec2.InterfaceVpcEndpointService(`com.amazonaws.${this.region}.ec2messages`, 443),
+      privateDnsEnabled: true,
+    });
+
+    // Gateway endpoint for S3 (for git clone and npm install)
+    // Gateway endpoints are free and don't require ENIs
+    new ec2.GatewayVpcEndpoint(this, 'S3Endpoint', {
+      vpc: vpc,
+      service: ec2.GatewayVpcEndpointAwsService.S3,
+    });
   }
 
   /**
