@@ -262,11 +262,15 @@ teardown_instance() {
 
   echo "Instance ID: $INSTANCE_ID"
   echo ""
-  read -p "Are you sure you want to terminate this instance? (yes/no): " CONFIRM
   
-  if [ "$CONFIRM" != "yes" ]; then
-    echo "Cancelled"
-    return
+  # Allow non-interactive teardown if FORCE_TEARDOWN is set
+  if [ "${FORCE_TEARDOWN:-false}" != "true" ]; then
+    read -p "Are you sure you want to terminate this instance? (yes/no): " CONFIRM
+    
+    if [ "$CONFIRM" != "yes" ]; then
+      echo "Cancelled"
+      return
+    fi
   fi
 
   echo "Terminating instance..."

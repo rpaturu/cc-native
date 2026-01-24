@@ -418,14 +418,26 @@ chmod +x setup-test-runner-prerequisites.sh
 Run the complete workflow with a single command:
 
 ```bash
+# Set repository URL (required for first run)
+export REPO_URL="https://github.com/your-org/cc-native.git"
+
+# Run complete workflow
 ./scripts/run-phase2-integration-tests.sh
 ```
 
 This script will:
 1. Set up all prerequisites (security group, IAM role, key pair)
-2. Launch the EC2 instance
-3. Show connection and test instructions
-4. Optionally teardown when done (set `TEARDOWN=true`)
+2. Launch the EC2 instance (or reuse existing if already running)
+3. Configure instance (install Node.js, clone repo, install dependencies)
+4. Run Phase 2 integration tests remotely via SSM
+5. **Conditionally teardown**: Only if all tests pass
+   - ✅ **Tests pass** → Instance automatically terminated
+   - ❌ **Tests fail** → Instance retained for debugging
+
+**Environment Variables**:
+- `REPO_URL` - Git repository URL (required for first run)
+- `SKIP_PREREQUISITES=true` - Skip prerequisites setup (use existing)
+- `SKIP_LAUNCH=true` - Skip launch (use existing instance)
 
 ### Option 2: Manual Step-by-Step
 
