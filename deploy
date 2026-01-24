@@ -137,6 +137,10 @@ TENANTS_TABLE_OUTPUT=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="
 METHODOLOGY_TABLE_OUTPUT=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="MethodologyTableName") | .OutputValue')
 ASSESSMENT_TABLE_OUTPUT=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="AssessmentTableName") | .OutputValue')
 IDENTITIES_TABLE_OUTPUT=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="IdentitiesTableName") | .OutputValue')
+ACCOUNT_POSTURE_STATE_TABLE_OUTPUT=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="AccountPostureStateTableName") | .OutputValue')
+GRAPH_MATERIALIZATION_STATUS_TABLE_OUTPUT=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="GraphMaterializationStatusTableName") | .OutputValue')
+NEPTUNE_CLUSTER_ENDPOINT_OUTPUT=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="NeptuneClusterEndpoint") | .OutputValue')
+NEPTUNE_CLUSTER_PORT_OUTPUT=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="NeptuneClusterPort") | .OutputValue')
 AGENT_ROLE_ARN_OUTPUT=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="AgentRoleArn") | .OutputValue')
 USER_POOL_ID_OUTPUT=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="UserPoolId") | .OutputValue')
 USER_POOL_CLIENT_ID_OUTPUT=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="UserPoolClientId") | .OutputValue')
@@ -188,6 +192,14 @@ ASSESSMENT_TABLE_NAME=$ASSESSMENT_TABLE_OUTPUT
 
 # DynamoDB Tables (Identity)
 IDENTITIES_TABLE_NAME=$IDENTITIES_TABLE_OUTPUT
+
+# DynamoDB Tables (Phase 2)
+ACCOUNT_POSTURE_STATE_TABLE_NAME=$ACCOUNT_POSTURE_STATE_TABLE_OUTPUT
+GRAPH_MATERIALIZATION_STATUS_TABLE_NAME=$GRAPH_MATERIALIZATION_STATUS_TABLE_OUTPUT
+
+# Neptune (Phase 2)
+NEPTUNE_CLUSTER_ENDPOINT=$NEPTUNE_CLUSTER_ENDPOINT_OUTPUT
+NEPTUNE_CLUSTER_PORT=$NEPTUNE_CLUSTER_PORT_OUTPUT
 
 # IAM Roles
 AGENT_ROLE_ARN=$AGENT_ROLE_ARN_OUTPUT
