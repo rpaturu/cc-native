@@ -303,12 +303,50 @@ run_tests() {
 }
 EOF
 
+  # Wait for SSM agent to be ready (can take 1-2 minutes after instance launch)
+  echo "Waiting for SSM agent to be ready on instance..."
+  echo "This may take 1-2 minutes after instance launch..."
+  MAX_SSM_WAIT=180  # 3 minutes
+  SSM_ELAPSED=0
+  SSM_READY=false
+
+  while [ $SSM_ELAPSED -lt $MAX_SSM_WAIT ]; do
+    if aws ssm describe-instance-information \
+      --filters "Key=InstanceIds,Values=$INSTANCE_ID" \
+      --query "InstanceInformationList[0].PingStatus" \
+      --output text \
+      --profile $PROFILE \
+      --region $REGION \
+      --no-cli-pager 2>/dev/null | grep -q "Online"; then
+      SSM_READY=true
+      break
+    fi
+    sleep 10
+    SSM_ELAPSED=$((SSM_ELAPSED + 10))
+    echo -n "."
+  done
+  echo ""
+
+  if [ "$SSM_READY" != "true" ]; then
+    echo "⚠️  Warning: SSM agent may not be ready yet"
+    echo "The instance was recently launched. SSM agent typically takes 1-2 minutes to be ready."
+    echo "You can wait a bit longer and try again, or connect manually."
+    echo ""
+    echo "To connect manually:"
+    echo "  aws ssm start-session --target $INSTANCE_ID --profile $PROFILE --region $REGION"
+    exit 1
+  fi
+
+  echo "✅ SSM agent is ready"
+  echo ""
+
   # Send command to instance
   echo "Sending test command to instance..."
   if [ -n "$REPO_URL" ]; then
     echo "Repository URL: $REPO_URL"
   fi
 
+  set +e  # Temporarily disable exit on error to capture full error message
   COMMAND_OUTPUT=$(aws ssm send-command \
     --instance-ids "$INSTANCE_ID" \
     --document-name "AWS-RunShellScript" \
@@ -316,10 +354,20 @@ EOF
     --profile $PROFILE \
     --region $REGION \
     --no-cli-pager 2>&1)
+  SSM_EXIT_CODE=$?
+  set -e  # Re-enable exit on error
 
-  if [ $? -ne 0 ]; then
+  if [ $SSM_EXIT_CODE -ne 0 ]; then
     echo "❌ Failed to send command to instance"
-    echo "Error: $COMMAND_OUTPUT"
+    echo "Exit code: $SSM_EXIT_CODE"
+    echo "Error output:"
+    echo "$COMMAND_OUTPUT"
+    echo ""
+    echo "Possible causes:"
+    echo "1. SSM agent not ready (wait 1-2 minutes after instance launch)"
+    echo "2. IAM permissions issue (instance profile needs SSM permissions)"
+    echo "3. Network connectivity issue"
+    echo ""
     rm -f $TEST_COMMANDS_FILE
     exit 1
   fi
