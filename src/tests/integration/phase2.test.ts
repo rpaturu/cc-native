@@ -133,43 +133,53 @@ describe('Phase 2 Integration Tests', () => {
       // Tests will be skipped or fail gracefully
     }
 
-    // For integration tests, we'll attempt Neptune connection but don't block on it
+    // For integration tests, we'll attempt Neptune connection and verify it works
     // Neptune is in isolated VPC subnets and requires VPC access
-    // Tests will skip gracefully if connection fails
+    // Tests will skip gracefully if connection fails or queries timeout
     let neptuneAccessible = false;
     if (neptuneEndpoint) {
-      // Attempt connection in background (non-blocking)
-      // If it fails, tests will skip
       neptuneConnection = NeptuneConnection.getInstance();
-      const connectionPromise = neptuneConnection
-        .initialize({
-          endpoint: neptuneEndpoint,
-          port: neptunePort,
-          region,
-          iamAuthEnabled: true,
-        })
-        .then(() => {
-          graphService = new GraphService(neptuneConnection);
+      try {
+        // Initialize connection with timeout
+        await Promise.race([
+          neptuneConnection.initialize({
+            endpoint: neptuneEndpoint,
+            port: neptunePort,
+            region,
+            iamAuthEnabled: true,
+          }),
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('Connection timeout')), 5000)
+          ),
+        ]);
+
+        graphService = new GraphService(neptuneConnection);
+
+        // Verify connection works with a simple health check query
+        try {
+          await Promise.race([
+            graphService.getVertex('test-vertex-id-that-does-not-exist'), // Simple query that should return null quickly
+            new Promise((_, reject) =>
+              setTimeout(() => reject(new Error('Query timeout - Neptune not accessible from this network')), 5000)
+            ),
+          ]);
           neptuneAccessible = true;
-          logger.info('Neptune connection successful - tests will run');
-        })
-        .catch((error: any) => {
-          logger.warn('Neptune not accessible (requires VPC access). Tests will skip Neptune operations.', {
-            error: error.message,
+          logger.info('Neptune connection and query successful - tests will run');
+        } catch (queryError: any) {
+          logger.warn('Neptune connection established but queries timeout (requires VPC access). Tests will skip.', {
+            error: queryError.message,
           });
           neptuneConnection = null as any;
           graphService = null as any;
           neptuneAccessible = false;
+        }
+      } catch (error: any) {
+        logger.warn('Neptune not accessible (requires VPC access). Tests will skip Neptune operations.', {
+          error: error.message,
         });
-
-      // Wait up to 3 seconds for connection, then continue
-      try {
-        await Promise.race([
-          connectionPromise,
-          new Promise((resolve) => setTimeout(() => resolve('timeout'), 3000)),
-        ]);
-      } catch (error) {
-        // Connection failed, neptuneAccessible remains false
+        neptuneConnection = null as any;
+        graphService = null as any;
+        neptuneAccessible = false;
       }
     } else {
       // Set to null to indicate tests should be skipped
