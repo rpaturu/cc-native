@@ -76,24 +76,38 @@ Phase 2 turns Phase 1 outputs (Signals, EvidenceSnapshotRefs, AccountState) into
 - VPC/subnets/security groups
 - IAM roles for Step Functions/Lambda to access Neptune
 - Add connection test utility (health check)
+- **Lock query language: Gremlin only** (not OpenCypher)
 
 **Acceptance criteria**
 - CI/CD can deploy Neptune infra
-- A service identity can run a simple Gremlin/OpenCypher query successfully
+- A service identity can run a simple Gremlin query successfully
 - Connectivity is private (VPC-only)
+- Gremlin is documented as the authoritative query language
 
 ---
 
 ### Story 2.1.2 — Define graph conventions (IDs, partitioning, upsert policy)
 **Tasks**
 - Define canonical vertex ID scheme:
-  - `TENANT#{tenant_id}#ACCOUNT#{account_id}` etc.
+  - `TENANT#{tenant_id}#ACCOUNT#{account_id}`
+  - `SIGNAL#{signal_id}` (use signal_id directly, not dedupeKey)
+  - `EVIDENCE_SNAPSHOT#{evidence_snapshot_id}`
+  - `POSTURE#{tenant_id}#{account_id}#{posture_id}`
+  - `RISK_FACTOR#{risk_factor_id}`
+  - `UNKNOWN#{unknown_id}`
+- **Signal Identity Rule:** 
+  - Vertex ID = `SIGNAL#{signal_id}` (from Phase 1 signal record)
+  - `dedupeKey` stored as a **property**, not used for vertex identity
+  - This prevents accidental graph collapse when signals look similar
 - Define required properties: `tenant_id`, `entity_type`, `created_at`, `updated_at`, `schema_version`
-- Define idempotent upsert patterns (vertex + edge)
+- Define idempotent upsert patterns (vertex + edge) using Gremlin
+- Document Gremlin query patterns for all operations
 
 **Acceptance criteria**
 - A written `GRAPH_CONVENTIONS.md` exists and is followed by materializer code
 - Upserts are idempotent under retries
+- Signal vertex identity is clearly separated from dedupeKey
+- All query patterns use Gremlin (no OpenCypher)
 
 ---
 
@@ -122,6 +136,9 @@ Phase 2 turns Phase 1 outputs (Signals, EvidenceSnapshotRefs, AccountState) into
   - Correct edges
 - Replaying the same event produces no duplicates
 - Ledger records the materialization with the same `trace_id`
+- **Failure Semantics Rule:** If graph materialization partially succeeds, synthesis MUST NOT run
+  - Enforce via ledger gate or `graph_materialized=true` flag per signal
+  - Prevents "phantom posture updates" without full evidence linkage
 
 **Note:** Phase 1 emits `SIGNAL_DETECTED` and `SIGNAL_CREATED` events. The materializer should listen to these events via EventBridge.
 
@@ -177,13 +194,18 @@ Phase 2 turns Phase 1 outputs (Signals, EvidenceSnapshotRefs, AccountState) into
 - Create versioned schemas:
   - `PostureStateV1`
   - `RiskFactorV1`
-  - `UnknownV1`
+  - `UnknownV1` (must include TTL semantics: `introduced_at`, `expires_at` OR `review_after`)
 - Define rule trigger metadata:
   - `rule_id`, `ruleset_version`, `inputs_hash`
+- **Unknowns TTL Requirement:** Every `UnknownV1` must have:
+  - `introduced_at: string` (ISO timestamp)
+  - `expires_at: string | null` OR `review_after: string` (ISO timestamp)
+  - Prevents Unknowns from accumulating indefinitely
 
 **Acceptance criteria**
 - Schemas are enforced at runtime (fail-closed)
 - Output includes `ruleset_version` and input references
+- Unknowns schema includes TTL semantics
 
 ---
 
@@ -298,13 +320,21 @@ Phase 2 turns Phase 1 outputs (Signals, EvidenceSnapshotRefs, AccountState) into
 
 ## Suggested Execution Order (Practical)
 
-1. EPIC 2.1 Neptune foundation
-2. EPIC 2.2 Graph materializer + backfill
-3. EPIC 2.3 AccountPostureState (DDB)
-4. EPIC 2.4 Synthesis rules + engine
-5. EPIC 2.6 Minimal APIs
-6. EPIC 2.7 Replay + certification
-7. EPIC 2.5 Optional artifacts (if time)
+**Recommended order (refined):**
+
+1. EPIC 2.1 — Neptune foundation
+2. EPIC 2.2 — Graph materializer + backfill
+3. **EPIC 2.4 — Synthesis rules (define early, code later)** ⚠️ **Do this before 2.3**
+   - Write `synthesis/rules/v1.yaml` first
+   - Forces clarity on posture semantics
+   - Prevents schema churn later
+4. EPIC 2.3 — AccountPostureState (DDB)
+5. EPIC 2.4 — Synthesis engine implementation
+6. EPIC 2.6 — Minimal APIs
+7. EPIC 2.7 — Replay + certification
+8. EPIC 2.5 — Optional artifacts (if time)
+
+**Rationale:** Writing rules early forces clarity on posture semantics and prevents schema churn during implementation.
 
 ---
 
@@ -332,7 +362,45 @@ This keeps Phase 3 cheap, grounded, and safe.
 
 ---
 
-## Review Notes & Recommendations
+## Technical Review & Refinements
+
+### Executive Assessment ✅
+
+**Verdict:** ✅ **Strong, implementable, and correctly sequenced.**
+
+This is a *clean continuation* of Phase 1 and preserves core architectural principles: determinism, replayability, evidence grounding, and cost control.
+
+**Key Strengths:**
+- Phase boundary discipline (does not mutate Phase 1)
+- Deterministic synthesis correctly scoped (versioned, hashed, reproducible)
+- Graph as truth store, not runtime dependency
+- Idempotency + replay are first-class
+
+### Critical Refinements Applied
+
+1. **Graph Query Language Locked:** ✅ Gremlin only (not OpenCypher)
+   - Better AWS tooling
+   - More examples for idempotent upserts
+   - Less cognitive overhead
+
+2. **Signal Identity vs Vertex Identity:** ✅ Clarified
+   - Vertex ID = `SIGNAL#{signal_id}` (from Phase 1 signal record)
+   - `dedupeKey` stored as property, not used for vertex identity
+   - Prevents accidental graph collapse
+
+3. **Failure Semantics Rule:** ✅ Added
+   - If graph materialization partially succeeds, synthesis MUST NOT run
+   - Enforced via ledger gate or `graph_materialized=true` flag
+   - Prevents "phantom posture updates"
+
+4. **Unknowns TTL Semantics:** ✅ Required
+   - Every `UnknownV1` must have `introduced_at`, `expires_at` OR `review_after`
+   - Prevents Unknowns from accumulating indefinitely
+
+5. **Execution Order Refined:** ✅ Rules defined early
+   - Write `synthesis/rules/v1.yaml` before implementing AccountPostureState
+   - Forces clarity on posture semantics
+   - Prevents schema churn
 
 ### Alignment with Phase 1 ✅
 - **Event Types:** Phase 1 emits `SIGNAL_DETECTED` and `SIGNAL_CREATED` events. The plan correctly references these events for triggering materialization.
@@ -344,25 +412,29 @@ This keeps Phase 3 cheap, grounded, and safe.
 1. **EventBridge Integration:**
    - Current Phase 1 setup routes `SIGNAL_DETECTED`/`SIGNAL_CREATED` to lifecycle-inference-handler
    - Phase 2 materializer should be added as an additional target (fan-out pattern)
-   - Consider using EventBridge filtering to route to both handlers
+   - Use EventBridge filtering to route to both handlers
+   - Materializer must check `graph_materialized` flag before synthesis runs
 
-2. **Neptune Query Language:**
-   - Plan doesn't specify Gremlin vs OpenCypher
-   - Recommendation: Use Gremlin (more mature, better AWS SDK support)
-   - Document query patterns in `GRAPH_CONVENTIONS.md`
+2. **Neptune Query Language:** ✅ **LOCKED: Gremlin only**
+   - Gremlin is the authoritative query language
+   - Document all query patterns in `GRAPH_CONVENTIONS.md`
+   - Use AWS Neptune Gremlin SDK
 
 3. **Idempotency:**
-   - Plan correctly emphasizes idempotency
-   - Consider using signal `dedupeKey` as part of vertex ID scheme for natural idempotency
+   - Signal vertex ID = `SIGNAL#{signal_id}` (from Phase 1)
+   - `dedupeKey` is a property, not part of vertex identity
+   - Natural idempotency via vertex ID uniqueness
 
 4. **Cost Optimization:**
-   - Plan correctly emphasizes bounded queries
-   - Consider batching graph operations where possible
+   - Bounded queries only (no scans, no unbounded traversals)
+   - Batch graph operations where possible
    - Use Neptune query timeout limits
+   - Read models (DynamoDB) for hot paths
 
 5. **Schema Versioning:**
-   - Plan mentions `schema_version` but should align with Phase 0/1 versioning approach
-   - Consider using same versioning scheme as evidence schemas
+   - Align with Phase 0/1 versioning approach
+   - Use same versioning scheme as evidence schemas
+   - Record `ruleset_version` in all outputs
 
 ### Missing Considerations
 
@@ -409,4 +481,25 @@ This keeps Phase 3 cheap, grounded, and safe.
 
 ---
 
-**Status:** Plan reviewed and ready for implementation. All prerequisites met (Phase 0 ✅, Phase 1 ✅).
+## Strategic Validation
+
+This plan correctly positions the system as:
+
+* **Grounded** (evidence-first)
+* **Deterministic** (rules, not vibes)
+* **Agent-ready but not agent-dependent**
+
+Phase 2 builds the **substrate** that real agents can safely stand on in Phase 3.
+
+---
+
+## Next Steps
+
+**Before coding:**
+1. ✅ Lock Gremlin as query language (done)
+2. ✅ Define signal identity rules (done)
+3. 📋 Draft `synthesis/rules/v1.yaml` (recommended next step)
+4. 📋 Design `GRAPH_CONVENTIONS.md` (recommended next step)
+5. 📋 Sanity-check posture semantics (OK/WATCH/AT_RISK/EXPAND/DORMANT) against real sales motion
+
+**Status:** ✅ Plan reviewed, refined, and ready for implementation. All prerequisites met (Phase 0 ✅, Phase 1 ✅).
