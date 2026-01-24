@@ -171,9 +171,6 @@ The `run-phase2-integration-tests.sh` script supports various options:
 - `--skip-prerequisites` - Skip prerequisites setup (use existing security group, IAM role, key pair)
 - `--setup-prerequisites` - Explicitly run prerequisites setup (default: runs if not skipped)
 - `--skip-launch` - Skip instance launch (use existing instance)
-- `--deploy-method METHOD` - Deployment method: `clone`, `s3`, or `manual` (default: `clone`)
-- `--s3-bucket BUCKET` - S3 bucket containing code archive (for s3 deploy method)
-- `--s3-key KEY` - S3 key/path to code archive (default: cc-native.tar.gz)
 - `--git-token TOKEN` - Git token for private HTTPS repos (e.g., GitHub personal access token)
 - `--git-ssh-key PATH` - Path to SSH private key for private SSH repos
 - `--profile PROFILE` - AWS profile (default: cc-native-account)
@@ -196,12 +193,6 @@ The `run-phase2-integration-tests.sh` script supports various options:
   --repo-url https://github.com/rpaturu/cc-native.git \
   --git-token ghp_xxxxx
 
-# Deploy from S3 (for local code or private repos)
-./scripts/run-phase2-integration-tests.sh \
-  --deploy-method s3 \
-  --s3-bucket my-code-bucket \
-  --s3-key cc-native.tar.gz
-
 # Show all options
 ./scripts/run-phase2-integration-tests.sh --help
 ```
@@ -212,18 +203,14 @@ The `run-phase2-integration-tests.sh` script supports various options:
 - `REPO_URL` - Repository URL for cloning (overrides GIT_REPO_URL)
 - `SKIP_PREREQUISITES` - Skip prerequisites setup (true/false)
 - `SKIP_LAUNCH` - Skip instance launch (true/false)
-- `DEPLOY_METHOD` - Deployment method: clone, s3, or manual
-- `S3_BUCKET` - S3 bucket for code deployment (s3 method)
 - `AWS_PROFILE` - AWS profile name
 - `AWS_REGION` - AWS region
 
 **Note**: `GIT_REPO_URL` and `GIT_TOKEN` can be set in `.env.local` for convenience.
 
-## Deployment Methods
+## Repository Setup
 
-### Method 1: Git Clone (Default)
-
-Clone repository from GitHub (or other git host):
+The test runner will clone your repository from GitHub (or other git host):
 
 ```bash
 # Public repository
@@ -240,30 +227,15 @@ Clone repository from GitHub (or other git host):
   --git-ssh-key ~/.ssh/id_rsa
 ```
 
-### Method 2: S3 Deployment
-
-Deploy code from S3 (useful for local code or private repos):
-
+**Recommended**: Store your repository URL and token in `.env.local`:
 ```bash
-# 1. Create archive from local code
-tar -czf cc-native.tar.gz --exclude=node_modules --exclude=.git .
-
-# 2. Upload to S3
-aws s3 cp cc-native.tar.gz s3://your-code-bucket/cc-native.tar.gz
-
-# 3. Run tests
-./scripts/run-phase2-integration-tests.sh \
-  --deploy-method s3 \
-  --s3-bucket your-code-bucket \
-  --s3-key cc-native.tar.gz
+GIT_REPO_URL=https://github.com/rpaturu/cc-native.git
+GIT_TOKEN=ghp_your_token_here
 ```
 
-### Method 3: Manual Deployment
-
-If code is already on the instance:
-
+Then simply run:
 ```bash
-./scripts/run-phase2-integration-tests.sh --deploy-method manual
+./scripts/run-phase2-integration-tests.sh
 ```
 
 ## Manual Step-by-Step Workflow
