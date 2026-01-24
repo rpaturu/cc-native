@@ -15,6 +15,26 @@ ruleset:
   
   # Rule evaluation order (priority: lower = evaluated first)
   # Rules are evaluated top-to-bottom until a match is found
+  # First matching rule wins (deterministic, order-stable)
+  #
+  # Condition Schema:
+  # - required_signals: Array of signal conditions (all must match)
+  # - excluded_signals: Array of signal conditions (none must match)
+  # - signal_properties: Array of property checks on signals
+  #   - property: Path to property (e.g., "trend_direction" in signal.data)
+  #   - operator: "equals", "greater_than", "less_than", "in", "exists", "not_exists"
+  #   - value: Comparison value
+  #
+  # Timestamp Handling:
+  # - Unknown timestamps (introduced_at, review_after) are NOT in ruleset
+  # - Engine stamps them using event.as_of_time (not wall clock)
+  # - These fields are excluded from bitwise equality checks
+  #
+  # TTL Semantics:
+  # - output_ttl_days: Posture output expires after N days (re-evaluate)
+  # - null = permanent (until inputs change)
+  # - Enforcement: If TTL expires and no other rule matches, re-run synthesis
+  #
   rules:
     # ============================================================
     # CUSTOMER LIFECYCLE RULES (Highest Priority)
@@ -54,11 +74,10 @@ ruleset:
             status: "ACTIVE"
           - signal_type: "USAGE_TREND_CHANGE"
             status: "ACTIVE"
-        signal_properties:
-          - signal_type: "USAGE_TREND_CHANGE"
-            property: "trend_direction"
-            operator: "equals"
-            value: "DOWN"
+            where:
+              - property: "trend_direction"
+                operator: "equals"
+                value: "DOWN"
       outputs:
         posture: "AT_RISK"
         momentum: "DOWN"
@@ -81,15 +100,13 @@ ruleset:
         required_signals:
           - signal_type: "USAGE_TREND_CHANGE"
             status: "ACTIVE"
-        signal_properties:
-          - signal_type: "USAGE_TREND_CHANGE"
-            property: "trend_direction"
-            operator: "equals"
-            value: "UP"
-          - signal_type: "USAGE_TREND_CHANGE"
-            property: "trend_magnitude"
-            operator: "greater_than"
-            value: 0.2  # 20%+ growth
+            where:
+              - property: "trend_direction"
+                operator: "equals"
+                value: "UP"
+              - property: "trend_magnitude"
+                operator: "greater_than"
+                value: 0.2  # 20%+ growth
       outputs:
         posture: "EXPAND"
         momentum: "UP"
@@ -101,7 +118,7 @@ ruleset:
             evidence_signals:
               - "USAGE_TREND_CHANGE"
         unknowns: []
-      ttl_days: 30  # Re-evaluate monthly
+      output_ttl_days: 30  # Re-evaluate monthly
     
     # Rule 4: CUSTOMER - Renewal window + no risks → WATCH
     - rule_id: "CUSTOMER_RENEWAL_WATCH"
@@ -116,8 +133,10 @@ ruleset:
             status: "ACTIVE"
           - signal_type: "USAGE_TREND_CHANGE"
             status: "ACTIVE"
-            property: "trend_direction"
-            value: "DOWN"
+            where:
+              - property: "trend_direction"
+                operator: "equals"
+                value: "DOWN"
       outputs:
         posture: "WATCH"
         momentum: "FLAT"
@@ -130,9 +149,61 @@ ruleset:
             review_after: "${now + 30 days}"
       ttl_days: 90  # Review after renewal window
     
-    # Rule 5: CUSTOMER - No active signals → OK
-    - rule_id: "CUSTOMER_STABLE"
+    # Rule 5: CUSTOMER - Support risk without renewal → WATCH
+    - rule_id: "CUSTOMER_SUPPORT_RISK"
       priority: 5
+      lifecycle_state: "CUSTOMER"
+      conditions:
+        required_signals:
+          - signal_type: "SUPPORT_RISK_EMERGING"
+            status: "ACTIVE"
+        excluded_signals:
+          - signal_type: "RENEWAL_WINDOW_ENTERED"
+            status: "ACTIVE"
+      outputs:
+        posture: "WATCH"
+        momentum: "DOWN"
+        risk_factors:
+          - type: "SUPPORT_RISK"
+            severity: "medium"
+            description: "Support risk emerging outside renewal window"
+            evidence_signals:
+              - "SUPPORT_RISK_EMERGING"
+        opportunities: []
+        unknowns: []
+      output_ttl_days: 30  # Re-evaluate monthly
+    
+    # Rule 6: CUSTOMER - Usage decline without renewal → WATCH
+    - rule_id: "CUSTOMER_USAGE_DECLINE"
+      priority: 6
+      lifecycle_state: "CUSTOMER"
+      conditions:
+        required_signals:
+          - signal_type: "USAGE_TREND_CHANGE"
+            status: "ACTIVE"
+            where:
+              - property: "trend_direction"
+                operator: "equals"
+                value: "DOWN"
+        excluded_signals:
+          - signal_type: "RENEWAL_WINDOW_ENTERED"
+            status: "ACTIVE"
+      outputs:
+        posture: "WATCH"
+        momentum: "DOWN"
+        risk_factors:
+          - type: "USAGE_DECLINE"
+            severity: "medium"
+            description: "Usage declining outside renewal window"
+            evidence_signals:
+              - "USAGE_TREND_CHANGE"
+        opportunities: []
+        unknowns: []
+      output_ttl_days: 30  # Re-evaluate monthly
+    
+    # Rule 7: CUSTOMER - No active signals → OK
+    - rule_id: "CUSTOMER_STABLE"
+      priority: 7
       lifecycle_state: "CUSTOMER"
       conditions:
         excluded_signals:
@@ -148,15 +219,15 @@ ruleset:
         risk_factors: []
         opportunities: []
         unknowns: []
-      ttl_days: null  # Stable state
+      output_ttl_days: null  # Stable state (permanent until inputs change)
     
     # ============================================================
     # SUSPECT LIFECYCLE RULES
     # ============================================================
     
-    # Rule 6: SUSPECT - Discovery stalled → AT_RISK
+    # Rule 8: SUSPECT - Discovery stalled → AT_RISK
     - rule_id: "SUSPECT_DISCOVERY_STALLED"
-      priority: 6
+      priority: 8
       lifecycle_state: "SUSPECT"
       conditions:
         required_signals:
@@ -175,13 +246,12 @@ ruleset:
         unknowns:
           - type: "STALL_REASON"
             description: "Why has discovery stalled?"
-            introduced_at: "${now}"
-            review_after: "${now + 14 days}"
-      ttl_days: 30  # Re-evaluate if stall persists
+            # Timestamps (introduced_at, review_after) are stamped by engine using event.as_of_time
+      output_ttl_days: 30  # Re-evaluate if stall persists
     
-    # Rule 7: SUSPECT - Stakeholder gap → WATCH with risk
+    # Rule 9: SUSPECT - Stakeholder gap → WATCH with risk
     - rule_id: "SUSPECT_STAKEHOLDER_GAP"
-      priority: 7
+      priority: 9
       lifecycle_state: "SUSPECT"
       conditions:
         required_signals:
@@ -200,18 +270,22 @@ ruleset:
         unknowns:
           - type: "GAP_RESOLUTION"
             description: "How to engage missing stakeholders?"
-            introduced_at: "${now}"
-            review_after: "${now + 30 days}"
-      ttl_days: 60  # Re-evaluate monthly
+            # Timestamps (introduced_at, review_after) are stamped by engine using event.as_of_time
+      output_ttl_days: 60  # Re-evaluate monthly
     
-    # Rule 8: SUSPECT - First engagement occurred → WATCH
+    # Rule 10: SUSPECT - First engagement occurred (within 14 days) → WATCH
     - rule_id: "SUSPECT_FIRST_ENGAGEMENT"
-      priority: 8
+      priority: 10
       lifecycle_state: "SUSPECT"
       conditions:
         required_signals:
           - signal_type: "FIRST_ENGAGEMENT_OCCURRED"
             status: "ACTIVE"
+            where:
+              # Signal must have occurred within last 14 days (not a stale historical signal)
+              - property: "occurred_within_days"
+                operator: "less_than_or_equal"
+                value: 14
         excluded_signals:
           - signal_type: "DISCOVERY_PROGRESS_STALLED"
             status: "ACTIVE"
@@ -230,13 +304,12 @@ ruleset:
         unknowns:
           - type: "ENGAGEMENT_QUALITY"
             description: "Is this engagement meaningful?"
-            introduced_at: "${now}"
-            review_after: "${now + 7 days}"
-      ttl_days: null  # Historical milestone
+            # Timestamps (introduced_at, review_after) are stamped by engine using event.as_of_time
+      output_ttl_days: 14  # Re-evaluate after engagement window
     
-    # Rule 9: SUSPECT - Default (no specific signals) → WATCH
+    # Rule 11: SUSPECT - Default (no specific signals) → WATCH
     - rule_id: "SUSPECT_DEFAULT"
-      priority: 9
+      priority: 11
       lifecycle_state: "SUSPECT"
       conditions:
         # Matches any SUSPECT state
@@ -248,9 +321,8 @@ ruleset:
         unknowns:
           - type: "SUSPECT_PROGRESSION"
             description: "What will move this account forward?"
-            introduced_at: "${now}"
-            review_after: "${now + 14 days}"
-      ttl_days: 30  # Re-evaluate bi-weekly
+            # Timestamps (introduced_at, review_after) are stamped by engine using event.as_of_time
+      output_ttl_days: 30  # Re-evaluate bi-weekly
     
     # ============================================================
     # PROSPECT LIFECYCLE RULES
@@ -279,9 +351,8 @@ ruleset:
         unknowns:
           - type: "ENGAGEMENT_STRATEGY"
             description: "How should we engage this activated account?"
-            introduced_at: "${now}"
-            review_after: "${now + 7 days}"
-      ttl_days: 90  # Re-evaluate quarterly
+            # Timestamps (introduced_at, review_after) are stamped by engine using event.as_of_time
+      output_ttl_days: 90  # Re-evaluate quarterly
     
     # Rule 11: PROSPECT - Activation only → WATCH
     - rule_id: "PROSPECT_ACTIVATION"
@@ -305,7 +376,7 @@ ruleset:
             evidence_signals:
               - "ACCOUNT_ACTIVATION_DETECTED"
         unknowns: []
-      ttl_days: 90  # Re-evaluate quarterly
+      output_ttl_days: 90  # Re-evaluate quarterly
     
     # Rule 12: PROSPECT - Default (no activation) → DORMANT
     - rule_id: "PROSPECT_DORMANT"
@@ -323,15 +394,14 @@ ruleset:
         unknowns:
           - type: "ACTIVATION_TRIGGER"
             description: "What would activate this account?"
-            introduced_at: "${now}"
-            review_after: "${now + 30 days}"
-      ttl_days: 30  # Re-evaluate monthly
+            # Timestamps (introduced_at, review_after) are stamped by engine using event.as_of_time
+      output_ttl_days: 30  # Re-evaluate monthly
     
     # ============================================================
     # CROSS-LIFECYCLE RULES (Lowest Priority - Catch-alls)
     # ============================================================
     
-    # Rule 13: Fallback - Any lifecycle, no matching rules → WATCH
+    # Rule 15: Fallback - Any lifecycle, no matching rules → WATCH
     - rule_id: "FALLBACK_WATCH"
       priority: 99
       lifecycle_state: null  # Matches any lifecycle state
@@ -345,9 +415,8 @@ ruleset:
         unknowns:
           - type: "STATE_EVALUATION"
             description: "Account state unclear - needs evaluation"
-            introduced_at: "${now}"
-            review_after: "${now + 7 days}"
-      ttl_days: 7  # Quick re-evaluation
+            # Timestamps (introduced_at, review_after) are stamped by engine using event.as_of_time
+      output_ttl_days: 7  # Quick re-evaluation
 
 # ============================================================
 # Rule Evaluation Metadata
@@ -387,3 +456,14 @@ evaluation:
   # - UP: Positive trajectory
   # - FLAT: Stable, no change
   # - DOWN: Negative trajectory
+  #
+  # TTL Semantics (output_ttl_days):
+  # - output_ttl_days: Posture output expires after N days (triggers re-evaluation)
+  # - null: Permanent until inputs change (no automatic expiry)
+  # - Enforcement: If TTL expires and no other rule matches, synthesis engine re-runs
+  # - TTL is evaluated against event.as_of_time (not wall clock) for determinism
+  #
+  # Evidence Signal References:
+  # - evidence_signals: Array of signal types that support this output
+  # - Engine should resolve to actual signal IDs for traceability
+  # - Multiple signals of same type: use latest active signal or all active signals
