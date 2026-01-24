@@ -44,6 +44,8 @@ import * as subscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
 ### Phase 1: Network Micro-Segmentation (Priority: High)
 **Goal**: Implement per-function security groups and restrict outbound traffic
 
+**Note**: Lambda functions in VPC experience longer cold starts (1-3 seconds) due to ENI creation. Consider using provisioned concurrency for production workloads if latency is critical.
+
 #### 1.1 Create Per-Function Security Groups
 
 **File**: `src/stacks/CCNativeStack.ts`
@@ -67,13 +69,20 @@ interface NeptuneInternalProperties {
 
 **Location**: `createNeptuneInfrastructure()` method
 
-**Current Code** (lines 712-716):
+**Current Code** (lines 712-723):
 ```typescript
 const lambdaSecurityGroup = new ec2.SecurityGroup(this, 'NeptuneLambdaSecurityGroup', {
   vpc: vpc,
   description: 'Security group for Lambda functions accessing Neptune',
   allowAllOutbound: true,
 });
+
+// Allow Lambda to connect to Neptune on Gremlin port (8182)
+neptuneSecurityGroup.addIngressRule(
+  lambdaSecurityGroup,
+  ec2.Port.tcp(8182),
+  'Allow Gremlin connections from Lambda'
+);
 ```
 
 **Implementation**:
@@ -128,9 +137,15 @@ synthesisEngineSecurityGroup.addEgressRule(
   'Allow HTTPS to AWS services via VPC endpoints (DynamoDB, EventBridge, CloudWatch Logs)'
 );
 
-// 4. Update Neptune ingress to allow from both security groups
-// Remove the old ingress rule that used lambdaSecurityGroup
-// Add new ingress rules for per-function security groups
+// 4. ⚠️ CRITICAL: Remove the old ingress rule (lines 719-723)
+// REMOVE this old ingress rule that uses lambdaSecurityGroup:
+// neptuneSecurityGroup.addIngressRule(
+//   lambdaSecurityGroup,
+//   ec2.Port.tcp(8182),
+//   'Allow Gremlin connections from Lambda'
+// );
+
+// 5. Add new ingress rules for per-function security groups
 neptuneSecurityGroup.addIngressRule(
   graphMaterializerSecurityGroup,
   ec2.Port.tcp(8182),
@@ -143,21 +158,16 @@ neptuneSecurityGroup.addIngressRule(
   'Allow Gremlin connections from synthesis-engine Lambda'
 );
 
-// 5. Store in internal properties
+// 6. Store in internal properties
 (this as unknown as CCNativeStack & NeptuneInternalProperties).graphMaterializerSecurityGroup = graphMaterializerSecurityGroup;
 (this as unknown as CCNativeStack & NeptuneInternalProperties).synthesisEngineSecurityGroup = synthesisEngineSecurityGroup;
 ```
 
-**Step 3**: Update `createPhase2Handlers()` method
+**Step 3**: Create Per-Function IAM Roles and Update Lambda Functions
 
 **Location**: `createPhase2Handlers()` method
 
-**Current Code** (lines 1087-1089):
-```typescript
-vpc: this.vpc,
-vpcSubnets: { subnets: this.vpc.isolatedSubnets },
-securityGroups: [neptuneLambdaSecurityGroup],
-```
+**Important**: For zero trust, each Lambda function should have its own dedicated IAM role. This provides better isolation and follows least privilege principles.
 
 **Implementation**:
 ```typescript
@@ -165,22 +175,88 @@ securityGroups: [neptuneLambdaSecurityGroup],
 const graphMaterializerSecurityGroup = (this as any).graphMaterializerSecurityGroup as ec2.SecurityGroup;
 const synthesisEngineSecurityGroup = (this as any).synthesisEngineSecurityGroup as ec2.SecurityGroup;
 
+// Create dedicated IAM role for Graph Materializer
+const graphMaterializerRole = new iam.Role(this, 'GraphMaterializerRole', {
+  roleName: 'cc-native-graph-materializer-role',
+  assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
+  description: 'IAM role for graph-materializer Lambda function',
+});
+
+// Add VPC permissions (REQUIRED for Lambda in VPC)
+// Note: If using default Lambda execution role, CDK adds this automatically when vpc is specified
+// But with custom roles, you must add it manually
+graphMaterializerRole.addManagedPolicy(
+  iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaVPCAccessExecutionRole')
+);
+
+// Create dedicated IAM role for Synthesis Engine
+const synthesisEngineRole = new iam.Role(this, 'SynthesisEngineRole', {
+  roleName: 'cc-native-synthesis-engine-role',
+  assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
+  description: 'IAM role for synthesis-engine Lambda function',
+});
+
+// Add VPC permissions (REQUIRED for Lambda in VPC)
+synthesisEngineRole.addManagedPolicy(
+  iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaVPCAccessExecutionRole')
+);
+
 // Graph Materializer Handler
 const graphMaterializerHandler = new lambdaNodejs.NodejsFunction(this, 'GraphMaterializerHandler', {
-  // ... existing config ...
+  functionName: 'cc-native-graph-materializer-handler',
+  entry: 'src/handlers/phase2/graph-materializer-handler.ts',
+  handler: 'handler',
+  runtime: lambda.Runtime.NODEJS_20_X,
+  timeout: cdk.Duration.minutes(5),
+  memorySize: 1024,
+  environment: phase2Env,
+  deadLetterQueue: this.graphMaterializerDlq,
+  deadLetterQueueEnabled: true,
+  retryAttempts: 2,
+  // VPC configuration for Neptune access
   vpc: this.vpc,
   vpcSubnets: { subnets: this.vpc.isolatedSubnets },
   securityGroups: [graphMaterializerSecurityGroup], // Use specific security group
+  role: graphMaterializerRole,  // ✅ Use dedicated role
 });
 
 // Synthesis Engine Handler
 const synthesisEngineHandler = new lambdaNodejs.NodejsFunction(this, 'SynthesisEngineHandler', {
-  // ... existing config ...
+  functionName: 'cc-native-synthesis-engine-handler',
+  entry: 'src/handlers/phase2/synthesis-engine-handler.ts',
+  handler: 'handler',
+  runtime: lambda.Runtime.NODEJS_20_X,
+  timeout: cdk.Duration.minutes(3),
+  memorySize: 1024,
+  environment: phase2Env,
+  deadLetterQueue: this.synthesisEngineDlq,
+  deadLetterQueueEnabled: true,
+  retryAttempts: 2,
+  // VPC configuration for Neptune access
   vpc: this.vpc,
   vpcSubnets: { subnets: this.vpc.isolatedSubnets },
   securityGroups: [synthesisEngineSecurityGroup], // Use specific security group
+  role: synthesisEngineRole,  // ✅ Use dedicated role
 });
+
+// Grant permissions for Graph Materializer
+this.signalsTable.grantReadData(graphMaterializerHandler);
+this.accountsTable.grantReadData(graphMaterializerHandler);
+this.graphMaterializationStatusTable.grantReadWriteData(graphMaterializerHandler);
+this.ledgerTable.grantWriteData(graphMaterializerHandler);
+this.eventBus.grantPutEventsTo(graphMaterializerHandler);
+
+// Grant permissions for Synthesis Engine
+this.signalsTable.grantReadData(synthesisEngineHandler);
+this.accountsTable.grantReadData(synthesisEngineHandler);
+this.accountPostureStateTable.grantReadWriteData(synthesisEngineHandler);
+this.graphMaterializationStatusTable.grantReadData(synthesisEngineHandler);
+this.ledgerTable.grantWriteData(synthesisEngineHandler);
 ```
+
+**Note**: The `neptuneAccessRole` created in `createNeptuneInfrastructure()` is not used with this approach. You can either:
+- Remove it (since we're using per-function roles), OR
+- Keep it for backward compatibility but document that it's not used
 
 #### 1.2 Add VPC Endpoints for DynamoDB, EventBridge, and CloudWatch Logs
 
@@ -194,6 +270,9 @@ new ec2.InterfaceVpcEndpoint(this, 'DynamoDBEndpoint', {
   vpc: vpc,
   service: new ec2.InterfaceVpcEndpointService(`com.amazonaws.${this.region}.dynamodb`, 443),
   privateDnsEnabled: true,
+  subnets: {
+    subnetType: ec2.SubnetType.PRIVATE_ISOLATED,  // ✅ Specify subnet type explicitly
+  },
 });
 
 // Add EventBridge VPC endpoint (interface endpoint)
@@ -201,6 +280,9 @@ new ec2.InterfaceVpcEndpoint(this, 'EventBridgeEndpoint', {
   vpc: vpc,
   service: new ec2.InterfaceVpcEndpointService(`com.amazonaws.${this.region}.events`, 443),
   privateDnsEnabled: true,
+  subnets: {
+    subnetType: ec2.SubnetType.PRIVATE_ISOLATED,  // ✅ Specify subnet type explicitly
+  },
 });
 
 // Add CloudWatch Logs endpoint (for Lambda logging)
@@ -211,6 +293,9 @@ new ec2.InterfaceVpcEndpoint(this, 'CloudWatchLogsEndpoint', {
   vpc: vpc,
   service: new ec2.InterfaceVpcEndpointService(`com.amazonaws.${this.region}.logs`, 443),
   privateDnsEnabled: true,
+  subnets: {
+    subnetType: ec2.SubnetType.PRIVATE_ISOLATED,  // ✅ Specify subnet type explicitly
+  },
 });
 ```
 
@@ -294,7 +379,7 @@ private createSecurityMonitoring(): void {
     treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
   }).addAlarmAction(new cloudwatch_actions.SnsAction(securityAlertsTopic));
 
-  // Alarm 2: Lambda function errors (potential security issues)
+  // Alarm 2: Graph Materializer Lambda function errors (potential security issues)
   // Note: These handlers must exist before this method is called
   const graphMaterializerErrors = new cloudwatch.Metric({
     namespace: 'AWS/Lambda',
@@ -314,25 +399,48 @@ private createSecurityMonitoring(): void {
     treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
   }).addAlarmAction(new cloudwatch_actions.SnsAction(securityAlertsTopic));
 
-  // Alarm 3: VPC Endpoint traffic monitoring
-  // Note: VPC Flow Logs don't automatically create CloudWatch metrics
-  // Monitor VPC endpoint traffic instead, or use CloudWatch Insights queries
-  const vpcEndpointMetric = new cloudwatch.Metric({
-    namespace: 'AWS/PrivateLinkEndpoints',
-    metricName: 'BytesProcessed',
+  // Alarm 3: Synthesis Engine Lambda function errors
+  const synthesisEngineErrors = new cloudwatch.Metric({
+    namespace: 'AWS/Lambda',
+    metricName: 'Errors',
+    dimensionsMap: {
+      FunctionName: this.synthesisEngineHandler.functionName,
+    },
     statistic: 'Sum',
     period: cdk.Duration.minutes(5),
   });
 
-  new cloudwatch.Alarm(this, 'HighVPCEndpointTraffic', {
-    alarmName: 'cc-native-high-vpc-endpoint-traffic',
-    metric: vpcEndpointMetric,
+  new cloudwatch.Alarm(this, 'SynthesisEngineErrors', {
+    alarmName: 'cc-native-synthesis-engine-errors',
+    metric: synthesisEngineErrors,
+    threshold: 5, // Alert if 5+ errors in 5 minutes
+    evaluationPeriods: 1,
+    treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+  }).addAlarmAction(new cloudwatch_actions.SnsAction(securityAlertsTopic));
+
+  // Alarm 4: VPC Endpoint traffic monitoring
+  // Note: VPC Flow Logs don't automatically create CloudWatch metrics
+  // Monitor VPC endpoint traffic instead, or use CloudWatch Insights queries
+  // For zero trust, monitor each endpoint separately
+  const dynamoDBEndpointMetric = new cloudwatch.Metric({
+    namespace: 'AWS/PrivateLinkEndpoints',
+    metricName: 'BytesProcessed',
+    dimensionsMap: {
+      ServiceName: `com.amazonaws.${this.region}.dynamodb`,  // ✅ Specify which endpoint
+    },
+    statistic: 'Sum',
+    period: cdk.Duration.minutes(5),
+  });
+
+  new cloudwatch.Alarm(this, 'HighDynamoDBEndpointTraffic', {
+    alarmName: 'cc-native-high-dynamodb-endpoint-traffic',
+    metric: dynamoDBEndpointMetric,
     threshold: 1000000000, // 1GB in 5 minutes (adjust as needed)
     evaluationPeriods: 2,
     treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
   }).addAlarmAction(new cloudwatch_actions.SnsAction(securityAlertsTopic));
 
-  // Alarm 4: IAM authentication failures
+  // Alarm 5: IAM authentication failures
   // Note: Neptune IAM auth failures are logged to CloudWatch Logs
   // This requires a log metric filter (see section 2.3)
 }
@@ -346,24 +454,62 @@ this.createPhase2Handlers();
 this.createSecurityMonitoring();  // ✅ Add this line - must be after createPhase2Handlers()
 ```
 
-#### 2.3 Create Log Metric Filters for Security Events
+#### 2.3 Create Neptune Audit Log Group and Metric Filters
 
 **File**: `src/stacks/CCNativeStack.ts`
-**Location**: `createSecurityMonitoring()` method (add to the end of the method)
+**Location**: `createNeptuneInfrastructure()` method, BEFORE creating Neptune cluster
+
+**Important**: The Neptune audit log group must be created BEFORE the cluster if using `enableCloudwatchLogsExports`.
 
 **Implementation**:
 ```typescript
 // Create log group for Neptune audit logs
-// Note: To enable Neptune audit logs to this log group, you need to:
-// 1. Set neptune_enable_audit_log: '1' in parameter group (already done in createNeptuneInfrastructure, line 741)
-// 2. Configure CloudWatch Logs export via Neptune console or CLI after deployment
-// 3. The log group name must match Neptune's expected format: /aws/neptune/cluster/{cluster-identifier}/audit
+// ⚠️ IMPORTANT: Must be created BEFORE Neptune cluster if using enableCloudwatchLogsExports
+// The log group name must match Neptune's expected format: /aws/neptune/cluster/{cluster-identifier}/audit
 const neptuneAuditLogGroup = new logs.LogGroup(this, 'NeptuneAuditLogGroup', {
-  logGroupName: `/aws/neptune/cluster/${this.neptuneCluster.ref}/audit`,  // Match Neptune format
+  logGroupName: `/aws/neptune/cluster/cc-native-neptune-cluster/audit`,  // Match Neptune format
   retention: logs.RetentionDays.ONE_MONTH,
+  removalPolicy: cdk.RemovalPolicy.RETAIN,
 });
 
+// Create IAM role for Neptune to write to CloudWatch Logs
+const neptuneLogsRole = new iam.Role(this, 'NeptuneLogsRole', {
+  assumedBy: new iam.ServicePrincipal(`rds.amazonaws.com`),  // Neptune uses RDS service principal
+  description: 'IAM role for Neptune to write audit logs to CloudWatch',
+});
+
+neptuneLogsRole.addToPolicy(new iam.PolicyStatement({
+  effect: iam.Effect.ALLOW,
+  actions: [
+    'logs:CreateLogGroup',
+    'logs:CreateLogStream',
+    'logs:PutLogEvents',
+    'logs:DescribeLogStreams',
+  ],
+  resources: [neptuneAuditLogGroup.logGroupArn],
+}));
+
+// Update Neptune cluster to enable CloudWatch Logs export
+const neptuneCluster = new neptune.CfnDBCluster(this, 'NeptuneCluster', {
+  // ... existing config ...
+  enableCloudwatchLogsExports: ['audit'],  // ✅ Enable audit log export to CloudWatch
+  // Note: Verify if cloudwatchLogsExportsRoleArn property exists in CfnDBCluster
+  // If not available, you may need to configure via AWS CLI after deployment:
+  // aws neptune modify-db-cluster --db-cluster-identifier cc-native-neptune-cluster \
+  //   --cloudwatch-logs-export-configuration '{"EnableLogTypes":["audit"]}'
+  // ... rest of config ...
+});
+
+// Make cluster depend on log group
+neptuneCluster.addDependency(neptuneAuditLogGroup.node.defaultChild as cdk.CfnResource);
+```
+
+**Then in `createSecurityMonitoring()` method**, add the metric filter:
+```typescript
 // Metric filter for IAM authentication failures
+// Note: Neptune audit logs are comma-delimited
+// Format: timestamp,client_host,server_host,connection_type,iam_arn,auth_context,...
+// Test the actual log format after deployment and adjust the filter pattern if needed
 new logs.MetricFilter(this, 'NeptuneIAMAuthFailure', {
   logGroup: neptuneAuditLogGroup,
   metricNamespace: 'CCNative/Security',
@@ -394,29 +540,14 @@ new cloudwatch.Alarm(this, 'NeptuneIAMAuthFailureAlarm', {
 #### 3.1 Implement Resource-Level IAM Policies with Conditions
 
 **File**: `src/stacks/CCNativeStack.ts`
-**Location**: `createPhase2Handlers()` method
-
-**Current Code** (lines 1099-1109):
-```typescript
-graphMaterializerHandler.addToRolePolicy(new iam.PolicyStatement({
-  effect: iam.Effect.ALLOW,
-  actions: [
-    'neptune-db:connect',
-    'neptune-db:ReadDataViaQuery',
-    'neptune-db:WriteDataViaQuery',
-  ],
-  resources: [
-    `arn:aws:neptune-db:${this.region}:${this.account}:${this.neptuneCluster.ref}/*`,
-  ],
-}));
-```
+**Location**: `createPhase2Handlers()` method, after creating Lambda roles
 
 **Implementation**:
 ```typescript
-// Enhanced IAM policy with conditions
+// Add Neptune permissions to Graph Materializer role with conditions
 // Note: Neptune only supports neptune-db:QueryLanguage as a service-specific condition key
 // For encryption enforcement, use aws:SecureTransport instead
-graphMaterializerHandler.addToRolePolicy(new iam.PolicyStatement({
+graphMaterializerRole.addToPolicy(new iam.PolicyStatement({
   effect: iam.Effect.ALLOW,
   actions: [
     'neptune-db:connect',
@@ -445,8 +576,8 @@ graphMaterializerHandler.addToRolePolicy(new iam.PolicyStatement({
   },
 }));
 
-// Apply the same conditions to synthesisEngineHandler
-synthesisEngineHandler.addToRolePolicy(new iam.PolicyStatement({
+// Add Neptune permissions to Synthesis Engine role with conditions
+synthesisEngineRole.addToPolicy(new iam.PolicyStatement({
   effect: iam.Effect.ALLOW,
   actions: [
     'neptune-db:connect',
@@ -466,6 +597,8 @@ synthesisEngineHandler.addToRolePolicy(new iam.PolicyStatement({
   },
 }));
 ```
+
+**Note**: The old `neptuneAccessRole` is no longer needed if using per-function roles. You can remove it from `createNeptuneInfrastructure()` or keep it for backward compatibility.
 
 #### 3.2 Add IP-Based Conditions (if applicable)
 
@@ -516,6 +649,27 @@ new kms.Alias(this, 'NeptuneEncryptionKeyAlias', {
   aliasName: 'alias/cc-native-neptune',  // ✅ Prefix required
   targetKey: neptuneEncryptionKey,
 });
+
+// ⚠️ CRITICAL: Grant Neptune service permission to use the key
+// Neptune uses the RDS service principal
+neptuneEncryptionKey.addToResourcePolicy(new iam.PolicyStatement({
+  sid: 'Allow Neptune service to use key',
+  effect: iam.Effect.ALLOW,
+  principals: [
+    new iam.ServicePrincipal(`rds.amazonaws.com`),  // Neptune uses RDS service principal
+  ],
+  actions: [
+    'kms:Decrypt',
+    'kms:DescribeKey',
+    'kms:CreateGrant',
+  ],
+  resources: ['*'],
+  conditions: {
+    StringEquals: {
+      'kms:ViaService': `rds.${this.region}.amazonaws.com`,
+    },
+  },
+}));
 
 // Update Neptune cluster to use KMS key
 const neptuneCluster = new neptune.CfnDBCluster(this, 'NeptuneCluster', {
@@ -656,9 +810,12 @@ private createNetworkFirewall(): void {
 - [ ] Create per-function security groups for Graph Materializer and Synthesis Engine
 - [ ] Restrict `allowAllOutbound` to `false` for all Lambda security groups
 - [ ] Add specific egress rules for required destinations (Neptune, DynamoDB, EventBridge, CloudWatch Logs)
-- [ ] Add VPC endpoints for DynamoDB, EventBridge, and CloudWatch Logs
-- [ ] Update Lambda functions to use per-function security groups
-- [ ] Remove old ingress rule using `lambdaSecurityGroup`
+- [ ] **Remove old ingress rule** using `lambdaSecurityGroup` (lines 719-723)
+- [ ] Add new ingress rules for per-function security groups
+- [ ] Create per-function IAM roles for Lambda functions
+- [ ] Add VPC execution permissions to Lambda roles (`AWSLambdaVPCAccessExecutionRole`)
+- [ ] Add VPC endpoints for DynamoDB, EventBridge, and CloudWatch Logs with subnet configuration
+- [ ] Update Lambda functions to use per-function security groups and roles
 - [ ] Test Lambda functions can still access required services
 
 ### Phase 2: Enhanced Monitoring
@@ -666,27 +823,35 @@ private createNetworkFirewall(): void {
 - [ ] Create CloudWatch Log Group for VPC Flow Logs
 - [ ] Create IAM role for VPC Flow Logs
 - [ ] Enable VPC Flow Logs for all traffic
+- [ ] **Create Neptune audit log group BEFORE cluster creation** (in `createNeptuneInfrastructure()`)
+- [ ] Create IAM role for Neptune CloudWatch Logs export
+- [ ] Add `enableCloudwatchLogsExports: ['audit']` to Neptune cluster
 - [ ] Create SNS topic for security alerts
 - [ ] Create CloudWatch alarms for:
   - [ ] Unauthorized Neptune connections
-  - [ ] Lambda function errors
-  - [ ] High VPC endpoint traffic
+  - [ ] Graph Materializer Lambda function errors
+  - [ ] Synthesis Engine Lambda function errors
+  - [ ] High DynamoDB endpoint traffic (with dimensions)
   - [ ] IAM authentication failures
 - [ ] Create log metric filters for security events
 - [ ] Add `createSecurityMonitoring()` call to constructor (after `createPhase2Handlers()`)
-- [ ] Configure Neptune audit logs export (via console/CLI after deployment)
 - [ ] Test alarm notifications
+- [ ] Verify Neptune audit logs are being written to CloudWatch
 
 ### Phase 3: Enhanced IAM
-- [ ] Fix Neptune IAM condition keys (use `aws:SecureTransport` instead of invalid key)
-- [ ] Add condition-based IAM policies
+- [ ] Add Neptune permissions to Graph Materializer role with conditions
+- [ ] Add Neptune permissions to Synthesis Engine role with conditions
+- [ ] Use `aws:SecureTransport` condition for encryption enforcement
+- [ ] Use `neptune-db:QueryLanguage` condition to restrict query language
 - [ ] Implement time-based access controls (if needed)
 - [ ] Add IP-based restrictions (if applicable)
 - [ ] Review and tighten all IAM policies
+- [ ] Remove or document unused `neptuneAccessRole`
 
 ### Phase 4: Data Protection
 - [ ] Create KMS key for Neptune encryption
 - [ ] Create KMS alias (with 'alias/' prefix)
+- [ ] **Grant Neptune service permission to use KMS key** (RDS service principal)
 - [ ] Update Neptune cluster to use KMS key
 - [ ] Create tag helper methods (separate for L1 and L2 constructs)
 - [ ] Add data classification tags to all resources
@@ -701,45 +866,78 @@ private createNetworkFirewall(): void {
 
 ## Testing Strategy
 
-### Unit Tests
-- Test security group egress rules allow only required traffic
-- Test IAM policies enforce least privilege
-- Test VPC Flow Logs are enabled
-- Test tag helper methods return correct types
+### Phase 1 Testing
+1. Deploy stack with Phase 1 changes
+2. Verify Lambda functions can connect to Neptune with new security groups
+3. Verify Lambda functions can access DynamoDB via VPC endpoint
+4. Verify Lambda functions can publish to EventBridge via VPC endpoint
+5. Verify Lambda functions can write CloudWatch Logs via VPC endpoint
+6. Verify Lambda logs appear in CloudWatch Logs
+7. Test with security group egress rules restricted
+8. Verify old ingress rule is removed (check security group rules in console)
 
-### Integration Tests
-- Verify Lambda functions can access Neptune with new security groups
-- Verify Lambda functions can access DynamoDB via VPC endpoint
-- Verify Lambda functions can publish to EventBridge via VPC endpoint
-- Verify Lambda functions can write CloudWatch Logs via VPC endpoint
-- Verify CloudWatch alarms trigger on security events
-- Verify Neptune audit logs are being written (after manual configuration)
+### Phase 2 Testing
+1. Deploy stack with Phase 2 changes
+2. Verify VPC Flow Logs are being created in CloudWatch Logs
+3. Verify Neptune audit logs are being written (if enabled)
+4. Trigger test events to verify CloudWatch alarms
+5. Verify alarm notifications are sent to SNS topic
+6. Test log metric filters with actual log data
+
+### Phase 3 Testing
+1. Deploy stack with Phase 3 changes
+2. Verify IAM conditions block non-compliant requests
+3. Test that TLS is required (attempt non-TLS connection - should fail)
+4. Test that only Gremlin queries are allowed (if condition is enabled)
+
+### Phase 4 Testing
+1. Deploy stack with Phase 4 changes
+2. Verify KMS encryption is working for Neptune
+3. Verify tags are applied correctly to all resources
+4. Test KMS key rotation
 
 ### Security Testing
 - Attempt unauthorized access (should be blocked)
 - Verify encryption is enforced (TLS required)
 - Test alarm notifications
 - Verify IAM conditions block non-compliant requests
+- Verify old security group ingress rule is removed
 
 ---
 
 ## Migration Plan
+
+### Migration from Existing Cluster
+
+If you have an existing Neptune cluster:
+1. **KMS Encryption**: Adding KMS key to existing cluster requires cluster modification
+   - Plan for brief downtime (usually < 5 minutes)
+   - Backup cluster before modification
+   - Test in development environment first
+2. **Security Groups**: Changing security groups is non-disruptive
+   - Can be updated without cluster modification
+3. **VPC Endpoints**: Can be added without cluster modification
+4. **CloudWatch Logs**: Can be enabled via `modify-db-cluster` without downtime
+   - Or use `enableCloudwatchLogsExports` in CDK (requires stack update)
+
+### Implementation Timeline
 
 1. **Week 1**: Implement Phase 1 (Network Micro-Segmentation)
    - Deploy in development environment
    - Test thoroughly
    - Monitor for any connectivity issues
    - Verify Lambda logs are being written
+   - Verify old ingress rule is removed
 
 2. **Week 2**: Implement Phase 2 (Enhanced Monitoring)
    - Deploy monitoring infrastructure
    - Configure alerts
    - Establish baseline metrics
-   - Configure Neptune audit logs export (manual step)
+   - Verify Neptune audit logs are being written
 
 3. **Week 3**: Implement Phase 3 & 4 (IAM & Data Protection)
    - Tighten IAM policies
-   - Enable KMS encryption
+   - Enable KMS encryption (plan for downtime if existing cluster)
    - Add data classification
    - Test IAM conditions
 
@@ -755,9 +953,11 @@ private createNetworkFirewall(): void {
 
 If issues arise:
 1. Revert security group changes (allow `allowAllOutbound: true` temporarily)
-2. Remove IAM conditions if blocking legitimate access
-3. Disable VPC Flow Logs if causing performance issues
-4. Document issues and create follow-up tasks
+2. Revert to default Lambda execution roles if custom roles cause issues
+3. Remove IAM conditions if blocking legitimate access
+4. Disable VPC Flow Logs if causing performance issues
+5. Remove KMS key requirement if causing cluster modification issues
+6. Document issues and create follow-up tasks
 
 ---
 
@@ -785,3 +985,4 @@ If issues arise:
 - [Neptune Security Best Practices](https://docs.aws.amazon.com/neptune/latest/userguide/security.html)
 - [Neptune IAM Condition Keys](https://docs.aws.amazon.com/neptune/latest/userguide/iam-data-condition-keys.html)
 - [AWS CDK VPC Endpoints](https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.aws_ec2.InterfaceVpcEndpoint.html)
+- [Neptune CloudWatch Logs Export](https://docs.aws.amazon.com/neptune/latest/userguide/cloudwatch-logs.html)
