@@ -1,0 +1,412 @@
+# Phase 2 — Situation Graph + Deterministic Synthesis
+
+**Status:** 📋 **PLANNING** (Not Started)  
+**Prerequisites:** Phase 0 ✅ Complete | Phase 1 ✅ Complete  
+**Dependencies:** Phase 0 + Phase 1 are implemented and certified (event envelope, immutable evidence, append-only ledger, canonical signals + lifecycle inference).
+
+---
+
+## Phase Objective
+
+Phase 2 turns Phase 1 outputs (Signals, EvidenceSnapshotRefs, AccountState) into:
+
+1. **Situation Graph** (Neptune) — a durable, queryable representation of account reality and why it changed.
+2. **Deterministic Synthesis** — a versioned ruleset that derives:
+   - `AccountPostureState` (OK/WATCH/AT_RISK/EXPAND/DORMANT)
+   - `RiskFactors[]`
+   - `Opportunities[]`
+   - `Unknowns[]`
+3. **Hot read models** (DynamoDB) for fast UI/agent reads (no graph queries required for most use cases).
+4. **Replayability** — given the same active signals + ruleset version, outputs are identical.
+
+**Non-goals (explicit):**
+- No autonomous execution/actions
+- No LLM-driven synthesis for posture/risk (optional bounded summaries are allowed as artifacts only)
+- No ranking/learning loop (that's Phase 6)
+
+---
+
+## Deliverables (Phase 2 Outputs)
+
+### 1.1 Neptune Situation Graph (MVP)
+- Vertex labels:
+  - `Tenant`, `Account`, `Signal`, `EvidenceSnapshot`, `Posture`, `RiskFactor`, `OpportunitySignal`, `Unknown`, `Artifact` (optional in 2.2)
+- Edge labels:
+  - `HAS_SIGNAL` (Account→Signal)
+  - `SUPPORTED_BY` (Signal→EvidenceSnapshot)
+  - `HAS_POSTURE` (Account→Posture)
+  - `IMPLIES_RISK` (Posture→RiskFactor)
+  - `IMPLIES_OPPORTUNITY` (Posture→OpportunitySignal)
+  - `HAS_UNKNOWN` (Account→Unknown)
+
+### 1.2 Read Models (DynamoDB)
+- `AccountPostureState` (primary)
+- Optional: `AccountTimelineIndex` (defer if not needed)
+
+### 1.3 Pipelines
+- `Phase2GraphMaterializer` (Step Functions)
+- `Phase2SynthesisEngine` (Step Functions)
+
+### 1.4 Rules
+- `synthesis/rules/v1.yaml` (versioned)
+- `SYNTHESIS_RULESET_VERSION` is recorded in outputs + ledger
+
+### 1.5 Minimal APIs (internal)
+- `GET /accounts/{account_id}/posture`
+- `GET /accounts/{account_id}/signals?active=true`
+- Optional: `GET /accounts/{account_id}/unknowns`
+
+### 1.6 Observability
+- CloudWatch dashboards + alarms for:
+  - materialization errors
+  - synthesis errors
+  - posture churn rate
+  - unknowns count
+  - rule trigger counts
+
+---
+
+## Epics and Stories
+
+## EPIC 2.1 — Neptune Graph Foundation (Schema + Access)
+
+### Story 2.1.1 — Provision Neptune + network access
+**Tasks**
+- Create Neptune cluster (dev/stage)
+- VPC/subnets/security groups
+- IAM roles for Step Functions/Lambda to access Neptune
+- Add connection test utility (health check)
+
+**Acceptance criteria**
+- CI/CD can deploy Neptune infra
+- A service identity can run a simple Gremlin/OpenCypher query successfully
+- Connectivity is private (VPC-only)
+
+---
+
+### Story 2.1.2 — Define graph conventions (IDs, partitioning, upsert policy)
+**Tasks**
+- Define canonical vertex ID scheme:
+  - `TENANT#{tenant_id}#ACCOUNT#{account_id}` etc.
+- Define required properties: `tenant_id`, `entity_type`, `created_at`, `updated_at`, `schema_version`
+- Define idempotent upsert patterns (vertex + edge)
+
+**Acceptance criteria**
+- A written `GRAPH_CONVENTIONS.md` exists and is followed by materializer code
+- Upserts are idempotent under retries
+
+---
+
+## EPIC 2.2 — Graph Materialization Pipeline (Signals → Graph)
+
+### Story 2.2.1 — Implement `Phase2GraphMaterializer` state machine
+**Input event**
+- `SIGNAL_DETECTED` or `SIGNAL_CREATED` (from Phase 1 EventBridge)
+
+**Steps**
+1. Load signal by ID (DDB)
+2. Validate schema + versions
+3. Ensure Account vertex exists
+4. Upsert Signal vertex
+5. Upsert EvidenceSnapshot vertex from `EvidenceSnapshotRef`
+6. Create edges:
+   - Account `HAS_SIGNAL` Signal
+   - Signal `SUPPORTED_BY` EvidenceSnapshot
+7. Emit ledger events: `GRAPH_UPSERTED`, `GRAPH_EDGE_CREATED`
+
+**Acceptance criteria**
+- For every emitted signal, the graph contains:
+  - Account node
+  - Signal node
+  - EvidenceSnapshot node
+  - Correct edges
+- Replaying the same event produces no duplicates
+- Ledger records the materialization with the same `trace_id`
+
+**Note:** Phase 1 emits `SIGNAL_DETECTED` and `SIGNAL_CREATED` events. The materializer should listen to these events via EventBridge.
+
+---
+
+### Story 2.2.2 — Backfill job (Phase 1 signals → graph)
+**Tasks**
+- Build a one-time backfill Step Functions workflow:
+  - iterate through existing signals by tenant/account/time
+  - feed into materializer
+- Use checkpointing to resume if interrupted
+
+**Acceptance criteria**
+- Backfill can run for a tenant without timeouts
+- Backfill is resumable and idempotent
+- Post-run: graph node/edge counts match expectation for sample accounts
+
+---
+
+## EPIC 2.3 — AccountPostureState Read Model (DynamoDB)
+
+### Story 2.3.1 — Create `AccountPostureState` table and schema
+**Attributes**
+- `posture`: `OK|WATCH|AT_RISK|EXPAND|DORMANT`
+- `momentum`: `UP|FLAT|DOWN`
+- `risk_factors[]`, `opportunities[]`, `unknowns[]`
+- `active_signals[]` (top K)
+- `evidence_refs[]` (top K)
+- `ruleset_version`, `schema_version`, `active_signals_hash`
+
+**Acceptance criteria**
+- Table exists with correct keys and GSIs (if needed)
+- Write pattern supports idempotent upserts
+
+---
+
+### Story 2.3.2 — Implement `account.get_posture_state(account_id)` service function
+**Tasks**
+- Add a small library/service that:
+  - reads posture state
+  - returns a stable DTO used by UI and later Phase 3 agents
+
+**Acceptance criteria**
+- Returns posture state within low latency (single DDB read)
+- Missing posture state returns a typed "not ready" response
+
+---
+
+## EPIC 2.4 — Deterministic Synthesis Engine (Ruleset + Execution)
+
+### Story 2.4.1 — Define synthesis output contracts
+**Tasks**
+- Create versioned schemas:
+  - `PostureStateV1`
+  - `RiskFactorV1`
+  - `UnknownV1`
+- Define rule trigger metadata:
+  - `rule_id`, `ruleset_version`, `inputs_hash`
+
+**Acceptance criteria**
+- Schemas are enforced at runtime (fail-closed)
+- Output includes `ruleset_version` and input references
+
+---
+
+### Story 2.4.2 — Implement `synthesis/rules/v1.yaml`
+**Scope**
+- Cover lifecycle stages:
+  - PROSPECT: activation + no engagement → WATCH
+  - SUSPECT: first engagement → WATCH, stalled → AT_RISK (or WATCH with risk factor)
+  - CUSTOMER: renewal window + usage/support → AT_RISK; strong usage → EXPAND
+
+**Acceptance criteria**
+- Ruleset includes: `rule_id`, `conditions`, `outputs`, `priority`, `ttl` (where applicable)
+- Rule evaluation is deterministic and order-stable
+
+---
+
+### Story 2.4.3 — Implement `Phase2SynthesisEngine` state machine
+**Trigger**
+- `SIGNAL_DETECTED` and/or scheduled consolidation (hourly)
+
+**Steps**
+1. Load active signals for account (apply TTL, suppression)
+2. Load AccountState (lifecycle)
+3. Evaluate ruleset
+4. Write `AccountPostureState` (DDB)
+5. Upsert Posture/Risk/Unknown vertices + edges in Neptune
+6. Emit ledger events: `POSTURE_UPDATED`, `RISK_FACTOR_EMITTED`, `UNKNOWN_EMITTED`
+
+**Idempotency key**
+- `tenant_id#account_id#ruleset_version#active_signals_hash`
+
+**Acceptance criteria**
+- Same active signals → same posture output (bitwise identical JSON ignoring timestamps)
+- Replays do not create duplicate risk/unknown entries
+- Posture updates only when output changes (avoid churn)
+
+---
+
+## EPIC 2.5 — Optional Artifacts (Human-readable summaries)
+
+### Story 2.5.1 — Deterministic `AccountDeltaSummary` artifact
+**Trigger**
+- posture changes OR high severity risk factor emitted
+
+**Output**
+- S3 artifact with:
+  - "what changed"
+  - "why it matters"
+  - top evidence refs
+
+**Acceptance criteria**
+- Artifact can be generated without an LLM (template-based)
+- Artifact is stored in S3 and referenced from ledger
+
+*(Optional extension: bounded Bedrock summarization as a second pass, clearly labeled and non-authoritative.)*
+
+---
+
+## EPIC 2.6 — APIs for UI and Phase 3 agents
+
+### Story 2.6.1 — Implement minimal posture + signals endpoints
+- `GET /accounts/{id}/posture`
+- `GET /accounts/{id}/signals?active=true`
+- Optional: `GET /accounts/{id}/unknowns`
+
+**Acceptance criteria**
+- Endpoints return within p95 < 200ms for DDB-backed reads
+- Responses include version fields and evidence pointers
+
+---
+
+## EPIC 2.7 — Observability, Testing, and Certification
+
+### Story 2.7.1 — Metrics + dashboards
+**Metrics**
+- `graph_materializer_success/fail`
+- `synthesis_success/fail`
+- `posture_change_count`
+- `unknown_count`
+- `rule_trigger_count{rule_id}`
+
+**Acceptance criteria**
+- Dashboard exists with actionable graphs and alarms
+- Alarms are routed to on-call channel
+
+---
+
+### Story 2.7.2 — Replay test harness
+**Tasks**
+- Build a replay runner that:
+  - replays a fixed set of Phase 1 signals
+  - asserts graph + posture outputs match golden files
+
+**Acceptance criteria**
+- Deterministic replay passes in CI
+- Any ruleset change requires an explicit golden update + changelog entry
+
+---
+
+### Story 2.7.3 — Phase 2 certification checklist
+**Checklist**
+- Idempotency verified under retries
+- No duplicate edges/nodes under replay
+- Posture state derivation stable
+- Ledger coverage complete
+- Cost: no scans; bounded queries only
+
+**Acceptance criteria**
+- A `PHASE_2_CERTIFICATION.md` is produced and signed off
+
+---
+
+## Suggested Execution Order (Practical)
+
+1. EPIC 2.1 Neptune foundation
+2. EPIC 2.2 Graph materializer + backfill
+3. EPIC 2.3 AccountPostureState (DDB)
+4. EPIC 2.4 Synthesis rules + engine
+5. EPIC 2.6 Minimal APIs
+6. EPIC 2.7 Replay + certification
+7. EPIC 2.5 Optional artifacts (if time)
+
+---
+
+## Phase 2 Definition of Done (Final)
+
+Phase 2 is complete when:
+- ✅ Signals are materialized into Neptune with evidence edges
+- ✅ `AccountPostureState` exists and can be queried per account
+- ✅ Synthesis rules produce posture/risk/unknowns deterministically
+- ✅ Replay harness passes in CI
+- ✅ Ledger contains complete trace for materialization + synthesis
+- ✅ Costs are bounded (no lake scans; no unbounded graph traversals)
+
+---
+
+## Handoff to Phase 3 (AgentCore Decision)
+
+Phase 3 agents will consume:
+- `AccountPostureState` (fast, primary context)
+- Neptune graph for deep context
+- Active signals + evidence refs
+- Optional delta summary artifacts
+
+This keeps Phase 3 cheap, grounded, and safe.
+
+---
+
+## Review Notes & Recommendations
+
+### Alignment with Phase 1 ✅
+- **Event Types:** Phase 1 emits `SIGNAL_DETECTED` and `SIGNAL_CREATED` events. The plan correctly references these events for triggering materialization.
+- **Evidence Binding:** Phase 1 signals already include `EvidenceSnapshotRef`, which aligns perfectly with graph materialization.
+- **AccountState:** Phase 1 maintains `AccountState` read model, which synthesis engine can leverage.
+
+### Technical Considerations
+
+1. **EventBridge Integration:**
+   - Current Phase 1 setup routes `SIGNAL_DETECTED`/`SIGNAL_CREATED` to lifecycle-inference-handler
+   - Phase 2 materializer should be added as an additional target (fan-out pattern)
+   - Consider using EventBridge filtering to route to both handlers
+
+2. **Neptune Query Language:**
+   - Plan doesn't specify Gremlin vs OpenCypher
+   - Recommendation: Use Gremlin (more mature, better AWS SDK support)
+   - Document query patterns in `GRAPH_CONVENTIONS.md`
+
+3. **Idempotency:**
+   - Plan correctly emphasizes idempotency
+   - Consider using signal `dedupeKey` as part of vertex ID scheme for natural idempotency
+
+4. **Cost Optimization:**
+   - Plan correctly emphasizes bounded queries
+   - Consider batching graph operations where possible
+   - Use Neptune query timeout limits
+
+5. **Schema Versioning:**
+   - Plan mentions `schema_version` but should align with Phase 0/1 versioning approach
+   - Consider using same versioning scheme as evidence schemas
+
+### Missing Considerations
+
+1. **Error Handling:**
+   - Add DLQ configuration for Step Functions state machines
+   - Define retry policies for Neptune operations
+   - Handle partial failures in graph materialization
+
+2. **Testing Strategy:**
+   - Add unit tests for graph materialization logic
+   - Add integration tests for Neptune connectivity
+   - Add contract tests for synthesis determinism
+
+3. **Migration Strategy:**
+   - Plan for migrating existing Phase 1 signals (backfill story covers this)
+   - Consider data migration scripts for production rollout
+
+4. **Monitoring:**
+   - Add Neptune query performance metrics
+   - Monitor graph size growth
+   - Track materialization latency
+
+### Recommendations
+
+1. **File Structure:**
+   - Create `src/services/synthesis/` for synthesis engine
+   - Create `src/services/graph/` for Neptune graph operations
+   - Create `src/handlers/phase2/` for Phase 2 handlers
+
+2. **Type Definitions:**
+   - Create `src/types/PostureTypes.ts` for posture-related types
+   - Create `src/types/GraphTypes.ts` for graph vertex/edge types
+   - Align with existing type organization patterns
+
+3. **CDK Organization:**
+   - Add Neptune cluster to `CCNativeStack`
+   - Create separate Step Functions state machines
+   - Follow existing CDK patterns from Phase 1
+
+4. **Documentation:**
+   - Create `docs/implementation/phase_2/` directory
+   - Add `GRAPH_CONVENTIONS.md` as specified
+   - Document synthesis ruleset format and examples
+
+---
+
+**Status:** Plan reviewed and ready for implementation. All prerequisites met (Phase 0 ✅, Phase 1 ✅).
