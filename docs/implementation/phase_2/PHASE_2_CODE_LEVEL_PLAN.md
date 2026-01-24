@@ -165,17 +165,23 @@ const g = graph.traversal().withRemote(connection);
 **Vertex ID Scheme (Canonical):**
 - `TENANT#{tenant_id}`
 - `ACCOUNT#{tenant_id}#{account_id}` (or `TENANT#{tenant_id}#ACCOUNT#{account_id}`)
-- `SIGNAL#{signal_id}` (use signal_id directly, NOT dedupeKey)
-- `EVIDENCE_SNAPSHOT#{evidence_snapshot_id}` (from EvidenceSnapshotRef.sha256 or unique ID)
+- `SIGNAL#{tenant_id}#{signal_id}` (tenant-scoped; assumes signal_id is unique within tenant)
+- `EVIDENCE_SNAPSHOT#{tenant_id}#{evidence_snapshot_id}` (tenant-scoped; from EvidenceSnapshotRef.sha256 or unique ID)
 - `POSTURE#{tenant_id}#{account_id}#{posture_id}` (posture_id = inputs_hash, NOT timestamp - ensures determinism)
-- `RISK_FACTOR#{risk_factor_id}` (risk_factor_id = deterministic hash)
-- `OPPORTUNITY#{opportunity_id}` (opportunity_id = deterministic hash)
-- `UNKNOWN#{unknown_id}` (unknown_id = deterministic hash)
+- `RISK_FACTOR#{risk_factor_id}` (risk_factor_id = deterministic hash, globally unique)
+- `OPPORTUNITY#{opportunity_id}` (opportunity_id = deterministic hash, globally unique)
+- `UNKNOWN#{unknown_id}` (unknown_id = deterministic hash, globally unique)
+
+**Critical Assumption:**
+- If `signal_id` and `evidence_snapshot_id` are globally unique across tenants, tenant-scoping can be omitted
+- **Document explicitly:** Either tenant-scope all IDs OR declare global uniqueness as a hard assumption
+- Recommendation: Tenant-scope for safety unless 100% certain of global uniqueness
 
 **Critical Rule: Signal Identity**
-- Vertex ID = `SIGNAL#{signal_id}` (from Phase 1 signal record)
+- Vertex ID = `SIGNAL#{tenant_id}#{signal_id}` (tenant-scoped; from Phase 1 signal record)
 - `dedupeKey` stored as a **property**, not used for vertex identity
 - Prevents accidental graph collapse when signals look similar
+- If signal_id is globally unique, tenant-scoping can be omitted (document assumption explicitly)
 
 **Required Properties (All Vertices):**
 - `tenant_id: string`
@@ -194,8 +200,11 @@ const g = graph.traversal().withRemote(connection);
 
 **Edge Properties:**
 - `created_at: string` (ISO timestamp)
-- `edge_type: string` (e.g., "HAS_SIGNAL", "SUPPORTED_BY")
+- `updated_at: string` (ISO timestamp)
+- `trace_id: string` (for ledger alignment)
+- `schema_version: string` (e.g., "v1")
 - Optional: `weight`, `metadata` (JSON)
+- Note: Edge label already encodes type (e.g., "HAS_SIGNAL", "SUPPORTED_BY"), so `edge_type` is redundant and omitted
 
 **Acceptance Criteria:**
 - All vertex ID schemes documented
@@ -323,7 +332,7 @@ async getEdges(
 **Acceptance Criteria:**
 - All upserts are idempotent (tested with retries)
 - Queries are bounded (no unbounded traversals)
-- Connection pooling works across Lambda invocations
+- Connection reuse works within warm container; reconnect-on-failure handles cold starts/stale websockets
 - Errors are logged and retried appropriately
 
 ---
@@ -409,6 +418,12 @@ export interface UnknownV1 {
 }
 ```
 
+**Critical Rule: Unknown Timestamp Determinism**
+- `introduced_at`, `expires_at`, and `review_after` are derived from `event.as_of_time` (not wall clock)
+- These timestamps are **excluded from semantic-equality checks** (non-deterministic fields)
+- Engine stamps them deterministically using `event.as_of_time` and fixed functions
+- This ensures replayability: same event → same timestamps
+
 **AccountPostureStateV1:**
 ```typescript
 export interface AccountPostureStateV1 {
@@ -490,7 +505,7 @@ export interface RuleTriggerMetadata {
    - Account `HAS_SIGNAL` Signal (idempotent)
    - Signal `SUPPORTED_BY` EvidenceSnapshot (idempotent)
 7. Write materialization status to separate table (or ledger-derived state):
-   - `GraphMaterializationStatus(pk=SIGNAL#{signal_id}) { status: 'COMPLETED', trace_id, updated_at }`
+   - `GraphMaterializationStatus(pk=SIGNAL#{tenant_id}#{signal_id}) { status: 'COMPLETED', trace_id, updated_at }`
    - Alternative: Use ledger as source of truth (check for `GRAPH_MATERIALIZATION_COMPLETED` event)
 8. Emit ledger events: `GRAPH_UPSERTED`, `GRAPH_EDGE_CREATED`, `GRAPH_MATERIALIZATION_COMPLETED`
 9. Emit EventBridge event: `GRAPH_MATERIALIZED` (triggers synthesis)
@@ -995,12 +1010,14 @@ After Phase 2 is complete:
    - No OpenCypher queries
 
 2. **Signal Identity:** ✅ **Separated from dedupeKey**
-   - Vertex ID = `SIGNAL#{signal_id}` (from Phase 1)
+   - Vertex ID = `SIGNAL#{tenant_id}#{signal_id}` (tenant-scoped; from Phase 1)
    - `dedupeKey` stored as property, not used for vertex identity
+   - If signal_id is globally unique, tenant-scoping can be omitted (document assumption explicitly)
 
 3. **Failure Semantics:** ✅ **Enforced**
    - If graph materialization partially succeeds, synthesis MUST NOT run
-   - Enforce via ledger gate or `graph_materialized=true` flag
+   - Enforce via separate `GraphMaterializationStatus` table (recommended) or ledger gate
+   - Do NOT mutate signal record (avoids write contention and mixing responsibilities)
 
 4. **Evidence Resolution:** ✅ **IDs-first Contract**
    - Engine MUST resolve to `evidence_signal_ids[]` and `evidence_snapshot_refs[]`
