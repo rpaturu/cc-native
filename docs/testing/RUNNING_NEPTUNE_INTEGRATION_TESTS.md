@@ -53,60 +53,24 @@ aws ec2 run-instances \
 
 ### Step 2a: Create Security Group for Test Runner
 
+Run the setup script:
+
 ```bash
-# Load VPC ID from .env (or set manually)
-source .env
-VPC_ID=$VPC_ID
-
-# Get your public IP address
-MY_IP=$(curl -s https://checkip.amazonaws.com)
-echo "Your IP: $MY_IP"
-
-# Create security group
-SG_ID=$(aws ec2 create-security-group \
-  --group-name cc-native-test-runner-sg \
-  --description "Security group for integration test runner - allows SSH from your IP" \
-  --vpc-id $VPC_ID \
-  --query "GroupId" \
-  --output text \
-  --profile cc-native-account \
-  --region us-west-2)
-
-echo "Security Group ID: $SG_ID"
-
-# Allow SSH from your IP
-aws ec2 authorize-security-group-ingress \
-  --group-id $SG_ID \
-  --protocol tcp \
-  --port 22 \
-  --cidr $MY_IP/32 \
-  --profile cc-native-account \
-  --region us-west-2
-
-# Get Neptune security group ID (to allow test runner to access Neptune)
-NEPTUNE_SG_ID=$(aws ec2 describe-security-groups \
-  --filters "Name=group-name,Values=*NeptuneSecurityGroup*" "Name=vpc-id,Values=$VPC_ID" \
-  --query "SecurityGroups[0].GroupId" \
-  --output text \
-  --profile cc-native-account \
-  --region us-west-2)
-
-# Allow test runner to connect to Neptune (port 8182)
-aws ec2 authorize-security-group-ingress \
-  --group-id $NEPTUNE_SG_ID \
-  --protocol tcp \
-  --port 8182 \
-  --source-group $SG_ID \
-  --profile cc-native-account \
-  --region us-west-2
-
-echo "Security group created: $SG_ID"
-echo "Neptune security group updated to allow access from test runner"
+./scripts/setup-test-runner-security-group.sh
 ```
 
-**Save the security group ID** - you'll need it when launching the EC2 instance:
+This script will:
+- Create a security group for the test runner
+- Allow SSH (port 22) from your current IP address
+- Allow the test runner to connect to Neptune (port 8182)
+- Save the security group ID to `.env.test-runner` file
+
+The script uses values from your `.env` file (VPC ID) and stores the results in `.env.test-runner` for later use.
+
+**Load the security group ID**:
 ```bash
-export TEST_RUNNER_SG_ID=$SG_ID
+source .env.test-runner
+echo "Security Group ID: $TEST_RUNNER_SECURITY_GROUP_ID"
 ```
 
 ### Step 2b: Create IAM Role and Instance Profile
@@ -260,9 +224,13 @@ Now you can launch the EC2 instance with all the prerequisites:
 # Load values from .env
 source .env
 
-# Set variables (or use values from previous steps)
-SUBNET_ID=$NEPTUNE_SUBNET_ID  # or use $NEPTUNE_SUBNET_IDS and pick one
-SECURITY_GROUP_ID=$TEST_RUNNER_SG_ID
+# Load variables from .env files
+source .env
+source .env.test-runner  # Created by setup-test-runner-security-group.sh
+
+# Set variables
+SUBNET_ID=$NEPTUNE_SUBNET_ID
+SECURITY_GROUP_ID=$TEST_RUNNER_SECURITY_GROUP_ID
 KEY_NAME="cc-native-test-runner-key"  # or your existing key name
 INSTANCE_PROFILE="cc-native-test-instance-profile"
 
@@ -583,14 +551,15 @@ echo ""
 echo "✅ Prerequisites setup complete!"
 echo ""
 echo "Summary:"
-echo "  Security Group ID: $SG_ID"
+echo "  Security Group ID: $SG_ID (saved to .env.test-runner)"
 echo "  IAM Role: cc-native-test-runner-role"
 echo "  Instance Profile: cc-native-test-instance-profile"
 echo "  Key Pair: $KEY_NAME"
 echo ""
 echo "You can now launch an EC2 instance with:"
+echo "  source .env.test-runner"
 echo "  --subnet-id $NEPTUNE_SUBNET_ID"
-echo "  --security-group-ids $SG_ID"
+echo "  --security-group-ids \$TEST_RUNNER_SECURITY_GROUP_ID"
 echo "  --iam-instance-profile Name=cc-native-test-instance-profile"
 echo "  --key-name $KEY_NAME"
 ```

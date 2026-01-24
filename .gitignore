@@ -19,6 +19,7 @@ target/
 # Environment variables
 .env
 .env.local
+.env.test-runner
 .env.*.local
 *.env
 
