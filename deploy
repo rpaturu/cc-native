@@ -134,6 +134,8 @@ CRITICAL_FIELD_REGISTRY_TABLE_OUTPUT=$(echo "$STACK_OUTPUTS" | jq -r '.[] | sele
 LEDGER_TABLE_OUTPUT=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="LedgerTableName") | .OutputValue')
 CACHE_TABLE_OUTPUT=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="CacheTableName") | .OutputValue')
 TENANTS_TABLE_OUTPUT=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="TenantsTableName") | .OutputValue')
+ACCOUNTS_TABLE_OUTPUT=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="AccountsTableName") | .OutputValue')
+SIGNALS_TABLE_OUTPUT=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="SignalsTableName") | .OutputValue')
 METHODOLOGY_TABLE_OUTPUT=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="MethodologyTableName") | .OutputValue')
 ASSESSMENT_TABLE_OUTPUT=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="AssessmentTableName") | .OutputValue')
 IDENTITIES_TABLE_OUTPUT=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="IdentitiesTableName") | .OutputValue')
@@ -188,6 +190,8 @@ CRITICAL_FIELD_REGISTRY_TABLE_NAME=$CRITICAL_FIELD_REGISTRY_TABLE_OUTPUT
 LEDGER_TABLE_NAME=$LEDGER_TABLE_OUTPUT
 CACHE_TABLE_NAME=$CACHE_TABLE_OUTPUT
 TENANTS_TABLE_NAME=$TENANTS_TABLE_OUTPUT
+ACCOUNTS_TABLE_NAME=$ACCOUNTS_TABLE_OUTPUT
+SIGNALS_TABLE_NAME=$SIGNALS_TABLE_OUTPUT
 
 # DynamoDB Tables (Methodology)
 METHODOLOGY_TABLE_NAME=$METHODOLOGY_TABLE_OUTPUT
