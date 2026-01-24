@@ -30,28 +30,14 @@ echo "Subnet IDs: $NEPTUNE_SUBNET_IDS"
 echo "First Subnet ID: $NEPTUNE_SUBNET_ID"
 ```
 
-### Step 2: Launch EC2 Instance
+### Step 2: Set Up Prerequisites
 
-```bash
-# Launch an EC2 instance in one of the isolated subnets
-aws ec2 run-instances \
-  --image-id ami-0c65adc9a5c1b5d7c \  # Amazon Linux 2023 (adjust for your region)
-  --instance-type t3.micro \
-  --subnet-id <SUBNET_ID> \
-  --security-group-ids <SECURITY_GROUP_ID> \
-  --iam-instance-profile Name=cc-native-test-instance-profile \
-  --key-name <YOUR_KEY_PAIR> \
-  --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=cc-native-test-runner}]' \
-  --profile cc-native-account \
-  --region us-west-2
-```
+Before launching the EC2 instance, you need to set up:
+1. Security group (allows SSH and Neptune access)
+2. IAM role and instance profile (for AWS permissions)
+3. Key pair (for SSH access)
 
-**Note**: You'll need to:
-- Create a security group that allows SSH (port 22) from your IP
-- Create an IAM instance profile with permissions to access Neptune, DynamoDB, etc.
-- Have a key pair for SSH access
-
-### Step 2a: Create Security Group for Test Runner
+#### Step 2a: Create Security Group for Test Runner
 
 Run the setup script:
 
@@ -73,7 +59,7 @@ source .env.test-runner
 echo "Security Group ID: $TEST_RUNNER_SECURITY_GROUP_ID"
 ```
 
-### Step 2b: Create IAM Role and Instance Profile
+#### Step 2b: Create IAM Role and Instance Profile
 
 ```bash
 # Get Neptune cluster identifier from stack outputs
@@ -183,7 +169,7 @@ echo "Wait a few seconds for the instance profile to propagate..."
 sleep 10
 ```
 
-### Step 2c: Create or Import Key Pair
+#### Step 2c: Create or Import Key Pair
 
 **Option 1: Create a new key pair** (recommended for testing):
 
@@ -216,7 +202,9 @@ export KEY_NAME="your-existing-key-name"
 
 **Note**: If you use an existing key pair, make sure you have the corresponding `.pem` file on your local machine.
 
-### Step 2d: Launch EC2 Instance
+### Step 3: Launch EC2 Instance
+
+Now that all prerequisites are set up, you can launch the EC2 instance:
 
 Now you can launch the EC2 instance with all the prerequisites:
 
@@ -281,11 +269,11 @@ if [ "$PUBLIC_IP" != "None" ] && [ -n "$PUBLIC_IP" ]; then
   echo "You can SSH with: ssh -i ~/.ssh/cc-native-test-runner-key.pem ec2-user@$PUBLIC_IP"
 else
   echo "Instance is in isolated subnet - no public IP"
-  echo "Use AWS Systems Manager Session Manager to connect (see Method 2)"
+  echo "Use AWS Systems Manager Session Manager to connect"
 fi
 ```
 
-### Step 3: Configure EC2 Instance
+### Step 4: Configure EC2 Instance
 
 ```bash
 # SSH into the instance
@@ -314,7 +302,7 @@ aws configure --profile cc-native-account
 # The deploy script should have populated .env with Neptune endpoint
 ```
 
-### Step 4: Run Tests
+### Step 5: Run Tests
 
 ```bash
 # Run Phase 2 integration tests
