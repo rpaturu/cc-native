@@ -23,15 +23,19 @@ ruleset:
   #   - signal_type: Signal type enum
   #   - status: ACTIVE | SUPPRESSED | EXPIRED
   #   - where: Array of property predicates (all must match)
-  #     - property: Path to property (e.g., "trend_direction" in signal.data, "timestamp" for timestamps)
+  #     - property: Path to property (e.g., "trend_direction" in signal.context, "createdAt" for timestamps)
   #     - operator: "equals", "greater_than", "less_than", "less_than_or_equal", "within_last_days", "in", "exists", "not_exists"
   #     - value: Comparison value
+  #     - Timestamp property path: Use "createdAt" (signal.createdAt, ISO timestamp when signal was created)
+  #     - Context property path: Use "context.{property_name}" (e.g., "context.trend_direction")
   # - excluded_signals: Array of signal conditions (none must match) - same schema as required_signals
   # - computed_predicates: Array of computed conditions (evaluated by engine, not signal properties)
   #   - name: Predicate name (e.g., "no_engagement_in_days", "has_engagement_in_days")
   #   - params: Parameters for the predicate (e.g., { days: 30 })
-  #   - Engine evaluates: no_engagement_in_days = absence of FIRST_ENGAGEMENT_OCCURRED or engagement signals in last N days
-  #   - Engine evaluates: has_engagement_in_days = presence of FIRST_ENGAGEMENT_OCCURRED or engagement signals in last N days
+  #   - Engine evaluates: no_engagement_in_days = absence of engagement signals in last N days
+  #   - Engine evaluates: has_engagement_in_days = presence of engagement signals in last N days
+  #   - Engagement signal types (canonical list): FIRST_ENGAGEMENT_OCCURRED, ACCOUNT_ACTIVATION_DETECTED
+  #     (Note: NO_ENGAGEMENT_PRESENT is absence-of-evidence, not an engagement signal)
   # - conditions: {} for match-all rules (explicit empty object, not null)
   #
   # Timestamp Handling:
@@ -47,11 +51,13 @@ ruleset:
   # Severity Enums (normalized):
   # - risk_factors and opportunities use: "low", "medium", "high" (no "critical" or other values)
   #
-  # Evidence Resolution (contract requirement):
-  # - evidence_signals lists signal types (e.g., "USAGE_TREND_CHANGE")
+  # Evidence Resolution (HARD CONTRACT - IDs-first, types-second):
+  # - evidence_signals: Array of signal types (human-readable, for documentation only)
   # - Engine MUST resolve to actual signal_ids when storing in DDB read model
-  # - Store as evidence_signal_ids[] (top K) for auditability
-  # - Keep evidence_signals types for human readability, but IDs are authoritative
+  # - Store as evidence_signal_ids[] (top K) for auditability and traceability
+  # - Store as evidence_snapshot_refs[] (S3 URIs + SHA256) for immutable evidence linkage
+  # - IDs and snapshot refs are authoritative; types are for human readability only
+  # - Violation: If engine stores only types without IDs, synthesis output is invalid
   #
   rules:
     # ============================================================
@@ -300,8 +306,8 @@ ruleset:
             status: "ACTIVE"
             where:
               # Signal must have occurred within last 14 days (not a stale historical signal)
-              # Engine evaluates: signal.timestamp >= (event.as_of_time - 14 days)
-              - property: "timestamp"
+              # Engine evaluates: signal.createdAt >= (event.as_of_time - 14 days)
+              - property: "createdAt"
                 operator: "within_last_days"
                 value: 14
         excluded_signals:
@@ -458,19 +464,25 @@ evaluation:
   # - greater_than: Numeric comparison
   # - less_than: Numeric comparison
   # - less_than_or_equal: Numeric comparison
-  # - within_last_days: Timestamp comparison (signal.timestamp >= event.as_of_time - N days)
+  # - within_last_days: Timestamp comparison (signal.createdAt >= event.as_of_time - N days)
+  #   - Property path: "createdAt" (signal.createdAt, ISO timestamp when signal was created)
   # - in: Array membership
   # - exists: Property exists
   # - not_exists: Property does not exist
   
   # Computed predicates:
-  # - no_engagement_in_days: Absence of FIRST_ENGAGEMENT_OCCURRED or engagement signals in last N days
-  # - has_engagement_in_days: Presence of FIRST_ENGAGEMENT_OCCURRED or engagement signals in last N days
+  # - no_engagement_in_days: Absence of engagement signals in last N days
+  # - has_engagement_in_days: Presence of engagement signals in last N days
   # - Engine evaluates these by scanning active signals, not by checking signal properties
+  # - Engagement signal types (canonical list, locked):
+  #   * FIRST_ENGAGEMENT_OCCURRED
+  #   * ACCOUNT_ACTIVATION_DETECTED
+  #   (Note: NO_ENGAGEMENT_PRESENT is absence-of-evidence, not an engagement signal)
   
   # Signal property access:
-  # - signal.data.{property_name} for signal data properties
-  # - signal.metadata.{property_name} for signal metadata
+  # - signal.context.{property_name} for signal context properties (e.g., "context.trend_direction")
+  # - signal.metadata.{property_name} for signal metadata (e.g., "metadata.confidence")
+  # - signal.createdAt for timestamp comparisons (ISO timestamp when signal was created)
   
   # Unknown TTL semantics:
   # - introduced_at: ISO timestamp when unknown was introduced
@@ -479,7 +491,7 @@ evaluation:
   
   # Posture state meanings:
   # - OK: Healthy, stable, no action needed
-  # - WATCH: Requires attention, monitor closely
+  # - WATCH: Requires attention, monitor closely (may carry risk factors with medium severity)
   # - AT_RISK: Risk factors present, intervention may be needed
   # - EXPAND: Opportunity for growth/expansion
   # - DORMANT: Inactive, no current engagement
@@ -487,7 +499,13 @@ evaluation:
   # Momentum meanings:
   # - UP: Positive trajectory
   # - FLAT: Stable, no change
-  # - DOWN: Negative trajectory
+  # - DOWN: Negative trajectory (implies "intervention soon" vs just monitoring)
+  
+  # WATCH + DOWN semantics (normalized):
+  # - WATCH posture with DOWN momentum indicates active risk requiring intervention
+  # - Risk factors are typically medium severity (not high, which would be AT_RISK)
+  # - Examples: CUSTOMER_SUPPORT_RISK (outside renewal), CUSTOMER_USAGE_DECLINE (outside renewal)
+  # - Distinction: WATCH + DOWN = "monitor and intervene proactively"; AT_RISK = "intervention required now"
   #
   # TTL Semantics (output_ttl_days):
   # - output_ttl_days: Posture output expires after N days (triggers re-evaluation)
@@ -495,12 +513,14 @@ evaluation:
   # - Enforcement: If TTL expires and no other rule matches, synthesis engine re-runs
   # - TTL is evaluated against event.as_of_time (not wall clock) for determinism
   #
-  # Evidence Signal References (CONTRACT REQUIREMENT):
-  # - evidence_signals: Array of signal types that support this output (human-readable)
+  # Evidence Signal References (HARD CONTRACT - IDs-first, types-second):
+  # - evidence_signals: Array of signal types (human-readable, for documentation only)
   # - Engine MUST resolve to actual signal_ids when storing in DDB read model
   # - Store as evidence_signal_ids[] (top K) for auditability and traceability
+  # - Store as evidence_snapshot_refs[] (S3 URIs + SHA256) for immutable evidence linkage
   # - Multiple signals of same type: use latest active signal or all active signals
-  # - IDs are authoritative; types are for documentation only
+  # - IDs and snapshot refs are authoritative; types are for human readability only
+  # - Violation: If engine stores only types without IDs, synthesis output is invalid
   
   # Severity Enums (normalized):
   # - risk_factors and opportunities use exactly: "low", "medium", "high"
