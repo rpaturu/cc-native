@@ -524,9 +524,11 @@ export interface RuleTriggerMetadata {
 6. Create edges:
    - Account `HAS_SIGNAL` Signal (idempotent)
    - Signal `SUPPORTED_BY` EvidenceSnapshot (idempotent)
-7. Write materialization status to `GraphMaterializationStatus` table:
+7. Write materialization status to `GraphMaterializationStatus` table (LOCKED - single enforcement path):
    - `GraphMaterializationStatus(pk=SIGNAL#{tenant_id}#{signal_id}) { status: 'COMPLETED', trace_id, updated_at }`
-   - This table is the authoritative gating mechanism for synthesis (ledger is for audit only)
+   - **This table is the ONLY authoritative gating mechanism for synthesis**
+   - **Ledger is NOT used for gating** - ledger is for audit only, never for synthesis gating
+   - **No alternative paths** - do NOT check ledger, do NOT use ledger-derived state
 8. Emit ledger events: `GRAPH_UPSERTED`, `GRAPH_EDGE_CREATED`, `GRAPH_MATERIALIZATION_COMPLETED`
 9. Emit EventBridge event: `GRAPH_MATERIALIZED` (triggers synthesis)
 
@@ -587,7 +589,10 @@ export interface RuleTriggerMetadata {
 1. Extract signalId from event
 2. Call `GraphMaterializer.materializeSignal(signalId, tenantId)`
 3. Log to ledger: `GRAPH_MATERIALIZATION_STARTED`, `GRAPH_MATERIALIZATION_COMPLETED`
-4. Write materialization status to `GraphMaterializationStatus` table (authoritative gating mechanism)
+4. Write materialization status to `GraphMaterializationStatus` table (LOCKED - single enforcement path):
+   - Write `GraphMaterializationStatus(pk=SIGNAL#{tenantId}#{signalId}) { status: 'COMPLETED', trace_id, updated_at }`
+   - **This table is the ONLY authoritative gating mechanism for synthesis**
+   - **Do NOT verify ledger event** - ledger is for audit only, not for gating
 5. Emit EventBridge event: `GRAPH_MATERIALIZED` (triggers synthesis engine)
 6. On failure: log `GRAPH_MATERIALIZATION_FAILED` and send to DLQ (do NOT emit `GRAPH_MATERIALIZED`)
 
@@ -795,10 +800,12 @@ export interface RuleTriggerMetadata {
 **Handler Logic:**
 1. Extract accountId, tenantId, signalId from event
 2. Verify graph materialization succeeded - **Failure Semantics Rule (LOCKED)**
-   - Query `GraphMaterializationStatus` table for `SIGNAL#{tenantId}#{signalId}`
+   - **Query ONLY `GraphMaterializationStatus` table** for `SIGNAL#{tenantId}#{signalId}`
+   - **Check:** `GraphMaterializationStatus.status === 'COMPLETED'`
    - If status is not 'COMPLETED', exit immediately (do NOT run synthesis)
-   - **Single enforcement path:** Only `GraphMaterializationStatus` table is checked
-   - **Ledger is NOT checked for gating** - ledger is for audit only, not for synthesis gating
+   - **Single enforcement path (LOCKED):** Only `GraphMaterializationStatus` table is checked
+   - **Do NOT check ledger** - ledger is for audit only, never for synthesis gating
+   - **No alternative paths** - do NOT use ledger events, do NOT use ledger-derived state
    - This prevents "phantom posture updates" without full evidence linkage
 3. Call `SynthesisEngine.synthesize(accountId, tenantId, eventTime)`
 4. Write `AccountPostureState` to DynamoDB (idempotent - conditional write with `inputs_hash` check)
