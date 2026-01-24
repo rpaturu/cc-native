@@ -79,6 +79,272 @@ aws ec2 run-instances \
 - Create an IAM instance profile with permissions to access Neptune, DynamoDB, etc.
 - Have a key pair for SSH access
 
+### Step 2a: Create Security Group for Test Runner
+
+```bash
+# Load VPC ID from .env (or set manually)
+source .env
+VPC_ID=$VPC_ID
+
+# Get your public IP address
+MY_IP=$(curl -s https://checkip.amazonaws.com)
+echo "Your IP: $MY_IP"
+
+# Create security group
+SG_ID=$(aws ec2 create-security-group \
+  --group-name cc-native-test-runner-sg \
+  --description "Security group for integration test runner - allows SSH from your IP" \
+  --vpc-id $VPC_ID \
+  --query "GroupId" \
+  --output text \
+  --profile cc-native-account \
+  --region us-west-2)
+
+echo "Security Group ID: $SG_ID"
+
+# Allow SSH from your IP
+aws ec2 authorize-security-group-ingress \
+  --group-id $SG_ID \
+  --protocol tcp \
+  --port 22 \
+  --cidr $MY_IP/32 \
+  --profile cc-native-account \
+  --region us-west-2
+
+# Get Neptune security group ID (to allow test runner to access Neptune)
+NEPTUNE_SG_ID=$(aws ec2 describe-security-groups \
+  --filters "Name=group-name,Values=*NeptuneSecurityGroup*" "Name=vpc-id,Values=$VPC_ID" \
+  --query "SecurityGroups[0].GroupId" \
+  --output text \
+  --profile cc-native-account \
+  --region us-west-2)
+
+# Allow test runner to connect to Neptune (port 8182)
+aws ec2 authorize-security-group-ingress \
+  --group-id $NEPTUNE_SG_ID \
+  --protocol tcp \
+  --port 8182 \
+  --source-group $SG_ID \
+  --profile cc-native-account \
+  --region us-west-2
+
+echo "Security group created: $SG_ID"
+echo "Neptune security group updated to allow access from test runner"
+```
+
+**Save the security group ID** - you'll need it when launching the EC2 instance:
+```bash
+export TEST_RUNNER_SG_ID=$SG_ID
+```
+
+### Step 2b: Create IAM Role and Instance Profile
+
+```bash
+# Get Neptune cluster identifier from stack outputs
+NEPTUNE_CLUSTER_ID=$(aws cloudformation describe-stacks \
+  --stack-name CCNativeStack \
+  --query "Stacks[0].Outputs[?OutputKey=='NeptuneClusterIdentifier'].OutputValue" \
+  --output text \
+  --profile cc-native-account \
+  --region us-west-2)
+
+# Get account ID
+ACCOUNT_ID=$(aws sts get-caller-identity \
+  --query "Account" \
+  --output text \
+  --profile cc-native-account)
+
+# Create IAM role for EC2 instance
+aws iam create-role \
+  --role-name cc-native-test-runner-role \
+  --assume-role-policy-document '{
+    "Version": "2012-10-17",
+    "Statement": [
+      {
+        "Effect": "Allow",
+        "Principal": {
+          "Service": "ec2.amazonaws.com"
+        },
+        "Action": "sts:AssumeRole"
+      }
+    ]
+  }' \
+  --profile cc-native-account
+
+# Create policy for Neptune access
+cat > /tmp/neptune-test-policy.json << EOF
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "neptune-db:connect",
+        "neptune-db:ReadDataViaQuery",
+        "neptune-db:WriteDataViaQuery"
+      ],
+      "Resource": "arn:aws:neptune-db:us-west-2:$ACCOUNT_ID:$NEPTUNE_CLUSTER_ID/*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "dynamodb:GetItem",
+        "dynamodb:PutItem",
+        "dynamodb:UpdateItem",
+        "dynamodb:DeleteItem",
+        "dynamodb:Query",
+        "dynamodb:Scan",
+        "dynamodb:BatchGetItem",
+        "dynamodb:BatchWriteItem"
+      ],
+      "Resource": [
+        "arn:aws:dynamodb:us-west-2:$ACCOUNT_ID:table/cc-native-*"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject",
+        "s3:PutObject",
+        "s3:ListBucket"
+      ],
+      "Resource": [
+        "arn:aws:s3:::cc-native-*",
+        "arn:aws:s3:::cc-native-*/*"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "events:PutEvents"
+      ],
+      "Resource": "arn:aws:events:us-west-2:$ACCOUNT_ID:event-bus/cc-native-events"
+    }
+  ]
+}
+EOF
+
+# Attach policy to role
+aws iam put-role-policy \
+  --role-name cc-native-test-runner-role \
+  --policy-name NeptuneTestRunnerPolicy \
+  --policy-document file:///tmp/neptune-test-policy.json \
+  --profile cc-native-account
+
+# Create instance profile
+aws iam create-instance-profile \
+  --instance-profile-name cc-native-test-instance-profile \
+  --profile cc-native-account
+
+# Attach role to instance profile
+aws iam add-role-to-instance-profile \
+  --instance-profile-name cc-native-test-instance-profile \
+  --role-name cc-native-test-runner-role \
+  --profile cc-native-account
+
+echo "IAM role and instance profile created"
+echo "Wait a few seconds for the instance profile to propagate..."
+sleep 10
+```
+
+### Step 2c: Create or Import Key Pair
+
+**Option 1: Create a new key pair** (recommended for testing):
+
+```bash
+# Create a new key pair
+aws ec2 create-key-pair \
+  --key-name cc-native-test-runner-key \
+  --query "KeyMaterial" \
+  --output text \
+  --profile cc-native-account \
+  --region us-west-2 > ~/.ssh/cc-native-test-runner-key.pem
+
+# Set proper permissions
+chmod 400 ~/.ssh/cc-native-test-runner-key.pem
+
+echo "Key pair created: ~/.ssh/cc-native-test-runner-key.pem"
+```
+
+**Option 2: Use an existing key pair**:
+
+```bash
+# List existing key pairs
+aws ec2 describe-key-pairs \
+  --profile cc-native-account \
+  --region us-west-2
+
+# Use an existing key name (replace with your key name)
+export KEY_NAME="your-existing-key-name"
+```
+
+**Note**: If you use an existing key pair, make sure you have the corresponding `.pem` file on your local machine.
+
+### Step 2d: Launch EC2 Instance
+
+Now you can launch the EC2 instance with all the prerequisites:
+
+```bash
+# Load values from .env
+source .env
+
+# Set variables (or use values from previous steps)
+SUBNET_ID=$NEPTUNE_SUBNET_ID  # or use $NEPTUNE_SUBNET_IDS and pick one
+SECURITY_GROUP_ID=$TEST_RUNNER_SG_ID
+KEY_NAME="cc-native-test-runner-key"  # or your existing key name
+INSTANCE_PROFILE="cc-native-test-instance-profile"
+
+# Get latest Amazon Linux 2023 AMI ID for us-west-2
+AMI_ID=$(aws ec2 describe-images \
+  --owners amazon \
+  --filters "Name=name,Values=al2023-ami-2023*" "Name=architecture,Values=x86_64" \
+  --query "Images | sort_by(@, &CreationDate) | [-1].ImageId" \
+  --output text \
+  --profile cc-native-account \
+  --region us-west-2)
+
+echo "Using AMI: $AMI_ID"
+
+# Launch instance
+INSTANCE_ID=$(aws ec2 run-instances \
+  --image-id $AMI_ID \
+  --instance-type t3.micro \
+  --subnet-id $SUBNET_ID \
+  --security-group-ids $SECURITY_GROUP_ID \
+  --iam-instance-profile Name=$INSTANCE_PROFILE \
+  --key-name $KEY_NAME \
+  --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=cc-native-test-runner}]' \
+  --query "Instances[0].InstanceId" \
+  --output text \
+  --profile cc-native-account \
+  --region us-west-2)
+
+echo "Instance launched: $INSTANCE_ID"
+echo "Waiting for instance to be running..."
+aws ec2 wait instance-running \
+  --instance-ids $INSTANCE_ID \
+  --profile cc-native-account \
+  --region us-west-2
+
+# Get public IP (if instance is in a subnet with internet gateway)
+# Note: Since we're using isolated subnets, the instance won't have a public IP
+# You'll need to use Session Manager or a bastion host to connect
+PUBLIC_IP=$(aws ec2 describe-instances \
+  --instance-ids $INSTANCE_ID \
+  --query "Reservations[0].Instances[0].PublicIpAddress" \
+  --output text \
+  --profile cc-native-account \
+  --region us-west-2)
+
+if [ "$PUBLIC_IP" != "None" ] && [ -n "$PUBLIC_IP" ]; then
+  echo "Public IP: $PUBLIC_IP"
+  echo "You can SSH with: ssh -i ~/.ssh/cc-native-test-runner-key.pem ec2-user@$PUBLIC_IP"
+else
+  echo "Instance is in isolated subnet - no public IP"
+  echo "Use AWS Systems Manager Session Manager to connect (see Method 2)"
+fi
+```
+
 ### Step 3: Configure EC2 Instance
 
 ```bash
@@ -363,6 +629,213 @@ For **development/testing**: Use **Method 1 (EC2 Instance)** or **Method 2 (Sess
 For **CI/CD**: Consider **Method 3 (Test Lambda)** or use **AWS CodeBuild** with a VPC configuration.
 
 For **quick testing**: Use **Method 4 (Cloud9)** if you need an IDE environment.
+
+## Quick Reference: All Prerequisites in One Script
+
+Here's a complete script that sets up all prerequisites:
+
+```bash
+#!/bin/bash
+# setup-test-runner-prerequisites.sh
+
+set -e
+
+PROFILE="cc-native-account"
+REGION="us-west-2"
+STACK_NAME="CCNativeStack"
+KEY_NAME="cc-native-test-runner-key"
+
+# Load .env if available
+if [ -f .env ]; then
+  source .env
+fi
+
+# Get VPC ID
+if [ -z "$VPC_ID" ]; then
+  VPC_ID=$(aws cloudformation describe-stacks \
+    --stack-name $STACK_NAME \
+    --query "Stacks[0].Outputs[?OutputKey=='VpcId'].OutputValue" \
+    --output text \
+    --profile $PROFILE \
+    --region $REGION)
+fi
+
+# Get subnet ID
+if [ -z "$NEPTUNE_SUBNET_ID" ]; then
+  NEPTUNE_SUBNET_ID=$(aws cloudformation describe-stacks \
+    --stack-name $STACK_NAME \
+    --query "Stacks[0].Outputs[?OutputKey=='NeptuneSubnetId'].OutputValue" \
+    --output text \
+    --profile $PROFILE \
+    --region $REGION)
+fi
+
+# Get Neptune cluster ID
+NEPTUNE_CLUSTER_ID=$(aws cloudformation describe-stacks \
+  --stack-name $STACK_NAME \
+  --query "Stacks[0].Outputs[?OutputKey=='NeptuneClusterIdentifier'].OutputValue" \
+  --output text \
+  --profile $PROFILE \
+  --region $REGION)
+
+# Get account ID
+ACCOUNT_ID=$(aws sts get-caller-identity \
+  --query "Account" \
+  --output text \
+  --profile $PROFILE)
+
+echo "VPC ID: $VPC_ID"
+echo "Subnet ID: $NEPTUNE_SUBNET_ID"
+echo "Neptune Cluster ID: $NEPTUNE_CLUSTER_ID"
+echo "Account ID: $ACCOUNT_ID"
+
+# 1. Create Security Group
+echo "Creating security group..."
+MY_IP=$(curl -s https://checkip.amazonaws.com)
+echo "Your IP: $MY_IP"
+
+SG_ID=$(aws ec2 create-security-group \
+  --group-name cc-native-test-runner-sg \
+  --description "Security group for integration test runner" \
+  --vpc-id $VPC_ID \
+  --query "GroupId" \
+  --output text \
+  --profile $PROFILE \
+  --region $REGION 2>/dev/null || \
+  aws ec2 describe-security-groups \
+    --filters "Name=group-name,Values=cc-native-test-runner-sg" "Name=vpc-id,Values=$VPC_ID" \
+    --query "SecurityGroups[0].GroupId" \
+    --output text \
+    --profile $PROFILE \
+    --region $REGION)
+
+echo "Security Group ID: $SG_ID"
+
+# Allow SSH from your IP
+aws ec2 authorize-security-group-ingress \
+  --group-id $SG_ID \
+  --protocol tcp \
+  --port 22 \
+  --cidr $MY_IP/32 \
+  --profile $PROFILE \
+  --region $REGION 2>/dev/null || echo "SSH rule may already exist"
+
+# Allow access to Neptune
+NEPTUNE_SG_ID=$(aws ec2 describe-security-groups \
+  --filters "Name=group-name,Values=*NeptuneSecurityGroup*" "Name=vpc-id,Values=$VPC_ID" \
+  --query "SecurityGroups[0].GroupId" \
+  --output text \
+  --profile $PROFILE \
+  --region $REGION)
+
+aws ec2 authorize-security-group-ingress \
+  --group-id $NEPTUNE_SG_ID \
+  --protocol tcp \
+  --port 8182 \
+  --source-group $SG_ID \
+  --profile $PROFILE \
+  --region $REGION 2>/dev/null || echo "Neptune rule may already exist"
+
+# 2. Create IAM Role
+echo "Creating IAM role..."
+aws iam create-role \
+  --role-name cc-native-test-runner-role \
+  --assume-role-policy-document '{
+    "Version": "2012-10-17",
+    "Statement": [{
+      "Effect": "Allow",
+      "Principal": {"Service": "ec2.amazonaws.com"},
+      "Action": "sts:AssumeRole"
+    }]
+  }' \
+  --profile $PROFILE 2>/dev/null || echo "IAM role may already exist"
+
+# Create and attach policy
+cat > /tmp/neptune-test-policy.json << EOF
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "neptune-db:connect",
+        "neptune-db:ReadDataViaQuery",
+        "neptune-db:WriteDataViaQuery"
+      ],
+      "Resource": "arn:aws:neptune-db:$REGION:$ACCOUNT_ID:$NEPTUNE_CLUSTER_ID/*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": ["dynamodb:*"],
+      "Resource": "arn:aws:dynamodb:$REGION:$ACCOUNT_ID:table/cc-native-*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": ["s3:GetObject", "s3:PutObject", "s3:ListBucket"],
+      "Resource": ["arn:aws:s3:::cc-native-*", "arn:aws:s3:::cc-native-*/*"]
+    },
+    {
+      "Effect": "Allow",
+      "Action": ["events:PutEvents"],
+      "Resource": "arn:aws:events:$REGION:$ACCOUNT_ID:event-bus/cc-native-events"
+    }
+  ]
+}
+EOF
+
+aws iam put-role-policy \
+  --role-name cc-native-test-runner-role \
+  --policy-name NeptuneTestRunnerPolicy \
+  --policy-document file:///tmp/neptune-test-policy.json \
+  --profile $PROFILE
+
+# 3. Create Instance Profile
+echo "Creating instance profile..."
+aws iam create-instance-profile \
+  --instance-profile-name cc-native-test-instance-profile \
+  --profile $PROFILE 2>/dev/null || echo "Instance profile may already exist"
+
+aws iam add-role-to-instance-profile \
+  --instance-profile-name cc-native-test-instance-profile \
+  --role-name cc-native-test-runner-role \
+  --profile $PROFILE 2>/dev/null || echo "Role may already be attached"
+
+# 4. Create Key Pair
+echo "Creating key pair..."
+aws ec2 create-key-pair \
+  --key-name $KEY_NAME \
+  --query "KeyMaterial" \
+  --output text \
+  --profile $PROFILE \
+  --region $REGION > ~/.ssh/$KEY_NAME.pem 2>/dev/null || echo "Key pair may already exist"
+
+if [ -f ~/.ssh/$KEY_NAME.pem ]; then
+  chmod 400 ~/.ssh/$KEY_NAME.pem
+  echo "Key pair saved to ~/.ssh/$KEY_NAME.pem"
+fi
+
+echo ""
+echo "✅ Prerequisites setup complete!"
+echo ""
+echo "Summary:"
+echo "  Security Group ID: $SG_ID"
+echo "  IAM Role: cc-native-test-runner-role"
+echo "  Instance Profile: cc-native-test-instance-profile"
+echo "  Key Pair: $KEY_NAME"
+echo ""
+echo "You can now launch an EC2 instance with:"
+echo "  --subnet-id $NEPTUNE_SUBNET_ID"
+echo "  --security-group-ids $SG_ID"
+echo "  --iam-instance-profile Name=cc-native-test-instance-profile"
+echo "  --key-name $KEY_NAME"
+```
+
+Save this script as `setup-test-runner-prerequisites.sh`, make it executable, and run it:
+
+```bash
+chmod +x setup-test-runner-prerequisites.sh
+./setup-test-runner-prerequisites.sh
+```
 
 ## Example: Complete EC2 Setup Script
 
