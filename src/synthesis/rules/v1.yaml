@@ -14,16 +14,25 @@ ruleset:
   description: "Deterministic synthesis rules for account posture, risk factors, opportunities, and unknowns"
   
   # Rule evaluation order (priority: lower = evaluated first)
-  # Rules are evaluated top-to-bottom until a match is found
+  # Rules are evaluated in priority order (ascending), then by rule_id (alphabetical) as tie-breaker
   # First matching rule wins (deterministic, order-stable)
+  # Engine must sort by: (priority, rule_id) to guarantee stable behavior
   #
-  # Condition Schema:
+  # Condition Schema (Normalized):
   # - required_signals: Array of signal conditions (all must match)
-  # - excluded_signals: Array of signal conditions (none must match)
-  # - signal_properties: Array of property checks on signals
-  #   - property: Path to property (e.g., "trend_direction" in signal.data)
-  #   - operator: "equals", "greater_than", "less_than", "in", "exists", "not_exists"
-  #   - value: Comparison value
+  #   - signal_type: Signal type enum
+  #   - status: ACTIVE | SUPPRESSED | EXPIRED
+  #   - where: Array of property predicates (all must match)
+  #     - property: Path to property (e.g., "trend_direction" in signal.data, "timestamp" for timestamps)
+  #     - operator: "equals", "greater_than", "less_than", "less_than_or_equal", "within_last_days", "in", "exists", "not_exists"
+  #     - value: Comparison value
+  # - excluded_signals: Array of signal conditions (none must match) - same schema as required_signals
+  # - computed_predicates: Array of computed conditions (evaluated by engine, not signal properties)
+  #   - name: Predicate name (e.g., "no_engagement_in_days", "has_engagement_in_days")
+  #   - params: Parameters for the predicate (e.g., { days: 30 })
+  #   - Engine evaluates: no_engagement_in_days = absence of FIRST_ENGAGEMENT_OCCURRED or engagement signals in last N days
+  #   - Engine evaluates: has_engagement_in_days = presence of FIRST_ENGAGEMENT_OCCURRED or engagement signals in last N days
+  # - conditions: {} for match-all rules (explicit empty object, not null)
   #
   # Timestamp Handling:
   # - Unknown timestamps (introduced_at, review_after) are NOT in ruleset
@@ -34,6 +43,15 @@ ruleset:
   # - output_ttl_days: Posture output expires after N days (re-evaluate)
   # - null = permanent (until inputs change)
   # - Enforcement: If TTL expires and no other rule matches, re-run synthesis
+  #
+  # Severity Enums (normalized):
+  # - risk_factors and opportunities use: "low", "medium", "high" (no "critical" or other values)
+  #
+  # Evidence Resolution (contract requirement):
+  # - evidence_signals lists signal types (e.g., "USAGE_TREND_CHANGE")
+  # - Engine MUST resolve to actual signal_ids when storing in DDB read model
+  # - Store as evidence_signal_ids[] (top K) for auditability
+  # - Keep evidence_signals types for human readability, but IDs are authoritative
   #
   rules:
     # ============================================================
@@ -282,8 +300,9 @@ ruleset:
             status: "ACTIVE"
             where:
               # Signal must have occurred within last 14 days (not a stale historical signal)
-              - property: "occurred_within_days"
-                operator: "less_than_or_equal"
+              # Engine evaluates: signal.timestamp >= (event.as_of_time - 14 days)
+              - property: "timestamp"
+                operator: "within_last_days"
                 value: 14
         excluded_signals:
           - signal_type: "DISCOVERY_PROGRESS_STALLED"
@@ -310,8 +329,7 @@ ruleset:
     - rule_id: "SUSPECT_DEFAULT"
       priority: 11
       lifecycle_state: "SUSPECT"
-      conditions:
-        # Matches any SUSPECT state
+      conditions: {}  # Matches any SUSPECT state
       outputs:
         posture: "WATCH"
         momentum: "FLAT"
@@ -336,11 +354,11 @@ ruleset:
           - signal_type: "ACCOUNT_ACTIVATION_DETECTED"
             status: "ACTIVE"
         # No engagement: computed predicate (no engagement signals in last 30 days)
-        # Engine evaluates: absence of FIRST_ENGAGEMENT_OCCURRED or any engagement-related signals
+        # Engine evaluates: absence of FIRST_ENGAGEMENT_OCCURRED or any engagement-related signals in last N days
         computed_predicates:
           - name: "no_engagement_in_days"
-            operator: "equals"
-            value: 30  # No engagement signals in last 30 days
+            params:
+              days: 30
       outputs:
         posture: "WATCH"
         momentum: "FLAT"
@@ -366,10 +384,11 @@ ruleset:
           - signal_type: "ACCOUNT_ACTIVATION_DETECTED"
             status: "ACTIVE"
         # Has engagement: computed predicate (engagement signals exist in last 30 days)
+        # Engine evaluates: presence of FIRST_ENGAGEMENT_OCCURRED or engagement signals in last N days
         computed_predicates:
           - name: "has_engagement_in_days"
-            operator: "equals"
-            value: 30  # Has engagement signals in last 30 days
+            params:
+              days: 30
       outputs:
         posture: "WATCH"
         momentum: "FLAT"
@@ -383,9 +402,9 @@ ruleset:
         unknowns: []
       output_ttl_days: 90  # Re-evaluate quarterly
     
-    # Rule 12: PROSPECT - Default (no activation) → DORMANT
+    # Rule 14: PROSPECT - Default (no activation) → DORMANT
     - rule_id: "PROSPECT_DORMANT"
-      priority: 12
+      priority: 14
       lifecycle_state: "PROSPECT"
       conditions:
         excluded_signals:
@@ -410,8 +429,7 @@ ruleset:
     - rule_id: "FALLBACK_WATCH"
       priority: 99
       lifecycle_state: null  # Matches any lifecycle state
-      conditions:
-        # Matches if no other rule matched
+      conditions: {}  # Matches if no other rule matched
       outputs:
         posture: "WATCH"
         momentum: "FLAT"
@@ -430,6 +448,8 @@ ruleset:
 evaluation:
   # Rule evaluation is deterministic and order-stable
   # Rules are evaluated in priority order (1-99, lower = first)
+  # Tie-breaker: If multiple rules have same priority, sort by rule_id (alphabetical)
+  # Engine MUST sort by: (priority, rule_id) to guarantee stable behavior
   # First matching rule wins
   # All conditions must match for a rule to apply
   
@@ -437,9 +457,16 @@ evaluation:
   # - equals: Exact match
   # - greater_than: Numeric comparison
   # - less_than: Numeric comparison
+  # - less_than_or_equal: Numeric comparison
+  # - within_last_days: Timestamp comparison (signal.timestamp >= event.as_of_time - N days)
   # - in: Array membership
   # - exists: Property exists
   # - not_exists: Property does not exist
+  
+  # Computed predicates:
+  # - no_engagement_in_days: Absence of FIRST_ENGAGEMENT_OCCURRED or engagement signals in last N days
+  # - has_engagement_in_days: Presence of FIRST_ENGAGEMENT_OCCURRED or engagement signals in last N days
+  # - Engine evaluates these by scanning active signals, not by checking signal properties
   
   # Signal property access:
   # - signal.data.{property_name} for signal data properties
@@ -468,7 +495,13 @@ evaluation:
   # - Enforcement: If TTL expires and no other rule matches, synthesis engine re-runs
   # - TTL is evaluated against event.as_of_time (not wall clock) for determinism
   #
-  # Evidence Signal References:
-  # - evidence_signals: Array of signal types that support this output
-  # - Engine should resolve to actual signal IDs for traceability
+  # Evidence Signal References (CONTRACT REQUIREMENT):
+  # - evidence_signals: Array of signal types that support this output (human-readable)
+  # - Engine MUST resolve to actual signal_ids when storing in DDB read model
+  # - Store as evidence_signal_ids[] (top K) for auditability and traceability
   # - Multiple signals of same type: use latest active signal or all active signals
+  # - IDs are authoritative; types are for documentation only
+  
+  # Severity Enums (normalized):
+  # - risk_factors and opportunities use exactly: "low", "medium", "high"
+  # - No other values allowed (no "critical", "urgent", etc.)
