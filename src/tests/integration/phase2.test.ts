@@ -10,11 +10,19 @@
  * - Neptune cluster is accessible (requires VPC access - tests will skip if not accessible)
  * - Environment variables loaded from .env file
  * 
- * NOTE: Neptune is in isolated VPC subnets and is NOT accessible from local machines.
- * These tests will timeout if run locally. To run these tests:
- * 1. Run from within the VPC (e.g., EC2 instance, Lambda test function)
- * 2. Use a VPN or bastion host to access the VPC
- * 3. Or run tests that don't require Neptune (synthesis without graph materialization)
+ * ⚠️ IMPORTANT: Neptune VPC Access Requirement
+ * 
+ * Neptune is deployed in isolated VPC subnets and is NOT accessible from local machines.
+ * These tests will timeout if run locally because Neptune requires VPC network access.
+ * 
+ * To run these tests successfully:
+ * 1. Run from within the VPC (e.g., EC2 instance in the same VPC)
+ * 2. Use a VPN connection to the VPC
+ * 3. Use a bastion host or AWS Systems Manager Session Manager
+ * 4. Or run tests that don't require Neptune (synthesis engine tests can run without graph)
+ * 
+ * The tests are designed to skip gracefully when Neptune is not accessible.
+ * All tests check for Neptune availability before attempting operations.
  */
 
 import { Logger } from '../../services/core/Logger';
@@ -125,49 +133,68 @@ describe('Phase 2 Integration Tests', () => {
       // Tests will be skipped or fail gracefully
     }
 
+    // For integration tests, we'll attempt Neptune connection but don't block on it
+    // Neptune is in isolated VPC subnets and requires VPC access
+    // Tests will skip gracefully if connection fails
+    let neptuneAccessible = false;
     if (neptuneEndpoint) {
+      // Attempt connection in background (non-blocking)
+      // If it fails, tests will skip
       neptuneConnection = NeptuneConnection.getInstance();
-      try {
-        // Try to initialize connection with a short timeout
-        // If Neptune is in VPC and not accessible, this will fail quickly
-        await Promise.race([
-          neptuneConnection.initialize({
-            endpoint: neptuneEndpoint,
-            port: neptunePort,
-            region,
-            iamAuthEnabled: true,
-          }),
-          new Promise((_, reject) =>
-            setTimeout(() => reject(new Error('Neptune connection timeout - VPC access required')), 5000)
-          ),
-        ]);
-        graphService = new GraphService(neptuneConnection);
-      } catch (error: any) {
-        logger.warn('Neptune not accessible (requires VPC access). Tests will skip Neptune operations.', {
-          error: error.message,
+      const connectionPromise = neptuneConnection
+        .initialize({
+          endpoint: neptuneEndpoint,
+          port: neptunePort,
+          region,
+          iamAuthEnabled: true,
+        })
+        .then(() => {
+          graphService = new GraphService(neptuneConnection);
+          neptuneAccessible = true;
+          logger.info('Neptune connection successful - tests will run');
+        })
+        .catch((error: any) => {
+          logger.warn('Neptune not accessible (requires VPC access). Tests will skip Neptune operations.', {
+            error: error.message,
+          });
+          neptuneConnection = null as any;
+          graphService = null as any;
+          neptuneAccessible = false;
         });
-        // Set to null to indicate Neptune is not accessible
-        neptuneConnection = null as any;
-        graphService = null as any;
+
+      // Wait up to 3 seconds for connection, then continue
+      try {
+        await Promise.race([
+          connectionPromise,
+          new Promise((resolve) => setTimeout(() => resolve('timeout'), 3000)),
+        ]);
+      } catch (error) {
+        // Connection failed, neptuneAccessible remains false
       }
     } else {
       // Set to null to indicate tests should be skipped
       neptuneConnection = null as any;
       graphService = null as any;
+      neptuneAccessible = false;
     }
 
-    graphMaterializer = new GraphMaterializer({
-      graphService,
-      signalService,
-      lifecycleStateService,
-      eventPublisher,
-      ledgerService,
-      dynamoClient,
-      materializationStatusTableName:
-        process.env.GRAPH_MATERIALIZATION_STATUS_TABLE_NAME ||
-        'cc-native-graph-materialization-status',
-      signalsTableName: process.env.SIGNALS_TABLE_NAME || 'cc-native-signals',
-    });
+    // Only create GraphMaterializer if graphService is available
+    if (neptuneAccessible && graphService) {
+      graphMaterializer = new GraphMaterializer({
+        graphService,
+        signalService,
+        lifecycleStateService,
+        eventPublisher,
+        ledgerService,
+        dynamoClient,
+        materializationStatusTableName:
+          process.env.GRAPH_MATERIALIZATION_STATUS_TABLE_NAME ||
+          'cc-native-graph-materialization-status',
+        signalsTableName: process.env.SIGNALS_TABLE_NAME || 'cc-native-signals',
+      });
+    } else {
+      graphMaterializer = null as any;
+    }
 
     synthesisEngine = new SynthesisEngine({
       signalService,
@@ -202,7 +229,7 @@ describe('Phase 2 Integration Tests', () => {
       // Tests will fail later if credentials are actually needed
       logger.warn('Failed to create test account (may be credentials issue)', { error: error.message });
     }
-  }, 30000); // 30 second timeout for Neptune connection
+  }, 5000); // 5 second timeout for setup (Neptune connection attempted but non-blocking)
 
   afterAll(async () => {
     // Cleanup: Connection is managed by singleton, no explicit close needed
@@ -211,7 +238,7 @@ describe('Phase 2 Integration Tests', () => {
 
   describe('Graph Materialization Flow', () => {
     it('should materialize signal into Neptune graph', async () => {
-      if (!process.env.NEPTUNE_CLUSTER_ENDPOINT || !graphService) {
+      if (!process.env.NEPTUNE_CLUSTER_ENDPOINT || !graphService || !graphMaterializer) {
         console.log('Skipping test: Neptune not accessible (requires VPC access)');
         return;
       }
@@ -311,7 +338,7 @@ describe('Phase 2 Integration Tests', () => {
 
   describe('Synthesis Engine Flow', () => {
     it('should synthesize posture state from active signals', async () => {
-      if (!process.env.NEPTUNE_CLUSTER_ENDPOINT || !graphService) {
+      if (!process.env.NEPTUNE_CLUSTER_ENDPOINT || !graphService || !graphMaterializer) {
         console.log('Skipping test: Neptune not accessible (requires VPC access)');
         return;
       }
@@ -525,7 +552,7 @@ describe('Phase 2 Integration Tests', () => {
 
   describe('Determinism', () => {
     it('should produce same posture state for same inputs', async () => {
-      if (!process.env.NEPTUNE_CLUSTER_ENDPOINT || !graphService) {
+      if (!process.env.NEPTUNE_CLUSTER_ENDPOINT || !graphService || !graphMaterializer) {
         console.log('Skipping test: Neptune not accessible (requires VPC access)');
         return;
       }
