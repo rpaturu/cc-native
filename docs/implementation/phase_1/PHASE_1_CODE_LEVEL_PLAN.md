@@ -456,4 +456,13 @@ Phase 1 is complete when:
 5. **Documentation** - Document signal schemas and detection logic for operations
 6. **Phase 2 Planning** - Begin Situation Graph materialization and cross-signal synthesis
 
-**See `PHASE_1_COMPLETION_SUMMARY.md` for detailed implementation statistics and file listing.**
+**Implementation Statistics:**
+- **19 TypeScript files** in perception layer (services, detectors, connectors, handlers)
+- **14 additional files** (types, interfaces, base classes)
+- **3 Lambda handlers** deployed via CDK
+- **3 DLQs** configured for error handling
+- **EventBridge rules** for handler routing
+- **Signals table** with GSI for efficient queries
+- **Accounts table** for AccountState read model
+
+**All Phase 1 requirements met and verified.****
