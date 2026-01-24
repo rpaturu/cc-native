@@ -75,83 +75,48 @@ The prerequisites script automatically handles key pair setup:
 - Use a different key pair that you have locally, or
 - Download the key from AWS (if you have access to it)
 
-### Step 3: Launch EC2 Instance
+### Step 3: Launch and Configure EC2 Instance
 
-Now that all prerequisites are set up, you can launch the EC2 instance:
-
-Now you can launch the EC2 instance with all the prerequisites:
+Use the management script to launch the instance:
 
 ```bash
-# Load values from .env
-source .env
-
-# Load variables from .env files
-source .env
-source .env.test-runner  # Created by setup-test-runner-security-group.sh
-
-# Set variables
-SUBNET_ID=$NEPTUNE_SUBNET_ID
-SECURITY_GROUP_ID=$TEST_RUNNER_SECURITY_GROUP_ID
-KEY_NAME=$TEST_RUNNER_KEY_NAME  # From .env.test-runner
-INSTANCE_PROFILE=$TEST_RUNNER_INSTANCE_PROFILE_NAME
-
-# Get latest Amazon Linux 2023 AMI ID for us-west-2
-AMI_ID=$(aws ec2 describe-images \
-  --owners amazon \
-  --filters "Name=name,Values=al2023-ami-2023*" "Name=architecture,Values=x86_64" \
-  --query "Images | sort_by(@, &CreationDate) | [-1].ImageId" \
-  --output text \
-  --profile cc-native-account \
-  --region us-west-2)
-
-echo "Using AMI: $AMI_ID"
-
-# Launch instance
-INSTANCE_ID=$(aws ec2 run-instances \
-  --image-id $AMI_ID \
-  --instance-type t3.micro \
-  --subnet-id $SUBNET_ID \
-  --security-group-ids $SECURITY_GROUP_ID \
-  --iam-instance-profile Name=$INSTANCE_PROFILE \
-  --key-name $KEY_NAME \
-  --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=cc-native-test-runner}]' \
-  --query "Instances[0].InstanceId" \
-  --output text \
-  --profile cc-native-account \
-  --region us-west-2)
-
-echo "Instance launched: $INSTANCE_ID"
-echo "Waiting for instance to be running..."
-aws ec2 wait instance-running \
-  --instance-ids $INSTANCE_ID \
-  --profile cc-native-account \
-  --region us-west-2
-
-# Get public IP (if instance is in a subnet with internet gateway)
-# Note: Since we're using isolated subnets, the instance won't have a public IP
-# You'll need to use Session Manager or a bastion host to connect
-PUBLIC_IP=$(aws ec2 describe-instances \
-  --instance-ids $INSTANCE_ID \
-  --query "Reservations[0].Instances[0].PublicIpAddress" \
-  --output text \
-  --profile cc-native-account \
-  --region us-west-2)
-
-if [ "$PUBLIC_IP" != "None" ] && [ -n "$PUBLIC_IP" ]; then
-  echo "Public IP: $PUBLIC_IP"
-  echo "You can SSH with: ssh -i ~/.ssh/cc-native-test-runner-key.pem ec2-user@$PUBLIC_IP"
-else
-  echo "Instance is in isolated subnet - no public IP"
-  echo "Use AWS Systems Manager Session Manager to connect"
-fi
+./scripts/manage-test-runner-instance.sh launch
 ```
 
-### Step 4: Configure EC2 Instance
+This script will:
+- Launch an EC2 instance with all prerequisites configured
+- Wait for the instance to be running
+- Show connection instructions
+- Save the instance ID to `.env.test-runner`
+
+**Check instance status**:
+```bash
+./scripts/manage-test-runner-instance.sh status
+```
+
+**Show connection instructions**:
+```bash
+./scripts/manage-test-runner-instance.sh connect
+```
+
+**Connect to the instance**:
+
+Since the instance is in an isolated subnet (no public IP), use AWS Systems Manager Session Manager:
 
 ```bash
-# SSH into the instance
-ssh -i <YOUR_KEY>.pem ec2-user@<EC2_PUBLIC_IP>
+# Load instance ID
+source .env.test-runner
 
+# Connect via Session Manager
+aws ssm start-session \
+  --target $TEST_RUNNER_INSTANCE_ID \
+  --profile cc-native-account \
+  --region us-west-2
+```
+
+**Configure the instance** (once connected):
+
+```bash
 # Install Node.js 20
 curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash
 source ~/.bashrc
@@ -161,21 +126,20 @@ nvm use 20
 # Install git
 sudo yum install -y git
 
-# Clone your repository (or copy files)
+# Clone your repository
 git clone <YOUR_REPO_URL>
 cd cc-native
 
 # Install dependencies
 npm install
 
-# Configure AWS credentials (use IAM role or configure manually)
-aws configure --profile cc-native-account
-
-# Copy .env file or set environment variables
-# The deploy script should have populated .env with Neptune endpoint
+# Copy .env file (from your local machine)
+# The instance uses IAM role for AWS credentials, so no manual AWS config needed
 ```
 
-### Step 5: Run Tests
+### Step 4: Run Tests
+
+Once connected to the instance and configured:
 
 ```bash
 # Run Phase 2 integration tests
@@ -183,6 +147,41 @@ npm test -- src/tests/integration/phase2.test.ts
 
 # Or run all tests
 npm test
+```
+
+### Step 5: Teardown Instance
+
+After testing is complete, terminate the instance:
+
+```bash
+./scripts/manage-test-runner-instance.sh teardown
+```
+
+This will:
+- Terminate the EC2 instance
+- Wait for termination to complete
+- Remove the instance ID from `.env.test-runner`
+
+## Complete Workflow
+
+Here's the complete workflow for running integration tests:
+
+```bash
+# 1. Set up prerequisites (security group, IAM role, key pair)
+./scripts/setup-test-runner-prerequisites.sh
+
+# 2. Launch EC2 instance
+./scripts/manage-test-runner-instance.sh launch
+
+# 3. Connect to instance (via Session Manager)
+source .env.test-runner
+aws ssm start-session --target $TEST_RUNNER_INSTANCE_ID --profile cc-native-account --region us-west-2
+
+# 4. On the instance: Configure and run tests
+# (Install Node.js, clone repo, run tests as shown in Step 4)
+
+# 5. Teardown instance when done
+./scripts/manage-test-runner-instance.sh teardown
 ```
 
 
@@ -433,12 +432,21 @@ chmod +x setup-test-runner-prerequisites.sh
 ```
 
 
-## Next Steps
+## Quick Start
 
-1. Run the prerequisites setup script (or follow the manual steps)
-2. Launch your EC2 instance
-3. SSH into the instance and configure it
-4. Run `npm test -- src/tests/integration/phase2.test.ts`
-5. Review test results
+Run the complete workflow:
+
+```bash
+# 1. Set up prerequisites
+./scripts/setup-test-runner-prerequisites.sh
+
+# 2. Launch instance
+./scripts/manage-test-runner-instance.sh launch
+
+# 3. Connect and run tests (see Step 4)
+
+# 4. Teardown when done
+./scripts/manage-test-runner-instance.sh teardown
+```
 
 The tests will automatically detect if Neptune is accessible and skip gracefully if not, so you can verify your setup is working correctly.
