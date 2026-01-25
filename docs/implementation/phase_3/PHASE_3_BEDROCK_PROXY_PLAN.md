@@ -311,15 +311,19 @@ const bedrockEndpoint = new ec2.InterfaceVpcEndpoint(this, 'BedrockRuntimeEndpoi
 ```typescript
 // Grant Bedrock invoke permission (via VPC endpoint)
 // ✅ Zero Trust: Region-restricted, resource-scoped permissions (matches decision evaluation handler)
+// Uses centralized config for actions and model pattern
+const config = props.config || DEFAULT_DECISION_INFRASTRUCTURE_CONFIG;
+const region = props.region || config.defaults.region;
+
 this.decisionApiHandler.addToRolePolicy(new iam.PolicyStatement({
   effect: iam.Effect.ALLOW,
-  actions: ['bedrock:InvokeModel'],
+  actions: config.bedrockIam.actions,
   resources: [
-    `arn:aws:bedrock:${props.region || 'us-west-2'}::foundation-model/anthropic.claude-3-*`,
+    `arn:aws:bedrock:${region}::foundation-model/${config.bedrock.modelPattern}`,
   ],
   conditions: {
     StringEquals: {
-      'aws:RequestedRegion': props.region || 'us-west-2',
+      'aws:RequestedRegion': region,
     },
   },
 }));

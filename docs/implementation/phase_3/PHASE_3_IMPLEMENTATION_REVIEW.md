@@ -614,6 +614,8 @@ All three recommendations have been implemented with Zero Trust principles:
    - All grant permissions use `props.` consistently (tables come from props)
    - Region variable usage standardized (uses config-derived `region` variable)
    - Table references standardized (uses `props.decisionBudgetTable.tableName`)
+   - Magic numbers replaced with constants (`NEPTUNE_DEFAULT_PORT = 8182`)
+   - Removed type assertions for readonly properties (now non-readonly with proper assignment)
 
 **Recommendation:** ✅ **Proceed with deployment** - All recommendations implemented, fully Zero Trust aligned, and architectural improvements enhance scalability and maintainability.
 
