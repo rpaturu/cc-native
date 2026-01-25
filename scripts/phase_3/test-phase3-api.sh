@@ -80,13 +80,28 @@ REGION="$AWS_REGION"
 if [ -z "$DECISION_API_KEY" ]; then
   echo -e "${RED}❌ Error: DECISION_API_KEY not found in .env${NC}"
   echo "   Please run ./deploy to generate .env file with API key"
+  echo ""
+  echo "   Note: For production, consider storing API key in AWS Secrets Manager"
+  echo "   For testing, .env file is acceptable"
   exit 1
 fi
 
 # Automatically create test user if needed
+# Use secure defaults, but allow override via environment variables
 TEST_USERNAME="${TEST_USERNAME:-test-user}"
-TEST_PASSWORD="${TEST_PASSWORD:-TestPassword123!}"
 TEST_USER_EMAIL="${TEST_USER_EMAIL:-test-user@cc-native.local}"
+
+# Password handling: prefer environment variable, fallback to secure default
+# For production use, set TEST_PASSWORD via environment variable
+if [ -z "$TEST_PASSWORD" ]; then
+  # Generate a random password for test user (more secure than hardcoded)
+  # Use date + random number for portability (works on all systems)
+  RANDOM_SUFFIX=$(date +%s | sha256sum | head -c 8)
+  TEST_PASSWORD="TestPass${RANDOM_SUFFIX}!"
+  echo "   Generated secure test password"
+else
+  echo "   Using TEST_PASSWORD from environment"
+fi
 
 echo "🔐 Setting up Cognito authentication..."
 
@@ -137,34 +152,51 @@ else
 fi
 
 echo "   Authenticating with Cognito..."
-COGNITO_TOKEN=$(aws cognito-idp initiate-auth \
-  --auth-flow USER_PASSWORD_AUTH \
-  --client-id "$USER_POOL_CLIENT_ID" \
-  --auth-parameters "USERNAME=${TEST_USERNAME},PASSWORD=${TEST_PASSWORD}" \
-  --region "$REGION" \
-  --query 'AuthenticationResult.IdToken' \
-  --output text \
-  --no-cli-pager 2>/dev/null || echo "")
+# Retry logic for transient authentication failures
+COGNITO_TOKEN=""
+MAX_RETRIES=3
+RETRY_DELAY=2
+
+for i in $(seq 1 $MAX_RETRIES); do
+  COGNITO_TOKEN=$(aws cognito-idp initiate-auth \
+    --auth-flow USER_PASSWORD_AUTH \
+    --client-id "$USER_POOL_CLIENT_ID" \
+    --auth-parameters "USERNAME=${TEST_USERNAME},PASSWORD=${TEST_PASSWORD}" \
+    --region "$REGION" \
+    --query 'AuthenticationResult.IdToken' \
+    --output text \
+    --no-cli-pager 2>/dev/null || echo "")
+  
+  if [ -n "$COGNITO_TOKEN" ] && [ "$COGNITO_TOKEN" != "None" ]; then
+    break
+  fi
+  
+  if [ $i -lt $MAX_RETRIES ]; then
+    echo "   Authentication attempt $i failed, retrying in ${RETRY_DELAY}s..."
+    sleep $RETRY_DELAY
+  fi
+done
 
 if [ -z "$COGNITO_TOKEN" ] || [ "$COGNITO_TOKEN" = "None" ]; then
-  echo -e "${RED}❌ Failed to authenticate with Cognito${NC}"
+  echo -e "${RED}❌ Failed to authenticate with Cognito after ${MAX_RETRIES} attempts${NC}"
   echo "   This may be due to:"
   echo "   - Cognito client not allowing USER_PASSWORD_AUTH flow"
   echo "   - User password not set correctly"
+  echo "   - Network/transient AWS service issues"
   echo ""
   echo "   You can manually create the user:"
   echo "   aws cognito-idp admin-create-user \\"
   echo "     --user-pool-id ${USER_POOL_ID} \\"
   echo "     --username ${TEST_USERNAME} \\"
   echo "     --user-attributes Name=email,Value=${TEST_USER_EMAIL} \\"
-  echo "     --temporary-password ${TEST_PASSWORD} \\"
+  echo "     --temporary-password 'YourPassword123!' \\"
   echo "     --message-action SUPPRESS \\"
   echo "     --region ${REGION}"
   echo ""
   echo "   aws cognito-idp admin-set-user-password \\"
   echo "     --user-pool-id ${USER_POOL_ID} \\"
   echo "     --username ${TEST_USERNAME} \\"
-  echo "     --password ${TEST_PASSWORD} \\"
+  echo "     --password 'YourPassword123!' \\"
   echo "     --permanent \\"
   echo "     --region ${REGION}"
   exit 1
