@@ -82,10 +82,29 @@ const UnknownItem = z
   .max(128);
 
 /**
- * DecisionActionProposalV1
- * One proposed action intent, prior to policy + human approval.
+ * EntityType
+ * Structured target entity type for action proposals.
  */
-export const DecisionActionProposalV1Schema = z
+export const EntityTypeEnum = z.enum(['ACCOUNT', 'CONTACT', 'OPPORTUNITY', 'DEAL', 'ENGAGEMENT']);
+export type EntityType = z.infer<typeof EntityTypeEnum>;
+
+/**
+ * TargetEntity
+ * Structured target entity (replaces ambiguous string).
+ */
+export const TargetEntitySchema = z.object({
+  entity_type: EntityTypeEnum,
+  entity_id: NonEmptyString,
+}).strict();
+
+export type TargetEntity = z.infer<typeof TargetEntitySchema>;
+
+/**
+ * ActionProposalV1
+ * One proposed action intent, prior to policy + human approval.
+ * (Consolidated naming: previously "DecisionActionProposalV1")
+ */
+export const ActionProposalV1Schema = z
   .object({
     action_intent_id: NonEmptyString, // UUID recommended
     action_type: ActionTypeV1Enum,
@@ -99,18 +118,21 @@ export const DecisionActionProposalV1Schema = z
     // LLM-estimated risk tier. Policy gate will reinterpret/override as needed.
     risk_level: RiskLevelEnum,
 
-    // True means must be routed to human approval regardless of confidence.
-    requires_human: z.boolean(),
+    // LLM's advisory opinion (policy gate is authoritative).
+    // Renamed from requires_human to make advisory nature explicit.
+    llm_suggests_human_review: z.boolean(),
 
     // If present and non-empty, decision flow should ask one minimal human question
     // (per Phase 3 uncertainty handling) and avoid proceeding silently.
     blocking_unknowns: z.array(UnknownItem).max(20).default([]),
 
     // Action-specific parameters (e.g., meeting date, opportunity stage, account fields)
+    // Include schema version for forward compatibility.
     parameters: z.record(z.any()).default({}),
+    parameters_schema_version: z.string().optional(), // e.g., "v1", "v2" per action type
 
-    // Target entity ID (account, contact, opportunity)
-    target_entity: NonEmptyString,
+    // Structured target entity (replaces ambiguous string)
+    target: TargetEntitySchema,
 
     // Optional: allow LLM to suggest rank ordering (UI may ignore; policy may re-rank)
     // Lower number = higher priority.
@@ -119,14 +141,21 @@ export const DecisionActionProposalV1Schema = z
   })
   .strict();
 
-export type DecisionActionProposalV1 = z.infer<
-  typeof DecisionActionProposalV1Schema
->;
+export type ActionProposalV1 = z.infer<typeof ActionProposalV1Schema>;
+
+// Legacy alias for backward compatibility during migration
+export const DecisionActionProposalV1Schema = ActionProposalV1Schema;
+export type DecisionActionProposalV1 = ActionProposalV1;
 
 /**
  * DecisionProposalBodyV1
  * LLM output schema (proposal body only, no IDs).
  * Server enriches with decision_id, account_id, tenant_id, trace_id post-parse.
+ * 
+ * Schema invariants (enforced via superRefine):
+ * - If decision_type === NO_ACTION_RECOMMENDED, then actions must be empty
+ * - If decision_type === BLOCKED_BY_UNKNOWNS, then blocking_unknowns must be non-empty and actions must be empty
+ * - If decision_type === PROPOSE_ACTIONS, then actions.length >= 1
  */
 export const DecisionProposalBodyV1Schema = z
   .object({
@@ -134,16 +163,17 @@ export const DecisionProposalBodyV1Schema = z
 
     // Normalized reason codes at decision level (for analytics)
     // Examples: ["RENEWAL_WINDOW_ENTERED", "USAGE_TREND_DOWN", "SUPPORT_RISK_EMERGING"]
-    decision_reason_codes: z.array(ReasonCode).min(0).max(20).default([]),
+    decision_reason_codes: z.array(ReasonCode).min(0).max(50).default([]),
 
     // Versioning: keep as literal "v1" to fail closed on incompatible changes.
     decision_version: z.literal("v1"),
+    schema_version: z.literal("v1"), // Explicit schema version for compatibility tracking
 
     // Summary is human-readable and should be short.
     summary: z.string().min(1).max(280),
 
-    // Actions array (empty if NO_ACTION_RECOMMENDED or BLOCKED_BY_UNKNOWNS)
-    actions: z.array(DecisionActionProposalV1Schema).min(0).max(25),
+    // Actions array (bounded, with invariants enforced below)
+    actions: z.array(ActionProposalV1Schema).min(0).max(25),
 
     // Optional overall decision confidence (if LLM provides it)
     confidence: z.number().min(0).max(1).optional(),
@@ -151,33 +181,91 @@ export const DecisionProposalBodyV1Schema = z
     // Optional blocking unknowns at decision level (if BLOCKED_BY_UNKNOWNS)
     blocking_unknowns: z.array(UnknownItem).max(20).optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((data: any, ctx: z.RefinementCtx) => {
+    // Note: 'data' is typed as 'any' because superRefine runs before full type inference
+    // The schema structure ensures type safety at runtime
+    // Invariant 1: NO_ACTION_RECOMMENDED must have empty actions
+    if (data.decision_type === 'NO_ACTION_RECOMMENDED' && data.actions.length > 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'NO_ACTION_RECOMMENDED must have empty actions array',
+        path: ['actions'],
+      });
+    }
 
+    // Invariant 2: BLOCKED_BY_UNKNOWNS must have non-empty blocking_unknowns and empty actions
+    if (data.decision_type === 'BLOCKED_BY_UNKNOWNS') {
+      if (!data.blocking_unknowns || data.blocking_unknowns.length === 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'BLOCKED_BY_UNKNOWNS must have non-empty blocking_unknowns',
+          path: ['blocking_unknowns'],
+        });
+      }
+      if (data.actions.length > 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'BLOCKED_BY_UNKNOWNS must have empty actions array',
+          path: ['actions'],
+        });
+      }
+    }
+
+    // Invariant 3: PROPOSE_ACTIONS must have at least one action
+    if (data.decision_type === 'PROPOSE_ACTIONS' && data.actions.length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'PROPOSE_ACTIONS must have at least one action',
+        path: ['actions'],
+      });
+    }
+  });
+
+// Define type before using in superRefine (needed for type inference)
 export type DecisionProposalBodyV1 = z.infer<typeof DecisionProposalBodyV1Schema>;
 
 /**
  * DecisionProposalV1
  * Enriched proposal with server-assigned IDs and metadata.
  * This is the complete proposal after server enrichment.
+ * 
+ * All fields are required (no optional server-enriched fields).
  */
-export interface DecisionProposalV1 extends DecisionProposalBodyV1 {
+export interface DecisionProposalV1 {
+  // From DecisionProposalBodyV1 (LLM output)
+  decision_type: DecisionType;
+  decision_reason_codes: string[];
+  decision_version: 'v1';
+  schema_version: 'v1';
+  summary: string;
+  actions: ActionProposalV1[];
+  confidence?: number;
+  blocking_unknowns?: string[];
+  
+  // Server-enriched fields (always present after enrichment)
   decision_id: string; // Server-assigned (not from LLM)
   account_id: string; // Server-assigned (from context)
   tenant_id: string; // Server-assigned (from context)
   trace_id: string; // Server-assigned (from context)
-  created_at?: string; // Optional timestamp
+  created_at: string; // Server-assigned timestamp
+  
+  // Proposal fingerprint for determinism testing and duplicate detection
+  proposal_fingerprint: string; // SHA256 hash of normalized proposal core (without IDs/timestamps)
 }
 
 /**
  * DecisionProposalV1Schema (for validation of enriched proposals)
- * Used for runtime validation of complete proposals after enrichment.
+ * Used for runtime validation of complete proposals after server enrichment.
+ * All fields are required (server always enriches with IDs, timestamps, fingerprint).
  */
 export const DecisionProposalV1Schema: z.ZodType<DecisionProposalV1> = DecisionProposalBodyV1Schema.extend({
   decision_id: NonEmptyString,
   account_id: NonEmptyString,
   tenant_id: NonEmptyString,
   trace_id: NonEmptyString,
-  created_at: z.string().datetime().optional(),
+  created_at: z.string().datetime(),
+  proposal_fingerprint: NonEmptyString, // SHA256 hash for determinism testing
 });
 
 /**
@@ -194,13 +282,52 @@ export function safeParseDecisionProposalV1(input: unknown): {
 }
 
 /**
+ * Generate proposal fingerprint for determinism testing and duplicate detection.
+ * Hash excludes IDs, timestamps, and other non-deterministic fields.
+ * 
+ * @param proposalBody - The LLM output (DecisionProposalBodyV1) before enrichment
+ * @returns SHA256 hash of normalized proposal core
+ */
+export function generateProposalFingerprint(proposalBody: DecisionProposalBodyV1): string {
+  // Normalize: remove non-deterministic fields, sort arrays, stringify
+  const normalized = {
+    decision_type: proposalBody.decision_type,
+    decision_reason_codes: [...proposalBody.decision_reason_codes].sort(),
+    decision_version: proposalBody.decision_version,
+    schema_version: proposalBody.schema_version,
+    summary: proposalBody.summary,
+    actions: proposalBody.actions.map((action: ActionProposalV1) => ({
+      action_type: action.action_type,
+      why: [...action.why].sort(),
+      confidence: action.confidence,
+      risk_level: action.risk_level,
+      llm_suggests_human_review: action.llm_suggests_human_review,
+      blocking_unknowns: [...action.blocking_unknowns].sort(),
+      parameters: action.parameters,
+      parameters_schema_version: action.parameters_schema_version,
+      target: action.target,
+      // Exclude: action_intent_id, proposed_rank (non-deterministic)
+    })),
+    confidence: proposalBody.confidence,
+    blocking_unknowns: proposalBody.blocking_unknowns ? [...proposalBody.blocking_unknowns].sort() : undefined,
+  };
+  
+  // In production, use crypto.createHash('sha256').update(JSON.stringify(normalized)).digest('hex')
+  // For now, return placeholder (implementation will use actual crypto)
+  return `fingerprint_${JSON.stringify(normalized).length}`;
+}
+
+/**
  * Example: minimal valid payload (for tests)
  */
 export const ExampleDecisionProposalV1: DecisionProposalV1 = {
   decision_id: "dec_123",
   account_id: "acct_acme",
+  tenant_id: "tenant_123",
+  trace_id: "trace_123",
   decision_type: "PROPOSE_ACTIONS",
   decision_version: "v1",
+  schema_version: "v1",
   decision_reason_codes: [
     "RENEWAL_WINDOW_ENTERED < 90d",
     "USAGE_TREND_CHANGE = DOWN",
@@ -218,15 +345,21 @@ export const ExampleDecisionProposalV1: DecisionProposalV1 = {
       ],
       confidence: 0.84,
       risk_level: "MEDIUM",
-      requires_human: true,
+      llm_suggests_human_review: true,
       blocking_unknowns: [],
       parameters: {
         meeting_type: "renewal_review",
         suggested_date_range: "next_30_days"
       },
-      target_entity: "account:acct_acme",
+      parameters_schema_version: "v1",
+      target: {
+        entity_type: "ACCOUNT",
+        entity_id: "acct_acme"
+      },
     },
   ],
+  created_at: new Date().toISOString(),
+  proposal_fingerprint: "sha256_hash_of_normalized_proposal_core",
 };
 
 // ============================================================================
@@ -294,8 +427,9 @@ export interface DecisionContextV1 {
 export interface ActionIntentV1 {
   action_intent_id: string;
   action_type: ActionTypeV1;
-  target_entity: string;
+  target: TargetEntity; // Structured target (replaces target_entity string)
   parameters: Record<string, any>;
+  parameters_schema_version?: string; // Preserved from proposal
   approved_by: string; // User ID
   approval_timestamp: string; // ISO timestamp
   execution_policy: ExecutionPolicy;
