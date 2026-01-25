@@ -284,8 +284,9 @@ export interface ActionIntentV1 {
   approval_timestamp: string; // ISO timestamp
   execution_policy: ExecutionPolicy;
   expires_at: string; // ISO timestamp
-  original_proposal_id: string; // Links to DecisionProposalV1
-  original_decision_id: string; // Links to DecisionContextV1
+  original_decision_id: string; // Links to DecisionProposalV1.decision_id (the decision that created this proposal)
+  original_proposal_id: string; // Same as original_decision_id (proposal_id == decision_id in our model)
+  supersedes_action_intent_id?: string; // If this intent was created by editing another, link to parent intent
   edited_fields: string[]; // Field names that were edited (if any)
   edited_by?: string; // User ID who edited (if edited)
   edited_at?: string; // Timestamp of edit (if edited)
@@ -307,6 +308,7 @@ export interface ExecutionPolicy {
 /**
  * PolicyEvaluationResult
  * Result of policy gate evaluation.
+ * Separates approval requirements from blocking reasons for clarity.
  */
 export interface PolicyEvaluationResult {
   action_intent_id: string;
@@ -314,7 +316,10 @@ export interface PolicyEvaluationResult {
   reason_codes: string[];
   confidence_threshold_met: boolean;
   risk_tier: 'HIGH' | 'MEDIUM' | 'LOW' | 'MINIMAL';
-  requires_human: boolean;
+  approval_required: boolean; // True if human approval is required (authoritative, from policy)
+  needs_human_input: boolean; // True if blocking unknowns require human question/input
+  blocked_reason?: string; // If BLOCKED, the reason (e.g., "CONFIDENCE_BELOW_THRESHOLD", "BLOCKING_UNKNOWNS_PRESENT")
+  llm_requires_human?: boolean; // LLM's advisory field (for reference, not authoritative)
 }
 
 /**

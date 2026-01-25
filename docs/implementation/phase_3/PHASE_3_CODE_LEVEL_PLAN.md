@@ -69,10 +69,10 @@
 **Purpose:** Define canonical decision types, action types, and decision contracts
 
 **Validation Approach:**
-* **Zod schemas** for `DecisionProposalV1` and `DecisionActionProposalV1` (LLM output validation - fail-closed)
-* **TypeScript interfaces** for internal types (`DecisionContextV1`, `ActionIntentV1`, etc.)
-* Zod provides runtime validation for untrusted LLM output
-* TypeScript interfaces provide compile-time safety for internal code
+* **Zod schemas are the source of truth** for `DecisionProposalV1` and `DecisionActionProposalV1`
+* **TypeScript types derive from Zod**: `export type DecisionProposalV1 = z.infer<typeof DecisionProposalV1Schema>`
+* This prevents schema/type drift and ensures validated objects are usable
+* TypeScript interfaces for internal types (`DecisionContextV1`, `ActionIntentV1`, etc.) - no runtime validation needed
 
 **Key Types:**
 
@@ -741,7 +741,7 @@ interface DecisionBudget {
 * Max 10 decisions per account per day
 * Max 100 decision units per account per month
 * Deep context fetches cost 2 units (standard decision = 1 unit)
-* Budget resets daily at midnight UTC
+* Budget resets daily at midnight UTC (documented in metrics/UI for clarity)
 
 **Acceptance Criteria:**
 * Budget checks are enforced before decision evaluation
@@ -807,8 +807,13 @@ export class DecisionSynthesisService {
       accept: 'application/json'
     }));
     
-    // Parse and validate response using Zod (fail-closed)
-    const responseBody = JSON.parse(new TextDecoder().decode(response.body));
+    // Parse Bedrock response (model-specific structure)
+    // Note: Bedrock responses may wrap content; parse the correct field based on model
+    // For Claude models: response.body is JSON with 'content' array
+    const rawResponse = JSON.parse(new TextDecoder().decode(response.body));
+    const responseBody = rawResponse.content?.[0]?.text 
+      ? JSON.parse(rawResponse.content[0].text) 
+      : rawResponse; // Fallback for direct JSON mode
     
     // Validate with Zod schema (throws on invalid)
     const proposal = DecisionProposalV1Schema.parse(responseBody);
@@ -1028,8 +1033,9 @@ export class PolicyGateService {
       }
     }
     
-    // Check for blocking unknowns
-    if (proposal.blocking_unknowns && proposal.blocking_unknowns.length > 0) {
+    // Check for blocking unknowns (requires human input, not approval)
+    const hasBlockingUnknowns = proposal.blocking_unknowns && proposal.blocking_unknowns.length > 0;
+    if (hasBlockingUnknowns) {
       evaluation = 'BLOCKED';
       reasonCodes.push('BLOCKING_UNKNOWNS_PRESENT');
     }
@@ -1040,13 +1046,20 @@ export class PolicyGateService {
       reasonCodes.push('CONFIDENCE_BELOW_THRESHOLD');
     }
     
+    // Determine approval and input requirements
+    const approvalRequired = evaluation === 'APPROVAL_REQUIRED';
+    const needsHumanInput = hasBlockingUnknowns; // Blocking unknowns need human question/input
+    
     return {
       action_intent_id: proposal.action_intent_id,
       evaluation,
       reason_codes: reasonCodes,
       confidence_threshold_met: confidenceThresholdMet,
       risk_tier: riskTier,
-      requires_human: evaluation === 'APPROVAL_REQUIRED' || evaluation === 'BLOCKED'
+      approval_required: approvalRequired, // Authoritative: policy requires approval
+      needs_human_input: needsHumanInput, // Blocking unknowns require human question
+      blocked_reason: evaluation === 'BLOCKED' ? reasonCodes[0] : undefined,
+      llm_requires_human: proposal.requires_human // LLM's advisory field (for reference)
     };
   }
   
@@ -1112,15 +1125,18 @@ export class ActionIntentService {
    * Create action intent from approved proposal
    */
   async createIntent(
-    proposal: ActionProposal,
-    decisionId: string,
+    proposal: DecisionActionProposalV1,
+    decisionId: string, // This is proposal.decision_id
     approvedBy: string,
+    tenantId: string,
+    accountId: string,
+    traceId: string,
     editedFields?: string[]
   ): Promise<ActionIntentV1> {
     const intent: ActionIntentV1 = {
       action_intent_id: proposal.action_intent_id,
       action_type: proposal.action_type,
-      target_entity: proposal.target_entity || `account:${proposal.account_id}`,
+      target_entity: proposal.target_entity,
       parameters: proposal.parameters,
       approved_by: approvedBy,
       approval_timestamp: new Date().toISOString(),
@@ -1130,27 +1146,25 @@ export class ActionIntentService {
         max_attempts: 1
       },
       expires_at: this.calculateExpiration(proposal.action_type),
-      original_proposal_id: decisionId,
-      original_decision_id: decisionId,
+      original_decision_id: decisionId, // Links to DecisionProposalV1.decision_id
+      original_proposal_id: decisionId, // Same as decision_id (proposal_id == decision_id in our model)
       edited_fields: editedFields || [],
       edited_by: editedFields && editedFields.length > 0 ? approvedBy : undefined,
       edited_at: editedFields && editedFields.length > 0 ? new Date().toISOString() : undefined,
-      tenant_id: proposal.tenant_id,
-      account_id: proposal.account_id,
-      trace_id: proposal.trace_id
+      tenant_id: tenantId,
+      account_id: accountId,
+      trace_id: traceId
     };
     
-    // Store in DynamoDB
-    await this.dynamoClient.send(new PutCommand({
-      TableName: this.intentTableName,
-      Item: intent
-    }));
+    // Store in DynamoDB with PK/SK pattern
+    await this.storeIntent(intent);
     
     return intent;
   }
   
   /**
    * Edit action intent (creates new intent with provenance)
+   * Original intent is preserved; new intent links to it via supersedes_action_intent_id
    */
   async editIntent(
     originalIntentId: string,
@@ -1174,27 +1188,29 @@ export class ActionIntentService {
     }
     
     // Validate locked fields are not edited
-    const lockedFields = ['action_type', 'original_proposal_id', 'original_decision_id'];
+    const lockedFields = ['action_type', 'original_proposal_id', 'original_decision_id', 'action_intent_id'];
     for (const field of lockedFields) {
       if (edits[field as keyof ActionIntentV1] !== undefined) {
         throw new Error(`Cannot edit locked field: ${field}`);
       }
     }
     
-    // Create new intent with edits
+    // Generate new action_intent_id for edited intent
+    const newActionIntentId = `ai_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+    
+    // Create new intent with edits (original preserved)
     const editedIntent: ActionIntentV1 = {
       ...original,
+      action_intent_id: newActionIntentId, // New ID
+      supersedes_action_intent_id: original.action_intent_id, // Link to parent
       ...edits,
       edited_fields: [...(original.edited_fields || []), ...editedFields],
       edited_by: editedBy,
       edited_at: new Date().toISOString()
     };
     
-    // Store as new intent (original preserved)
-    await this.dynamoClient.send(new PutCommand({
-      TableName: this.intentTableName,
-      Item: editedIntent
-    }));
+    // Store as new intent (original preserved) with PK/SK pattern
+    await this.storeIntent(editedIntent);
     
     return editedIntent;
   }
@@ -1232,15 +1248,43 @@ export class ActionIntentService {
     return expiration.toISOString();
   }
   
-  private async getIntent(intentId: string): Promise<ActionIntentV1 | null> {
-    const result = await this.dynamoClient.send(new GetCommand({
+  /**
+   * Get intent by action_intent_id (uses GSI)
+   */
+  private async getIntent(intentId: string, tenantId: string, accountId: string): Promise<ActionIntentV1 | null> {
+    // Use GSI for direct lookup
+    const result = await this.dynamoClient.send(new QueryCommand({
       TableName: this.intentTableName,
-      Key: {
-        action_intent_id: intentId
-      }
+      IndexName: 'action-intent-id-index',
+      KeyConditionExpression: 'action_intent_id = :intentId',
+      ExpressionAttributeValues: {
+        ':intentId': intentId
+      },
+      Limit: 1
     }));
     
-    return result.Item as ActionIntentV1 || null;
+    if (!result.Items || result.Items.length === 0) {
+      return null;
+    }
+    
+    return result.Items[0] as ActionIntentV1;
+  }
+  
+  /**
+   * Store intent with PK/SK pattern
+   */
+  private async storeIntent(intent: ActionIntentV1): Promise<void> {
+    const pk = `TENANT#${intent.tenant_id}#ACCOUNT#${intent.account_id}`;
+    const sk = `ACTION_INTENT#${intent.action_intent_id}`;
+    
+    await this.dynamoClient.send(new PutCommand({
+      TableName: this.intentTableName,
+      Item: {
+        ...intent,
+        pk,
+        sk
+      }
+    }));
   }
 }
 ```
@@ -1508,6 +1552,15 @@ export async function decisionTriggerHandler(event: EventBridgeEvent): Promise<v
   const triggerService = new DecisionTriggerService(...);
   const triggerType = inferTriggerType(envelope);
   
+  if (!triggerType) {
+    logger.warn('Unknown trigger event, blocking', { 
+      account_id, 
+      detailType: envelope.detailType,
+      source: envelope.source 
+    });
+    return; // Block unknown events
+  }
+  
   const triggerResult = await triggerService.shouldTriggerDecision(
     account_id,
     tenant_id,
@@ -1536,7 +1589,7 @@ export async function decisionTriggerHandler(event: EventBridgeEvent): Promise<v
   }));
 }
 
-function inferTriggerType(envelope: EventEnvelope): DecisionTriggerType {
+function inferTriggerType(envelope: EventEnvelope): DecisionTriggerType | null {
   if (envelope.detailType === 'LIFECYCLE_STATE_CHANGED') {
     return DecisionTriggerType.LIFECYCLE_TRANSITION;
   }
@@ -1554,7 +1607,13 @@ function inferTriggerType(envelope: EventEnvelope): DecisionTriggerType {
     }
   }
   
-  return DecisionTriggerType.COOLDOWN_GATED_PERIODIC;
+  // Only allow periodic triggers from scheduler events we control
+  if (envelope.source === 'cc-native.scheduler' && envelope.detailType === 'PERIODIC_DECISION_EVALUATION') {
+    return DecisionTriggerType.COOLDOWN_GATED_PERIODIC;
+  }
+  
+  // Unknown event - return null to block
+  return null;
 }
 ```
 
@@ -1677,15 +1736,23 @@ const decisionBudgetTable = new dynamodb.Table(this, 'DecisionBudgetTable', {
 });
 
 // Action Intent Table
+// Uses consistent PK/SK pattern for multi-tenant isolation
 const actionIntentTable = new dynamodb.Table(this, 'ActionIntentTable', {
   tableName: `cc-native-action-intent`,
-  partitionKey: { name: 'action_intent_id', type: dynamodb.AttributeType.STRING },
+  partitionKey: { name: 'pk', type: dynamodb.AttributeType.STRING }, // TENANT#{tenantId}#ACCOUNT#{accountId}
+  sortKey: { name: 'sk', type: dynamodb.AttributeType.STRING }, // ACTION_INTENT#{action_intent_id}
   billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
   pointInTimeRecovery: true,
   timeToLiveAttribute: 'expires_at'
 });
 
-// GSI: By account
+// GSI: By action_intent_id (for direct lookups)
+actionIntentTable.addGlobalSecondaryIndex({
+  indexName: 'action-intent-id-index',
+  partitionKey: { name: 'action_intent_id', type: dynamodb.AttributeType.STRING }
+});
+
+// GSI: By account (for listing intents by account)
 actionIntentTable.addGlobalSecondaryIndex({
   indexName: 'account-index',
   partitionKey: { name: 'account_id', type: dynamodb.AttributeType.STRING },
@@ -1825,12 +1892,18 @@ rejectResource.addMethod('POST', new apigateway.LambdaIntegration(decisionApiHan
 **File:** `src/tests/contract/phase3-certification.test.ts`
 
 **Contract Tests:**
-1. **Decision Determinism Test** - Same context → same proposal (ignoring timestamps)
-2. **Policy Determinism Test** - Same proposal → same policy result
+1. **Context Assembly Determinism Test** - Same inputs → same context (deterministic)
+2. **Policy Determinism Test** - Same proposal → same policy result (deterministic)
 3. **Budget Enforcement Test** - Budget exhaustion blocks evaluation
 4. **Trigger Cooldown Test** - Cooldown prevents decision storms
-5. **Edit Provenance Test** - Edited intents preserve original proposal
-6. **Schema Validation Test** - LLM output always conforms to schema
+5. **Edit Provenance Test** - Edited intents create new IDs and preserve original
+6. **Schema Validation Test** - LLM output always conforms to Zod schema
+7. **Schema Invariant Test** - LLM output respects invariants:
+   * No unknown keys (strict mode)
+   * Confidence in [0,1]
+   * Action types valid
+   * Bounded counts (actions max 25, why max 20)
+   * Decision type rules consistent (no actions if NO_ACTION_RECOMMENDED)
 
 **Acceptance Criteria:**
 * All unit tests pass
