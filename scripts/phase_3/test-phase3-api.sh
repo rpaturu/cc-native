@@ -75,8 +75,10 @@ if [ -z "$USER_POOL_ID" ] || [ -z "$USER_POOL_CLIENT_ID" ]; then
   exit 1
 fi
 
+# Set variables for use throughout script (including cleanup function)
 API_URL="$DECISION_API_URL"
 REGION="$AWS_REGION"
+USER_POOL_ID="$USER_POOL_ID"  # Ensure it's set for cleanup function
 
 # API Gateway authentication
 # When Cognito authorizer is configured, API Gateway REQUIRES Cognito JWT token
