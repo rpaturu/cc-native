@@ -262,6 +262,22 @@ echo ""
 
 echo -e "${GREEN}✅ Testing complete!${NC}"
 echo ""
+
+# Cleanup: Remove test user
+echo "🧹 Cleaning up test user..."
+aws cognito-idp admin-delete-user \
+  --user-pool-id "$USER_POOL_ID" \
+  --username "$TEST_USERNAME" \
+  --region "$REGION" \
+  --no-cli-pager > /dev/null 2>&1
+
+if [ $? -eq 0 ]; then
+  echo -e "${GREEN}✅ Test user removed${NC}"
+else
+  echo -e "${YELLOW}⚠️  Could not remove test user (may not exist or already deleted)${NC}"
+fi
+echo ""
+
 echo "📊 Next Steps:"
 echo "   1. Check CloudWatch Logs for decision evaluation handler"
 echo "   2. Verify decision proposal in DynamoDB table"
