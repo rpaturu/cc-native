@@ -1019,13 +1019,12 @@ export class PolicyGateService {
         evaluation: 'BLOCKED',
         reason_codes: ['UNKNOWN_ACTION_TYPE'],
         confidence_threshold_met: false,
-        risk_tier: 'HIGH',
+        policy_risk_tier: 'HIGH',
         approval_required: false,
         needs_human_input: false,
         blocked_reason: 'UNKNOWN_ACTION_TYPE',
-        llm_requires_human: proposal.llm_suggests_human_review,
-        llm_risk_level: proposal.risk_level,
-        policy_risk_tier: 'HIGH'
+        llm_suggests_human_review: proposal.llm_suggests_human_review,
+        llm_risk_level: proposal.risk_level
       };
     }
     
@@ -1037,13 +1036,12 @@ export class PolicyGateService {
         evaluation: 'BLOCKED',
         reason_codes: ['BLOCKING_UNKNOWNS_PRESENT'],
         confidence_threshold_met: false,
-        risk_tier: actionPermission.risk_tier,
+        policy_risk_tier: actionPermission.risk_tier,
         approval_required: false,
         needs_human_input: true, // Blocking unknowns require human question/input
         blocked_reason: 'BLOCKING_UNKNOWNS_PRESENT',
-        llm_requires_human: proposal.llm_suggests_human_review,
-        llm_risk_level: proposal.risk_level,
-        policy_risk_tier: actionPermission.risk_tier
+        llm_suggests_human_review: proposal.llm_suggests_human_review,
+        llm_risk_level: proposal.risk_level
       };
     }
     
@@ -1098,13 +1096,12 @@ export class PolicyGateService {
       evaluation,
       reason_codes: reasonCodes,
       confidence_threshold_met: confidenceThresholdMet,
-      risk_tier: riskTier,
+      policy_risk_tier: riskTier, // Authoritative policy risk tier
       approval_required: approvalRequired, // Authoritative: policy requires approval
       needs_human_input: false, // No blocking unknowns at this point
       blocked_reason: evaluation === 'BLOCKED' ? reasonCodes[0] : undefined,
-      llm_requires_human: proposal.llm_suggests_human_review, // LLM's advisory field (for reference)
-      llm_risk_level: proposal.risk_level, // LLM's risk estimate (for reference)
-      policy_risk_tier: riskTier // Authoritative policy risk tier
+      llm_suggests_human_review: proposal.llm_suggests_human_review, // LLM's advisory field (for reference)
+      llm_risk_level: proposal.risk_level // LLM's risk estimate (for reference)
     };
   }
   

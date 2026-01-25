@@ -11,6 +11,8 @@
 
 import { z } from "zod";
 import { createHash } from "crypto";
+import { LifecycleState, Signal } from './SignalTypes';
+import { AccountPostureStateV1, RiskFactorV1, OpportunityV1, UnknownV1 } from './PostureTypes';
 
 /**
  * ActionTypeV1
@@ -265,41 +267,21 @@ export const DecisionProposalBodyV1Schema = DecisionProposalBodyV1BaseSchema.sup
 export type DecisionProposalBodyV1 = z.infer<typeof DecisionProposalBodyV1Schema>;
 
 /**
- * DecisionProposalV1
- * Enriched proposal with server-assigned IDs and metadata.
- * This is the complete proposal after server enrichment.
- * 
- * All fields are required (no optional server-enriched fields).
- */
-export interface DecisionProposalV1 {
-  // From DecisionProposalBodyV1 (LLM output)
-  decision_type: DecisionType;
-  decision_reason_codes: ReasonCode[]; // Use Zod-inferred type for consistency
-  decision_version: 'v1';
-  schema_version: 'v1';
-  summary: string;
-  actions: ActionProposalV1[];
-  confidence?: number;
-  blocking_unknowns?: UnknownItem[]; // Use Zod-inferred type for consistency
-  
-  // Server-enriched fields (always present after enrichment)
-  decision_id: string; // Server-assigned (not from LLM)
-  account_id: string; // Server-assigned (from context)
-  tenant_id: string; // Server-assigned (from context)
-  trace_id: string; // Server-assigned (from context)
-  created_at: string; // Server-assigned timestamp
-  
-  // Proposal fingerprint for determinism testing and duplicate detection
-  proposal_fingerprint: string; // SHA256 hash of normalized proposal core (without IDs/timestamps)
-}
-
-/**
  * DecisionProposalV1Schema (for validation of enriched proposals)
  * Used for runtime validation of complete proposals after server enrichment.
  * All fields are required (server always enriches with IDs, timestamps, fingerprint).
  * 
  * Note: We extend the base schema (before superRefine) to add server-enriched fields,
  * then apply the same invariants.
+ * 
+ * Field documentation:
+ * - Server-enriched fields (always present after enrichment):
+ *   - decision_id: Server-assigned (not from LLM)
+ *   - account_id: Server-assigned (from context)
+ *   - tenant_id: Server-assigned (from context)
+ *   - trace_id: Server-assigned (from context)
+ *   - created_at: Server-assigned timestamp (ISO 8601)
+ *   - proposal_fingerprint: SHA256 hash of normalized proposal core (without IDs/timestamps)
  */
 export const DecisionProposalV1Schema = DecisionProposalBodyV1BaseSchema.extend({
   decision_id: NonEmptyString,
@@ -308,7 +290,17 @@ export const DecisionProposalV1Schema = DecisionProposalBodyV1BaseSchema.extend(
   trace_id: NonEmptyString,
   created_at: z.string().datetime(),
   proposal_fingerprint: NonEmptyString, // SHA256 hash for determinism testing
-}).superRefine(validateDecisionInvariants) as z.ZodType<DecisionProposalV1>;
+}).superRefine(validateDecisionInvariants);
+
+/**
+ * DecisionProposalV1
+ * Enriched proposal with server-assigned IDs and metadata.
+ * This is the complete proposal after server enrichment.
+ * 
+ * Type is derived from Zod schema to prevent drift.
+ * All fields are required (no optional server-enriched fields).
+ */
+export type DecisionProposalV1 = z.infer<typeof DecisionProposalV1Schema>;
 
 /**
  * Safe parse helper (non-throwing)
@@ -324,19 +316,20 @@ export function safeParseDecisionProposalV1(input: unknown): {
 }
 
 /**
- * Canonicalize an object by deep-sorting all keys recursively.
+ * Canonicalize an object by sorting object keys recursively.
+ * Preserves array order (arrays are not sorted - order may matter).
  * Ensures stable JSON serialization for fingerprinting.
+ * 
+ * Rule: Sort object keys, never sort arrays (unless explicitly declared as unordered).
  */
 function canonicalizeObject(obj: any): any {
   if (obj === null || obj === undefined) {
     return obj;
   }
   if (Array.isArray(obj)) {
-    return obj.map(canonicalizeObject).sort((a, b) => {
-      const aStr = JSON.stringify(a);
-      const bStr = JSON.stringify(b);
-      return aStr < bStr ? -1 : aStr > bStr ? 1 : 0;
-    });
+    // Preserve array order - do not sort arrays in parameters
+    // Arrays may contain ordered data (agenda items, step sequences, etc.)
+    return obj.map(canonicalizeObject);
   }
   if (typeof obj === 'object') {
     const sorted: Record<string, any> = {};
@@ -453,9 +446,6 @@ export const ExampleDecisionProposalV1: DecisionProposalV1 = {
 // These are used internally and don't require runtime validation.
 // ============================================================================
 
-import { LifecycleState, Signal } from './SignalTypes';
-import { AccountPostureStateV1, RiskFactorV1, OpportunityV1, UnknownV1 } from './PostureTypes';
-
 /**
  * GraphContextRef
  * Reference to a graph vertex with bounded depth.
@@ -570,13 +560,12 @@ export interface PolicyEvaluationResult {
   evaluation: 'ALLOWED' | 'BLOCKED' | 'APPROVAL_REQUIRED';
   reason_codes: string[];
   confidence_threshold_met: boolean;
-  risk_tier: 'HIGH' | 'MEDIUM' | 'LOW' | 'MINIMAL'; // Authoritative policy risk tier
+  policy_risk_tier: 'HIGH' | 'MEDIUM' | 'LOW' | 'MINIMAL'; // Authoritative policy risk tier
   approval_required: boolean; // True if human approval is required (authoritative, from policy)
   needs_human_input: boolean; // True if blocking unknowns require human question/input
   blocked_reason?: string; // If BLOCKED, the reason (e.g., "CONFIDENCE_BELOW_THRESHOLD", "BLOCKING_UNKNOWNS_PRESENT")
-  llm_requires_human?: boolean; // LLM's advisory field (for reference, not authoritative)
+  llm_suggests_human_review?: boolean; // LLM's advisory field (for reference, not authoritative)
   llm_risk_level?: RiskLevel; // LLM's risk estimate (for reference, not authoritative)
-  policy_risk_tier: 'HIGH' | 'MEDIUM' | 'LOW' | 'MINIMAL'; // Authoritative policy risk tier (same as risk_tier, explicit for clarity)
 }
 
 /**
