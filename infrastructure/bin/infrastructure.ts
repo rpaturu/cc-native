@@ -7,7 +7,8 @@ const app = new cdk.App();
 
 new CCNativeStack(app, 'CCNativeStack', {
   env: {
-    account: process.env.CDK_DEFAULT_ACCOUNT,
-    region: process.env.CDK_DEFAULT_REGION || 'us-west-2',
+    // Use AWS_ACCOUNT_ID from .env.local if CDK_DEFAULT_ACCOUNT is not set
+    account: process.env.CDK_DEFAULT_ACCOUNT || process.env.AWS_ACCOUNT_ID,
+    region: process.env.CDK_DEFAULT_REGION || process.env.AWS_REGION || 'us-west-2',
   },
 });

@@ -1,0 +1,1628 @@
+{
+  "version": "48.0.0",
+  "artifacts": {
+    "CCNativeStack.assets": {
+      "type": "cdk:asset-manifest",
+      "properties": {
+        "file": "CCNativeStack.assets.json",
+        "requiresBootstrapStackVersion": 6,
+        "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version"
+      }
+    },
+    "CCNativeStack": {
+      "type": "aws:cloudformation:stack",
+      "environment": "aws://661268174397/us-west-2",
+      "properties": {
+        "templateFile": "CCNativeStack.template.json",
+        "terminationProtection": false,
+        "validateOnSynth": false,
+        "assumeRoleArn": "arn:${AWS::Partition}:iam::661268174397:role/cdk-hnb659fds-deploy-role-661268174397-us-west-2",
+        "cloudFormationExecutionRoleArn": "arn:${AWS::Partition}:iam::661268174397:role/cdk-hnb659fds-cfn-exec-role-661268174397-us-west-2",
+        "stackTemplateAssetObjectUrl": "s3://cdk-hnb659fds-assets-661268174397-us-west-2/4b4610e1ec9519b1965532d654696a2b90f3b30106486f3d09ff948d47c5f018.json",
+        "requiresBootstrapStackVersion": 6,
+        "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version",
+        "additionalDependencies": [
+          "CCNativeStack.assets"
+        ],
+        "lookupRole": {
+          "arn": "arn:${AWS::Partition}:iam::661268174397:role/cdk-hnb659fds-lookup-role-661268174397-us-west-2",
+          "requiresBootstrapStackVersion": 8,
+          "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version"
+        }
+      },
+      "dependencies": [
+        "CCNativeStack.assets"
+      ],
+      "metadata": {
+        "/CCNativeStack/EvidenceLedgerBucket/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "EvidenceLedgerBucket3A5BFB25"
+          }
+        ],
+        "/CCNativeStack/EvidenceLedgerBucket/Policy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "EvidenceLedgerBucketPolicyE4997D34"
+          }
+        ],
+        "/CCNativeStack/WorldStateSnapshotsBucket/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "WorldStateSnapshotsBucket7B77A435"
+          }
+        ],
+        "/CCNativeStack/WorldStateSnapshotsBucket/Policy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "WorldStateSnapshotsBucketPolicy37D77781"
+          }
+        ],
+        "/CCNativeStack/SchemaRegistryBucket/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SchemaRegistryBucketAD895CE8"
+          }
+        ],
+        "/CCNativeStack/SchemaRegistryBucket/Policy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SchemaRegistryBucketPolicyF79BCF0C"
+          }
+        ],
+        "/CCNativeStack/ArtifactsBucket/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ArtifactsBucket2AAC5544"
+          }
+        ],
+        "/CCNativeStack/ArtifactsBucket/Policy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ArtifactsBucketPolicy852CB646"
+          }
+        ],
+        "/CCNativeStack/LedgerArchivesBucket/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "LedgerArchivesBucket5FE74194"
+          }
+        ],
+        "/CCNativeStack/LedgerArchivesBucket/Policy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "LedgerArchivesBucketPolicy042BE1F6"
+          }
+        ],
+        "/CCNativeStack/WorldStateTable": [
+          {
+            "type": "aws:cdk:hasPhysicalName",
+            "data": {
+              "Ref": "WorldStateTableD92FBF82"
+            }
+          }
+        ],
+        "/CCNativeStack/WorldStateTable/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "WorldStateTableD92FBF82"
+          }
+        ],
+        "/CCNativeStack/EvidenceIndexTable": [
+          {
+            "type": "aws:cdk:hasPhysicalName",
+            "data": {
+              "Ref": "EvidenceIndexTableCC0C8C88"
+            }
+          }
+        ],
+        "/CCNativeStack/EvidenceIndexTable/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "EvidenceIndexTableCC0C8C88"
+          }
+        ],
+        "/CCNativeStack/SnapshotsIndexTable": [
+          {
+            "type": "aws:cdk:hasPhysicalName",
+            "data": {
+              "Ref": "SnapshotsIndexTable28F25CBB"
+            }
+          }
+        ],
+        "/CCNativeStack/SnapshotsIndexTable/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SnapshotsIndexTable28F25CBB"
+          }
+        ],
+        "/CCNativeStack/SchemaRegistryTable": [
+          {
+            "type": "aws:cdk:hasPhysicalName",
+            "data": {
+              "Ref": "SchemaRegistryTableD1184F6E"
+            }
+          }
+        ],
+        "/CCNativeStack/SchemaRegistryTable/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SchemaRegistryTableD1184F6E"
+          }
+        ],
+        "/CCNativeStack/CriticalFieldRegistryTable": [
+          {
+            "type": "aws:cdk:hasPhysicalName",
+            "data": {
+              "Ref": "CriticalFieldRegistryTable5513C5F7"
+            }
+          }
+        ],
+        "/CCNativeStack/CriticalFieldRegistryTable/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CriticalFieldRegistryTable5513C5F7"
+          }
+        ],
+        "/CCNativeStack/AccountsTable": [
+          {
+            "type": "aws:cdk:hasPhysicalName",
+            "data": {
+              "Ref": "AccountsTable81C15AE5"
+            }
+          }
+        ],
+        "/CCNativeStack/AccountsTable/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AccountsTable81C15AE5"
+          }
+        ],
+        "/CCNativeStack/SignalsTable": [
+          {
+            "type": "aws:cdk:hasPhysicalName",
+            "data": {
+              "Ref": "SignalsTableE8D63F6D"
+            }
+          }
+        ],
+        "/CCNativeStack/SignalsTable/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SignalsTableE8D63F6D"
+          }
+        ],
+        "/CCNativeStack/ToolRunsTable": [
+          {
+            "type": "aws:cdk:hasPhysicalName",
+            "data": {
+              "Ref": "ToolRunsTableEF3E8A61"
+            }
+          }
+        ],
+        "/CCNativeStack/ToolRunsTable/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ToolRunsTableEF3E8A61"
+          }
+        ],
+        "/CCNativeStack/ApprovalRequestsTable": [
+          {
+            "type": "aws:cdk:hasPhysicalName",
+            "data": {
+              "Ref": "ApprovalRequestsTableEACE774C"
+            }
+          }
+        ],
+        "/CCNativeStack/ApprovalRequestsTable/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApprovalRequestsTableEACE774C"
+          }
+        ],
+        "/CCNativeStack/ActionQueueTable": [
+          {
+            "type": "aws:cdk:hasPhysicalName",
+            "data": {
+              "Ref": "ActionQueueTable5BA20E48"
+            }
+          }
+        ],
+        "/CCNativeStack/ActionQueueTable/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ActionQueueTable5BA20E48"
+          }
+        ],
+        "/CCNativeStack/PolicyConfigTable": [
+          {
+            "type": "aws:cdk:hasPhysicalName",
+            "data": {
+              "Ref": "PolicyConfigTableE9468135"
+            }
+          }
+        ],
+        "/CCNativeStack/PolicyConfigTable/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "PolicyConfigTableE9468135"
+          }
+        ],
+        "/CCNativeStack/LedgerTable": [
+          {
+            "type": "aws:cdk:hasPhysicalName",
+            "data": {
+              "Ref": "LedgerTable38A58B60"
+            }
+          }
+        ],
+        "/CCNativeStack/LedgerTable/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "LedgerTable38A58B60"
+          }
+        ],
+        "/CCNativeStack/CacheTable": [
+          {
+            "type": "aws:cdk:hasPhysicalName",
+            "data": {
+              "Ref": "CacheTableC1E6DF7E"
+            }
+          }
+        ],
+        "/CCNativeStack/CacheTable/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CacheTableC1E6DF7E"
+          }
+        ],
+        "/CCNativeStack/TenantsTable": [
+          {
+            "type": "aws:cdk:hasPhysicalName",
+            "data": {
+              "Ref": "TenantsTableB701DC57"
+            }
+          }
+        ],
+        "/CCNativeStack/TenantsTable/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "TenantsTableB701DC57"
+          }
+        ],
+        "/CCNativeStack/MethodologyTable": [
+          {
+            "type": "aws:cdk:hasPhysicalName",
+            "data": {
+              "Ref": "MethodologyTable8F16BBDE"
+            }
+          }
+        ],
+        "/CCNativeStack/MethodologyTable/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "MethodologyTable8F16BBDE"
+          }
+        ],
+        "/CCNativeStack/AssessmentTable": [
+          {
+            "type": "aws:cdk:hasPhysicalName",
+            "data": {
+              "Ref": "AssessmentTable25EB317A"
+            }
+          }
+        ],
+        "/CCNativeStack/AssessmentTable/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AssessmentTable25EB317A"
+          }
+        ],
+        "/CCNativeStack/IdentitiesTable": [
+          {
+            "type": "aws:cdk:hasPhysicalName",
+            "data": {
+              "Ref": "IdentitiesTableCD62DAD4"
+            }
+          }
+        ],
+        "/CCNativeStack/IdentitiesTable/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "IdentitiesTableCD62DAD4"
+          }
+        ],
+        "/CCNativeStack/CCNativeEventBus/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CCNativeEventBus892049F2"
+          }
+        ],
+        "/CCNativeStack/TenantEncryptionKey/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "TenantEncryptionKey1880BF35"
+          }
+        ],
+        "/CCNativeStack/AgentRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AgentRoleF4A42D6B"
+          }
+        ],
+        "/CCNativeStack/AgentRole/DefaultPolicy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AgentRoleDefaultPolicy1027F5D2"
+          }
+        ],
+        "/CCNativeStack/UserPool/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "UserPool6BA7E5F2"
+          }
+        ],
+        "/CCNativeStack/UserPool/WebClient/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "UserPoolWebClient4C9370B0"
+          }
+        ],
+        "/CCNativeStack/NeptuneInfrastructure/CCNativeVpc/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "NeptuneInfrastructureCCNativeVpc9CABA391"
+          }
+        ],
+        "/CCNativeStack/NeptuneInfrastructure/CCNativeVpc/NeptuneIsolatedSubnet1/Subnet": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "NeptuneInfrastructureCCNativeVpcNeptuneIsolatedSubnet1SubnetA7BEE99D"
+          }
+        ],
+        "/CCNativeStack/NeptuneInfrastructure/CCNativeVpc/NeptuneIsolatedSubnet1/RouteTable": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "NeptuneInfrastructureCCNativeVpcNeptuneIsolatedSubnet1RouteTable23335C61"
+          }
+        ],
+        "/CCNativeStack/NeptuneInfrastructure/CCNativeVpc/NeptuneIsolatedSubnet1/RouteTableAssociation": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "NeptuneInfrastructureCCNativeVpcNeptuneIsolatedSubnet1RouteTableAssociation9F6FC58C"
+          }
+        ],
+        "/CCNativeStack/NeptuneInfrastructure/CCNativeVpc/NeptuneIsolatedSubnet2/Subnet": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "NeptuneInfrastructureCCNativeVpcNeptuneIsolatedSubnet2SubnetD9369810"
+          }
+        ],
+        "/CCNativeStack/NeptuneInfrastructure/CCNativeVpc/NeptuneIsolatedSubnet2/RouteTable": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "NeptuneInfrastructureCCNativeVpcNeptuneIsolatedSubnet2RouteTable41D2F6EF"
+          }
+        ],
+        "/CCNativeStack/NeptuneInfrastructure/CCNativeVpc/NeptuneIsolatedSubnet2/RouteTableAssociation": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "NeptuneInfrastructureCCNativeVpcNeptuneIsolatedSubnet2RouteTableAssociationB0458231"
+          }
+        ],
+        "/CCNativeStack/NeptuneInfrastructure/CCNativeVpc/RestrictDefaultSecurityGroupCustomResource/Default": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "NeptuneInfrastructureCCNativeVpcRestrictDefaultSecurityGroupCustomResource617E4544"
+          }
+        ],
+        "/CCNativeStack/NeptuneInfrastructure/VPCFlowLogGroup/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "VPCFlowLogGroup"
+          }
+        ],
+        "/CCNativeStack/NeptuneInfrastructure/VPCFlowLogRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "NeptuneInfrastructureVPCFlowLogRole52BBBE1D"
+          }
+        ],
+        "/CCNativeStack/NeptuneInfrastructure/VPCFlowLogRole/DefaultPolicy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "NeptuneInfrastructureVPCFlowLogRoleDefaultPolicy402D435E"
+          }
+        ],
+        "/CCNativeStack/NeptuneInfrastructure/VPCFlowLog/FlowLog": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "NeptuneInfrastructureVPCFlowLogE91936D4"
+          }
+        ],
+        "/CCNativeStack/NeptuneInfrastructure/NeptuneAuditLogGroup/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "NeptuneAuditLogGroup"
+          }
+        ],
+        "/CCNativeStack/NeptuneInfrastructure/NeptuneLogsRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "NeptuneInfrastructureNeptuneLogsRole6C0E7822"
+          }
+        ],
+        "/CCNativeStack/NeptuneInfrastructure/NeptuneLogsRole/DefaultPolicy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "NeptuneInfrastructureNeptuneLogsRoleDefaultPolicyB8D02316"
+          }
+        ],
+        "/CCNativeStack/NeptuneInfrastructure/NeptuneSecurityGroup/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "NeptuneInfrastructureNeptuneSecurityGroup4DAE2150"
+          }
+        ],
+        "/CCNativeStack/NeptuneInfrastructure/NeptuneSecurityGroup/from CCNativeStackNeptuneInfrastructureGraphMaterializerSecurityGroup2826C302:8182": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "NeptuneInfrastructureNeptuneSecurityGroupfromCCNativeStackNeptuneInfrastructureGraphMaterializerSecurityGroup2826C302818277890D32"
+          }
+        ],
+        "/CCNativeStack/NeptuneInfrastructure/NeptuneSecurityGroup/from CCNativeStackNeptuneInfrastructureSynthesisEngineSecurityGroup3BB6D47F:8182": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "NeptuneInfrastructureNeptuneSecurityGroupfromCCNativeStackNeptuneInfrastructureSynthesisEngineSecurityGroup3BB6D47F8182C918F650"
+          }
+        ],
+        "/CCNativeStack/NeptuneInfrastructure/GraphMaterializerSecurityGroup/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "NeptuneInfrastructureGraphMaterializerSecurityGroupE324FDAD"
+          }
+        ],
+        "/CCNativeStack/NeptuneInfrastructure/GraphMaterializerSecurityGroup/to CCNativeStackNeptuneInfrastructureNeptuneSecurityGroup570D658A:8182": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "NeptuneInfrastructureGraphMaterializerSecurityGrouptoCCNativeStackNeptuneInfrastructureNeptuneSecurityGroup570D658A81821AAE957F"
+          }
+        ],
+        "/CCNativeStack/NeptuneInfrastructure/SynthesisEngineSecurityGroup/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "NeptuneInfrastructureSynthesisEngineSecurityGroup862BB426"
+          }
+        ],
+        "/CCNativeStack/NeptuneInfrastructure/SynthesisEngineSecurityGroup/to CCNativeStackNeptuneInfrastructureNeptuneSecurityGroup570D658A:8182": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "NeptuneInfrastructureSynthesisEngineSecurityGrouptoCCNativeStackNeptuneInfrastructureNeptuneSecurityGroup570D658A8182B1C69328"
+          }
+        ],
+        "/CCNativeStack/NeptuneInfrastructure/NeptuneSubnetGroup": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "NeptuneInfrastructureNeptuneSubnetGroup829B75F7"
+          }
+        ],
+        "/CCNativeStack/NeptuneInfrastructure/NeptuneParameterGroup": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "NeptuneInfrastructureNeptuneParameterGroupB1C5FC2E"
+          }
+        ],
+        "/CCNativeStack/NeptuneInfrastructure/NeptuneCluster": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "NeptuneInfrastructureNeptuneCluster6F50D8EC"
+          }
+        ],
+        "/CCNativeStack/NeptuneInfrastructure/NeptuneInstance": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "NeptuneInfrastructureNeptuneInstance4C2DEC15"
+          }
+        ],
+        "/CCNativeStack/NeptuneInfrastructure/NeptuneAccessRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "NeptuneInfrastructureNeptuneAccessRole3BE029B3"
+          }
+        ],
+        "/CCNativeStack/NeptuneInfrastructure/NeptuneAccessRole/DefaultPolicy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "NeptuneInfrastructureNeptuneAccessRoleDefaultPolicy70BE82DD"
+          }
+        ],
+        "/CCNativeStack/NeptuneInfrastructure/SSMEndpoint/SecurityGroup/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "NeptuneInfrastructureSSMEndpointSecurityGroup5899AF6F"
+          }
+        ],
+        "/CCNativeStack/NeptuneInfrastructure/SSMEndpoint/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "NeptuneInfrastructureSSMEndpoint4E59F374"
+          }
+        ],
+        "/CCNativeStack/NeptuneInfrastructure/SSMMessagesEndpoint/SecurityGroup/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "NeptuneInfrastructureSSMMessagesEndpointSecurityGroup8DF937A8"
+          }
+        ],
+        "/CCNativeStack/NeptuneInfrastructure/SSMMessagesEndpoint/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "NeptuneInfrastructureSSMMessagesEndpointDC0D55D0"
+          }
+        ],
+        "/CCNativeStack/NeptuneInfrastructure/EC2MessagesEndpoint/SecurityGroup/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "NeptuneInfrastructureEC2MessagesEndpointSecurityGroupDE1907F7"
+          }
+        ],
+        "/CCNativeStack/NeptuneInfrastructure/EC2MessagesEndpoint/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "NeptuneInfrastructureEC2MessagesEndpoint7625F63B"
+          }
+        ],
+        "/CCNativeStack/NeptuneInfrastructure/S3Endpoint/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "NeptuneInfrastructureS3Endpoint8E3AD8A7"
+          }
+        ],
+        "/CCNativeStack/NeptuneInfrastructure/DynamoDBEndpoint/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "NeptuneInfrastructureDynamoDBEndpoint4D439FBD"
+          }
+        ],
+        "/CCNativeStack/NeptuneInfrastructure/EventBridgeEndpoint/SecurityGroup/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "NeptuneInfrastructureEventBridgeEndpointSecurityGroup4236C4D5"
+          }
+        ],
+        "/CCNativeStack/NeptuneInfrastructure/EventBridgeEndpoint/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "NeptuneInfrastructureEventBridgeEndpoint7FA73CBF"
+          }
+        ],
+        "/CCNativeStack/NeptuneInfrastructure/CloudWatchLogsEndpoint/SecurityGroup/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "NeptuneInfrastructureCloudWatchLogsEndpointSecurityGroupF0AB1F65"
+          }
+        ],
+        "/CCNativeStack/NeptuneInfrastructure/CloudWatchLogsEndpoint/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "NeptuneInfrastructureCloudWatchLogsEndpoint6ED07965"
+          }
+        ],
+        "/CCNativeStack/Custom::VpcRestrictDefaultSGCustomResourceProvider": [
+          {
+            "type": "aws:cdk:is-custom-resource-handler-customResourceProvider",
+            "data": true
+          }
+        ],
+        "/CCNativeStack/Custom::VpcRestrictDefaultSGCustomResourceProvider/Role": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CustomVpcRestrictDefaultSGCustomResourceProviderRole26592FE0"
+          }
+        ],
+        "/CCNativeStack/Custom::VpcRestrictDefaultSGCustomResourceProvider/Handler": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CustomVpcRestrictDefaultSGCustomResourceProviderHandlerDC833E5E"
+          }
+        ],
+        "/CCNativeStack/GraphIntelligenceHandlers/AccountPostureStateTable": [
+          {
+            "type": "aws:cdk:hasPhysicalName",
+            "data": {
+              "Ref": "AccountPostureStateTable"
+            }
+          }
+        ],
+        "/CCNativeStack/GraphIntelligenceHandlers/AccountPostureStateTable/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AccountPostureStateTable"
+          }
+        ],
+        "/CCNativeStack/GraphIntelligenceHandlers/GraphMaterializationStatusTable": [
+          {
+            "type": "aws:cdk:hasPhysicalName",
+            "data": {
+              "Ref": "GraphMaterializationStatusTable"
+            }
+          }
+        ],
+        "/CCNativeStack/GraphIntelligenceHandlers/GraphMaterializationStatusTable/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "GraphMaterializationStatusTable"
+          }
+        ],
+        "/CCNativeStack/GraphIntelligenceHandlers/GraphMaterializerDlq/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "GraphIntelligenceHandlersGraphMaterializerDlq875ECC3E"
+          }
+        ],
+        "/CCNativeStack/GraphIntelligenceHandlers/GraphMaterializerDlq/Policy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "GraphIntelligenceHandlersGraphMaterializerDlqPolicy9E1EF859"
+          }
+        ],
+        "/CCNativeStack/GraphIntelligenceHandlers/SynthesisEngineDlq/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "GraphIntelligenceHandlersSynthesisEngineDlq0BCDE437"
+          }
+        ],
+        "/CCNativeStack/GraphIntelligenceHandlers/SynthesisEngineDlq/Policy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "GraphIntelligenceHandlersSynthesisEngineDlqPolicy0E00FC4C"
+          }
+        ],
+        "/CCNativeStack/GraphIntelligenceHandlers/GraphMaterializerRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "GraphIntelligenceHandlersGraphMaterializerRole864DFE90"
+          }
+        ],
+        "/CCNativeStack/GraphIntelligenceHandlers/GraphMaterializerRole/DefaultPolicy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "GraphIntelligenceHandlersGraphMaterializerRoleDefaultPolicy29F61D7F"
+          }
+        ],
+        "/CCNativeStack/GraphIntelligenceHandlers/SynthesisEngineRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "GraphIntelligenceHandlersSynthesisEngineRole23D96DDD"
+          }
+        ],
+        "/CCNativeStack/GraphIntelligenceHandlers/SynthesisEngineRole/DefaultPolicy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "GraphIntelligenceHandlersSynthesisEngineRoleDefaultPolicy6372121D"
+          }
+        ],
+        "/CCNativeStack/GraphIntelligenceHandlers/GraphMaterializerHandler/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "GraphMaterializerHandler"
+          }
+        ],
+        "/CCNativeStack/GraphIntelligenceHandlers/GraphMaterializerHandler/EventInvokeConfig/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "GraphIntelligenceHandlersGraphMaterializerHandlerEventInvokeConfig326AD5A9"
+          }
+        ],
+        "/CCNativeStack/GraphIntelligenceHandlers/SynthesisEngineHandler/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SynthesisEngineHandler"
+          }
+        ],
+        "/CCNativeStack/GraphIntelligenceHandlers/SynthesisEngineHandler/EventInvokeConfig/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "GraphIntelligenceHandlersSynthesisEngineHandlerEventInvokeConfig426F220B"
+          }
+        ],
+        "/CCNativeStack/GraphIntelligenceHandlers/SignalDetectedToGraphMaterializerRule/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "GraphIntelligenceHandlersSignalDetectedToGraphMaterializerRule1A475BC7"
+          }
+        ],
+        "/CCNativeStack/GraphIntelligenceHandlers/SignalDetectedToGraphMaterializerRule/AllowEventRuleCCNativeStackGraphIntelligenceHandlersGraphMaterializerHandler2AD3E9DC": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "GraphIntelligenceHandlersSignalDetectedToGraphMaterializerRuleAllowEventRuleCCNativeStackGraphIntelligenceHandlersGraphMaterializerHandler2AD3E9DC170D41E4"
+          }
+        ],
+        "/CCNativeStack/GraphIntelligenceHandlers/SignalCreatedToGraphMaterializerRule/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "GraphIntelligenceHandlersSignalCreatedToGraphMaterializerRule3158BF8B"
+          }
+        ],
+        "/CCNativeStack/GraphIntelligenceHandlers/SignalCreatedToGraphMaterializerRule/AllowEventRuleCCNativeStackGraphIntelligenceHandlersGraphMaterializerHandler2AD3E9DC": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "GraphIntelligenceHandlersSignalCreatedToGraphMaterializerRuleAllowEventRuleCCNativeStackGraphIntelligenceHandlersGraphMaterializerHandler2AD3E9DC05FEF707"
+          }
+        ],
+        "/CCNativeStack/GraphIntelligenceHandlers/GraphMaterializedToSynthesisRule/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "GraphIntelligenceHandlersGraphMaterializedToSynthesisRule94B777F4"
+          }
+        ],
+        "/CCNativeStack/GraphIntelligenceHandlers/GraphMaterializedToSynthesisRule/AllowEventRuleCCNativeStackGraphIntelligenceHandlersSynthesisEngineHandler045C593E": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "GraphIntelligenceHandlersGraphMaterializedToSynthesisRuleAllowEventRuleCCNativeStackGraphIntelligenceHandlersSynthesisEngineHandler045C593E22975BE8"
+          }
+        ],
+        "/CCNativeStack/SecurityMonitoring/SecurityAlertsTopic/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SecurityMonitoringSecurityAlertsTopic976B7E04"
+          }
+        ],
+        "/CCNativeStack/SecurityMonitoring/NeptuneUnauthorizedConnections/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SecurityMonitoringNeptuneUnauthorizedConnectionsB8CD92BB"
+          }
+        ],
+        "/CCNativeStack/SecurityMonitoring/GraphMaterializerErrors/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SecurityMonitoringGraphMaterializerErrors7E76685B"
+          }
+        ],
+        "/CCNativeStack/SecurityMonitoring/SynthesisEngineErrors/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SecurityMonitoringSynthesisEngineErrorsE0DB3F13"
+          }
+        ],
+        "/CCNativeStack/SecurityMonitoring/HighDynamoDBEndpointTraffic/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SecurityMonitoringHighDynamoDBEndpointTraffic04E6B06B"
+          }
+        ],
+        "/CCNativeStack/SecurityMonitoring/NeptuneIAMAuthFailure/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SecurityMonitoringNeptuneIAMAuthFailure5B61A41C"
+          }
+        ],
+        "/CCNativeStack/SecurityMonitoring/NeptuneIAMAuthFailureAlarm/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SecurityMonitoringNeptuneIAMAuthFailureAlarmF4453F7B"
+          }
+        ],
+        "/CCNativeStack/EvidenceLedgerBucketName": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "EvidenceLedgerBucketName"
+          }
+        ],
+        "/CCNativeStack/WorldStateSnapshotsBucketName": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "WorldStateSnapshotsBucketName"
+          }
+        ],
+        "/CCNativeStack/SchemaRegistryBucketName": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SchemaRegistryBucketName"
+          }
+        ],
+        "/CCNativeStack/ArtifactsBucketName": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ArtifactsBucketName"
+          }
+        ],
+        "/CCNativeStack/LedgerArchivesBucketName": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "LedgerArchivesBucketName"
+          }
+        ],
+        "/CCNativeStack/EventBusName": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "EventBusName"
+          }
+        ],
+        "/CCNativeStack/WorldStateTableName": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "WorldStateTableName"
+          }
+        ],
+        "/CCNativeStack/EvidenceIndexTableName": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "EvidenceIndexTableName"
+          }
+        ],
+        "/CCNativeStack/SnapshotsIndexTableName": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SnapshotsIndexTableName"
+          }
+        ],
+        "/CCNativeStack/SchemaRegistryTableName": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SchemaRegistryTableName"
+          }
+        ],
+        "/CCNativeStack/CriticalFieldRegistryTableName": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CriticalFieldRegistryTableName"
+          }
+        ],
+        "/CCNativeStack/LedgerTableName": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "LedgerTableName"
+          }
+        ],
+        "/CCNativeStack/CacheTableName": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CacheTableName"
+          }
+        ],
+        "/CCNativeStack/TenantsTableName": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "TenantsTableName"
+          }
+        ],
+        "/CCNativeStack/AccountsTableName": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AccountsTableName"
+          }
+        ],
+        "/CCNativeStack/SignalsTableName": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SignalsTableName"
+          }
+        ],
+        "/CCNativeStack/MethodologyTableName": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "MethodologyTableName"
+          }
+        ],
+        "/CCNativeStack/AssessmentTableName": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AssessmentTableName"
+          }
+        ],
+        "/CCNativeStack/IdentitiesTableName": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "IdentitiesTableName"
+          }
+        ],
+        "/CCNativeStack/AgentRoleArn": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AgentRoleArn"
+          }
+        ],
+        "/CCNativeStack/UserPoolId": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "UserPoolId"
+          }
+        ],
+        "/CCNativeStack/UserPoolClientId": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "UserPoolClientId"
+          }
+        ],
+        "/CCNativeStack/NeptuneClusterEndpoint": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "NeptuneClusterEndpoint"
+          }
+        ],
+        "/CCNativeStack/NeptuneClusterPort": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "NeptuneClusterPort"
+          }
+        ],
+        "/CCNativeStack/NeptuneClusterIdentifier": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "NeptuneClusterIdentifier"
+          }
+        ],
+        "/CCNativeStack/NeptuneAccessRoleArn": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "NeptuneAccessRoleArn"
+          }
+        ],
+        "/CCNativeStack/VpcId": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "VpcId"
+          }
+        ],
+        "/CCNativeStack/NeptuneSubnetIds": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "NeptuneSubnetIds"
+          }
+        ],
+        "/CCNativeStack/NeptuneSubnetId": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "NeptuneSubnetId"
+          }
+        ],
+        "/CCNativeStack/PerceptionHandlers/ConnectorPollDlq/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "PerceptionHandlersConnectorPollDlq14318C64"
+          }
+        ],
+        "/CCNativeStack/PerceptionHandlers/SignalDetectionDlq/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "PerceptionHandlersSignalDetectionDlqEC9EFCCF"
+          }
+        ],
+        "/CCNativeStack/PerceptionHandlers/SignalDetectionDlq/Policy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "PerceptionHandlersSignalDetectionDlqPolicy834340B6"
+          }
+        ],
+        "/CCNativeStack/PerceptionHandlers/LifecycleInferenceDlq/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "PerceptionHandlersLifecycleInferenceDlq6448FBB8"
+          }
+        ],
+        "/CCNativeStack/PerceptionHandlers/LifecycleInferenceDlq/Policy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "PerceptionHandlersLifecycleInferenceDlqPolicy390C7857"
+          }
+        ],
+        "/CCNativeStack/PerceptionHandlers/ConnectorPollHandler/ServiceRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "PerceptionHandlersConnectorPollHandlerServiceRole81041944"
+          }
+        ],
+        "/CCNativeStack/PerceptionHandlers/ConnectorPollHandler/ServiceRole/DefaultPolicy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "PerceptionHandlersConnectorPollHandlerServiceRoleDefaultPolicy4F818644"
+          }
+        ],
+        "/CCNativeStack/PerceptionHandlers/ConnectorPollHandler/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ConnectorPollHandler"
+          }
+        ],
+        "/CCNativeStack/PerceptionHandlers/ConnectorPollHandler/EventInvokeConfig/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "PerceptionHandlersConnectorPollHandlerEventInvokeConfigA9A7C9F7"
+          }
+        ],
+        "/CCNativeStack/PerceptionHandlers/SignalDetectionHandler/ServiceRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "PerceptionHandlersSignalDetectionHandlerServiceRoleB8FA54A9"
+          }
+        ],
+        "/CCNativeStack/PerceptionHandlers/SignalDetectionHandler/ServiceRole/DefaultPolicy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "PerceptionHandlersSignalDetectionHandlerServiceRoleDefaultPolicyBE3A145F"
+          }
+        ],
+        "/CCNativeStack/PerceptionHandlers/SignalDetectionHandler/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SignalDetectionHandler"
+          }
+        ],
+        "/CCNativeStack/PerceptionHandlers/SignalDetectionHandler/EventInvokeConfig/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "PerceptionHandlersSignalDetectionHandlerEventInvokeConfig846FC90C"
+          }
+        ],
+        "/CCNativeStack/PerceptionHandlers/LifecycleInferenceHandler/ServiceRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "PerceptionHandlersLifecycleInferenceHandlerServiceRoleD091F351"
+          }
+        ],
+        "/CCNativeStack/PerceptionHandlers/LifecycleInferenceHandler/ServiceRole/DefaultPolicy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "PerceptionHandlersLifecycleInferenceHandlerServiceRoleDefaultPolicy2147626F"
+          }
+        ],
+        "/CCNativeStack/PerceptionHandlers/LifecycleInferenceHandler/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "LifecycleInferenceHandler"
+          }
+        ],
+        "/CCNativeStack/PerceptionHandlers/LifecycleInferenceHandler/EventInvokeConfig/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "PerceptionHandlersLifecycleInferenceHandlerEventInvokeConfigA9D00F52"
+          }
+        ],
+        "/CCNativeStack/PerceptionHandlers/ConnectorPollCompletedRule/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "PerceptionHandlersConnectorPollCompletedRule339EDE78"
+          }
+        ],
+        "/CCNativeStack/PerceptionHandlers/ConnectorPollCompletedRule/AllowEventRuleCCNativeStackPerceptionHandlersSignalDetectionHandler86A6DCFB": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "PerceptionHandlersConnectorPollCompletedRuleAllowEventRuleCCNativeStackPerceptionHandlersSignalDetectionHandler86A6DCFB606B8ED5"
+          }
+        ],
+        "/CCNativeStack/PerceptionHandlers/SignalDetectedRule/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "PerceptionHandlersSignalDetectedRule4DCF0A68"
+          }
+        ],
+        "/CCNativeStack/PerceptionHandlers/SignalDetectedRule/AllowEventRuleCCNativeStackPerceptionHandlersLifecycleInferenceHandler109F8B97": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "PerceptionHandlersSignalDetectedRuleAllowEventRuleCCNativeStackPerceptionHandlersLifecycleInferenceHandler109F8B97A730B0FE"
+          }
+        ],
+        "/CCNativeStack/ConnectorPollHandlerArn": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ConnectorPollHandlerArn"
+          }
+        ],
+        "/CCNativeStack/SignalDetectionHandlerArn": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SignalDetectionHandlerArn"
+          }
+        ],
+        "/CCNativeStack/LifecycleInferenceHandlerArn": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "LifecycleInferenceHandlerArn"
+          }
+        ],
+        "/CCNativeStack/GraphMaterializerHandlerArn": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "GraphMaterializerHandlerArn"
+          }
+        ],
+        "/CCNativeStack/SynthesisEngineHandlerArn": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SynthesisEngineHandlerArn"
+          }
+        ],
+        "/CCNativeStack/AccountPostureStateTableName": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AccountPostureStateTableName"
+          }
+        ],
+        "/CCNativeStack/GraphMaterializationStatusTableName": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "GraphMaterializationStatusTableName"
+          }
+        ],
+        "/CCNativeStack/CDKMetadata/Default": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CDKMetadata"
+          }
+        ],
+        "/CCNativeStack/BootstrapVersion": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "BootstrapVersion"
+          }
+        ],
+        "/CCNativeStack/CheckBootstrapVersion": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CheckBootstrapVersion"
+          }
+        ]
+      },
+      "displayName": "CCNativeStack"
+    },
+    "Tree": {
+      "type": "cdk:tree",
+      "properties": {
+        "file": "tree.json"
+      }
+    },
+    "aws-cdk-lib/feature-flag-report": {
+      "type": "cdk:feature-flag-report",
+      "properties": {
+        "module": "aws-cdk-lib",
+        "flags": {
+          "@aws-cdk/aws-signer:signingProfileNamePassedToCfn": {
+            "recommendedValue": true,
+            "explanation": "Pass signingProfileName to CfnSigningProfile"
+          },
+          "@aws-cdk/core:newStyleStackSynthesis": {
+            "recommendedValue": true,
+            "explanation": "Switch to new stack synthesis method which enables CI/CD",
+            "unconfiguredBehavesLike": {
+              "v2": true
+            }
+          },
+          "@aws-cdk/core:stackRelativeExports": {
+            "recommendedValue": true,
+            "explanation": "Name exports based on the construct paths relative to the stack, rather than the global construct path",
+            "unconfiguredBehavesLike": {
+              "v2": true
+            }
+          },
+          "@aws-cdk/aws-ecs-patterns:secGroupsDisablesImplicitOpenListener": {
+            "recommendedValue": true,
+            "explanation": "Disable implicit openListener when custom security groups are provided"
+          },
+          "@aws-cdk/aws-rds:lowercaseDbIdentifier": {
+            "recommendedValue": true,
+            "explanation": "Force lowercasing of RDS Cluster names in CDK",
+            "unconfiguredBehavesLike": {
+              "v2": true
+            }
+          },
+          "@aws-cdk/aws-apigateway:usagePlanKeyOrderInsensitiveId": {
+            "recommendedValue": true,
+            "explanation": "Allow adding/removing multiple UsagePlanKeys independently",
+            "unconfiguredBehavesLike": {
+              "v2": true
+            }
+          },
+          "@aws-cdk/aws-lambda:recognizeVersionProps": {
+            "recommendedValue": true,
+            "explanation": "Enable this feature flag to opt in to the updated logical id calculation for Lambda Version created using the  `fn.currentVersion`.",
+            "unconfiguredBehavesLike": {
+              "v2": true
+            }
+          },
+          "@aws-cdk/aws-lambda:recognizeLayerVersion": {
+            "userValue": true,
+            "recommendedValue": true,
+            "explanation": "Enable this feature flag to opt in to the updated logical id calculation for Lambda Version created using the `fn.currentVersion`."
+          },
+          "@aws-cdk/aws-cloudfront:defaultSecurityPolicyTLSv1.2_2021": {
+            "recommendedValue": true,
+            "explanation": "Enable this feature flag to have cloudfront distributions use the security policy TLSv1.2_2021 by default.",
+            "unconfiguredBehavesLike": {
+              "v2": true
+            }
+          },
+          "@aws-cdk/core:checkSecretUsage": {
+            "userValue": true,
+            "recommendedValue": true,
+            "explanation": "Enable this flag to make it impossible to accidentally use SecretValues in unsafe locations"
+          },
+          "@aws-cdk/core:target-partitions": {
+            "userValue": [
+              "aws",
+              "aws-cn"
+            ],
+            "recommendedValue": [
+              "aws",
+              "aws-cn"
+            ],
+            "explanation": "What regions to include in lookup tables of environment agnostic stacks"
+          },
+          "@aws-cdk-containers/ecs-service-extensions:enableDefaultLogDriver": {
+            "userValue": true,
+            "recommendedValue": true,
+            "explanation": "ECS extensions will automatically add an `awslogs` driver if no logging is specified"
+          },
+          "@aws-cdk/aws-ec2:uniqueImdsv2TemplateName": {
+            "userValue": true,
+            "recommendedValue": true,
+            "explanation": "Enable this feature flag to have Launch Templates generated by the `InstanceRequireImdsv2Aspect` use unique names."
+          },
+          "@aws-cdk/aws-ecs:arnFormatIncludesClusterName": {
+            "userValue": true,
+            "recommendedValue": true,
+            "explanation": "ARN format used by ECS. In the new ARN format, the cluster name is part of the resource ID."
+          },
+          "@aws-cdk/aws-iam:minimizePolicies": {
+            "userValue": true,
+            "recommendedValue": true,
+            "explanation": "Minimize IAM policies by combining Statements"
+          },
+          "@aws-cdk/core:validateSnapshotRemovalPolicy": {
+            "userValue": true,
+            "recommendedValue": true,
+            "explanation": "Error on snapshot removal policies on resources that do not support it."
+          },
+          "@aws-cdk/aws-codepipeline:crossAccountKeyAliasStackSafeResourceName": {
+            "userValue": true,
+            "recommendedValue": true,
+            "explanation": "Generate key aliases that include the stack name"
+          },
+          "@aws-cdk/aws-s3:createDefaultLoggingPolicy": {
+            "userValue": true,
+            "recommendedValue": true,
+            "explanation": "Enable this feature flag to create an S3 bucket policy by default in cases where an AWS service would automatically create the Policy if one does not exist."
+          },
+          "@aws-cdk/aws-sns-subscriptions:restrictSqsDescryption": {
+            "userValue": true,
+            "recommendedValue": true,
+            "explanation": "Restrict KMS key policy for encrypted Queues a bit more"
+          },
+          "@aws-cdk/aws-apigateway:disableCloudWatchRole": {
+            "userValue": true,
+            "recommendedValue": true,
+            "explanation": "Make default CloudWatch Role behavior safe for multiple API Gateways in one environment"
+          },
+          "@aws-cdk/core:enablePartitionLiterals": {
+            "userValue": true,
+            "recommendedValue": true,
+            "explanation": "Make ARNs concrete if AWS partition is known"
+          },
+          "@aws-cdk/aws-events:eventsTargetQueueSameAccount": {
+            "userValue": true,
+            "recommendedValue": true,
+            "explanation": "Event Rules may only push to encrypted SQS queues in the same account"
+          },
+          "@aws-cdk/aws-ecs:disableExplicitDeploymentControllerForCircuitBreaker": {
+            "userValue": true,
+            "recommendedValue": true,
+            "explanation": "Avoid setting the \"ECS\" deployment controller when adding a circuit breaker"
+          },
+          "@aws-cdk/aws-iam:importedRoleStackSafeDefaultPolicyName": {
+            "userValue": true,
+            "recommendedValue": true,
+            "explanation": "Enable this feature to create default policy names for imported roles that depend on the stack the role is in."
+          },
+          "@aws-cdk/aws-s3:serverAccessLogsUseBucketPolicy": {
+            "userValue": true,
+            "recommendedValue": true,
+            "explanation": "Use S3 Bucket Policy instead of ACLs for Server Access Logging"
+          },
+          "@aws-cdk/aws-route53-patters:useCertificate": {
+            "userValue": true,
+            "recommendedValue": true,
+            "explanation": "Use the official `Certificate` resource instead of `DnsValidatedCertificate`"
+          },
+          "@aws-cdk/customresources:installLatestAwsSdkDefault": {
+            "userValue": false,
+            "recommendedValue": false,
+            "explanation": "Whether to install the latest SDK by default in AwsCustomResource"
+          },
+          "@aws-cdk/aws-rds:databaseProxyUniqueResourceName": {
+            "userValue": true,
+            "recommendedValue": true,
+            "explanation": "Use unique resource name for Database Proxy"
+          },
+          "@aws-cdk/aws-codedeploy:removeAlarmsFromDeploymentGroup": {
+            "userValue": true,
+            "recommendedValue": true,
+            "explanation": "Remove CloudWatch alarms from deployment group"
+          },
+          "@aws-cdk/aws-apigateway:authorizerChangeDeploymentLogicalId": {
+            "userValue": true,
+            "recommendedValue": true,
+            "explanation": "Include authorizer configuration in the calculation of the API deployment logical ID."
+          },
+          "@aws-cdk/aws-ec2:launchTemplateDefaultUserData": {
+            "userValue": true,
+            "recommendedValue": true,
+            "explanation": "Define user data for a launch template by default when a machine image is provided."
+          },
+          "@aws-cdk/aws-secretsmanager:useAttachedSecretResourcePolicyForSecretTargetAttachments": {
+            "userValue": true,
+            "recommendedValue": true,
+            "explanation": "SecretTargetAttachments uses the ResourcePolicy of the attached Secret."
+          },
+          "@aws-cdk/aws-redshift:columnId": {
+            "userValue": true,
+            "recommendedValue": true,
+            "explanation": "Whether to use an ID to track Redshift column changes"
+          },
+          "@aws-cdk/aws-stepfunctions-tasks:enableEmrServicePolicyV2": {
+            "userValue": true,
+            "recommendedValue": true,
+            "explanation": "Enable AmazonEMRServicePolicy_v2 managed policies"
+          },
+          "@aws-cdk/aws-ec2:restrictDefaultSecurityGroup": {
+            "userValue": true,
+            "recommendedValue": true,
+            "explanation": "Restrict access to the VPC default security group"
+          },
+          "@aws-cdk/aws-apigateway:requestValidatorUniqueId": {
+            "userValue": true,
+            "recommendedValue": true,
+            "explanation": "Generate a unique id for each RequestValidator added to a method"
+          },
+          "@aws-cdk/aws-kms:aliasNameRef": {
+            "userValue": true,
+            "recommendedValue": true,
+            "explanation": "KMS Alias name and keyArn will have implicit reference to KMS Key"
+          },
+          "@aws-cdk/aws-kms:applyImportedAliasPermissionsToPrincipal": {
+            "recommendedValue": true,
+            "explanation": "Enable grant methods on Aliases imported by name to use kms:ResourceAliases condition"
+          },
+          "@aws-cdk/aws-autoscaling:generateLaunchTemplateInsteadOfLaunchConfig": {
+            "userValue": true,
+            "recommendedValue": true,
+            "explanation": "Generate a launch template when creating an AutoScalingGroup"
+          },
+          "@aws-cdk/core:includePrefixInUniqueNameGeneration": {
+            "userValue": true,
+            "recommendedValue": true,
+            "explanation": "Include the stack prefix in the stack name generation process"
+          },
+          "@aws-cdk/aws-efs:denyAnonymousAccess": {
+            "recommendedValue": true,
+            "explanation": "EFS denies anonymous clients accesses"
+          },
+          "@aws-cdk/aws-opensearchservice:enableOpensearchMultiAzWithStandby": {
+            "userValue": true,
+            "recommendedValue": true,
+            "explanation": "Enables support for Multi-AZ with Standby deployment for opensearch domains"
+          },
+          "@aws-cdk/aws-lambda-nodejs:useLatestRuntimeVersion": {
+            "recommendedValue": true,
+            "explanation": "Enables aws-lambda-nodejs.Function to use the latest available NodeJs runtime as the default"
+          },
+          "@aws-cdk/aws-efs:mountTargetOrderInsensitiveLogicalId": {
+            "recommendedValue": true,
+            "explanation": "When enabled, mount targets will have a stable logicalId that is linked to the associated subnet."
+          },
+          "@aws-cdk/aws-rds:auroraClusterChangeScopeOfInstanceParameterGroupWithEachParameters": {
+            "recommendedValue": true,
+            "explanation": "When enabled, a scope of InstanceParameterGroup for AuroraClusterInstance with each parameters will change."
+          },
+          "@aws-cdk/aws-appsync:useArnForSourceApiAssociationIdentifier": {
+            "recommendedValue": true,
+            "explanation": "When enabled, will always use the arn for identifiers for CfnSourceApiAssociation in the GraphqlApi construct rather than id."
+          },
+          "@aws-cdk/aws-rds:preventRenderingDeprecatedCredentials": {
+            "recommendedValue": true,
+            "explanation": "When enabled, creating an RDS database cluster from a snapshot will only render credentials for snapshot credentials."
+          },
+          "@aws-cdk/aws-codepipeline-actions:useNewDefaultBranchForCodeCommitSource": {
+            "recommendedValue": true,
+            "explanation": "When enabled, the CodeCommit source action is using the default branch name 'main'."
+          },
+          "@aws-cdk/aws-cloudwatch-actions:changeLambdaPermissionLogicalIdForLambdaAction": {
+            "recommendedValue": true,
+            "explanation": "When enabled, the logical ID of a Lambda permission for a Lambda action includes an alarm ID."
+          },
+          "@aws-cdk/aws-codepipeline:crossAccountKeysDefaultValueToFalse": {
+            "recommendedValue": true,
+            "explanation": "Enables Pipeline to set the default value for crossAccountKeys to false."
+          },
+          "@aws-cdk/aws-codepipeline:defaultPipelineTypeToV2": {
+            "recommendedValue": true,
+            "explanation": "Enables Pipeline to set the default pipeline type to V2."
+          },
+          "@aws-cdk/aws-kms:reduceCrossAccountRegionPolicyScope": {
+            "recommendedValue": true,
+            "explanation": "When enabled, IAM Policy created from KMS key grant will reduce the resource scope to this key only."
+          },
+          "@aws-cdk/pipelines:reduceAssetRoleTrustScope": {
+            "recommendedValue": true,
+            "explanation": "Remove the root account principal from PipelineAssetsFileRole trust policy",
+            "unconfiguredBehavesLike": {
+              "v2": true
+            }
+          },
+          "@aws-cdk/aws-eks:nodegroupNameAttribute": {
+            "recommendedValue": true,
+            "explanation": "When enabled, nodegroupName attribute of the provisioned EKS NodeGroup will not have the cluster name prefix."
+          },
+          "@aws-cdk/aws-ec2:ebsDefaultGp3Volume": {
+            "recommendedValue": true,
+            "explanation": "When enabled, the default volume type of the EBS volume will be GP3"
+          },
+          "@aws-cdk/aws-ecs:removeDefaultDeploymentAlarm": {
+            "recommendedValue": true,
+            "explanation": "When enabled, remove default deployment alarm settings"
+          },
+          "@aws-cdk/custom-resources:logApiResponseDataPropertyTrueDefault": {
+            "recommendedValue": false,
+            "explanation": "When enabled, the custom resource used for `AwsCustomResource` will configure the `logApiResponseData` property as true by default"
+          },
+          "@aws-cdk/aws-s3:keepNotificationInImportedBucket": {
+            "recommendedValue": false,
+            "explanation": "When enabled, Adding notifications to a bucket in the current stack will not remove notification from imported stack."
+          },
+          "@aws-cdk/aws-stepfunctions-tasks:useNewS3UriParametersForBedrockInvokeModelTask": {
+            "recommendedValue": true,
+            "explanation": "When enabled, use new props for S3 URI field in task definition of state machine for bedrock invoke model.",
+            "unconfiguredBehavesLike": {
+              "v2": true
+            }
+          },
+          "@aws-cdk/core:explicitStackTags": {
+            "recommendedValue": true,
+            "explanation": "When enabled, stack tags need to be assigned explicitly on a Stack."
+          },
+          "@aws-cdk/aws-ecs:reduceEc2FargateCloudWatchPermissions": {
+            "recommendedValue": true,
+            "explanation": "When enabled, we will only grant the necessary permissions when users specify cloudwatch log group through logConfiguration"
+          },
+          "@aws-cdk/aws-dynamodb:resourcePolicyPerReplica": {
+            "recommendedValue": true,
+            "explanation": "When enabled will allow you to specify a resource policy per replica, and not copy the source table policy to all replicas"
+          },
+          "@aws-cdk/aws-ec2:ec2SumTImeoutEnabled": {
+            "recommendedValue": true,
+            "explanation": "When enabled, initOptions.timeout and resourceSignalTimeout values will be summed together."
+          },
+          "@aws-cdk/aws-appsync:appSyncGraphQLAPIScopeLambdaPermission": {
+            "recommendedValue": true,
+            "explanation": "When enabled, a Lambda authorizer Permission created when using GraphqlApi will be properly scoped with a SourceArn."
+          },
+          "@aws-cdk/aws-rds:setCorrectValueForDatabaseInstanceReadReplicaInstanceResourceId": {
+            "recommendedValue": true,
+            "explanation": "When enabled, the value of property `instanceResourceId` in construct `DatabaseInstanceReadReplica` will be set to the correct value which is `DbiResourceId` instead of currently `DbInstanceArn`"
+          },
+          "@aws-cdk/core:cfnIncludeRejectComplexResourceUpdateCreatePolicyIntrinsics": {
+            "recommendedValue": true,
+            "explanation": "When enabled, CFN templates added with `cfn-include` will error if the template contains Resource Update or Create policies with CFN Intrinsics that include non-primitive values."
+          },
+          "@aws-cdk/aws-lambda-nodejs:sdkV3ExcludeSmithyPackages": {
+            "recommendedValue": true,
+            "explanation": "When enabled, both `@aws-sdk` and `@smithy` packages will be excluded from the Lambda Node.js 18.x runtime to prevent version mismatches in bundled applications."
+          },
+          "@aws-cdk/aws-stepfunctions-tasks:fixRunEcsTaskPolicy": {
+            "recommendedValue": true,
+            "explanation": "When enabled, the resource of IAM Run Ecs policy generated by SFN EcsRunTask will reference the definition, instead of constructing ARN."
+          },
+          "@aws-cdk/aws-ec2:bastionHostUseAmazonLinux2023ByDefault": {
+            "recommendedValue": true,
+            "explanation": "When enabled, the BastionHost construct will use the latest Amazon Linux 2023 AMI, instead of Amazon Linux 2."
+          },
+          "@aws-cdk/core:aspectStabilization": {
+            "recommendedValue": true,
+            "explanation": "When enabled, a stabilization loop will be run when invoking Aspects during synthesis.",
+            "unconfiguredBehavesLike": {
+              "v2": true
+            }
+          },
+          "@aws-cdk/aws-route53-targets:userPoolDomainNameMethodWithoutCustomResource": {
+            "recommendedValue": true,
+            "explanation": "When enabled, use a new method for DNS Name of user pool domain target without creating a custom resource."
+          },
+          "@aws-cdk/aws-elasticloadbalancingV2:albDualstackWithoutPublicIpv4SecurityGroupRulesDefault": {
+            "recommendedValue": true,
+            "explanation": "When enabled, the default security group ingress rules will allow IPv6 ingress from anywhere"
+          },
+          "@aws-cdk/aws-iam:oidcRejectUnauthorizedConnections": {
+            "recommendedValue": true,
+            "explanation": "When enabled, the default behaviour of OIDC provider will reject unauthorized connections"
+          },
+          "@aws-cdk/core:enableAdditionalMetadataCollection": {
+            "recommendedValue": true,
+            "explanation": "When enabled, CDK will expand the scope of usage data collected to better inform CDK development and improve communication for security concerns and emerging issues."
+          },
+          "@aws-cdk/aws-lambda:createNewPoliciesWithAddToRolePolicy": {
+            "recommendedValue": false,
+            "explanation": "[Deprecated] When enabled, Lambda will create new inline policies with AddToRolePolicy instead of adding to the Default Policy Statement"
+          },
+          "@aws-cdk/aws-s3:setUniqueReplicationRoleName": {
+            "recommendedValue": true,
+            "explanation": "When enabled, CDK will automatically generate a unique role name that is used for s3 object replication."
+          },
+          "@aws-cdk/pipelines:reduceStageRoleTrustScope": {
+            "recommendedValue": true,
+            "explanation": "Remove the root account principal from Stage addActions trust policy",
+            "unconfiguredBehavesLike": {
+              "v2": true
+            }
+          },
+          "@aws-cdk/aws-events:requireEventBusPolicySid": {
+            "recommendedValue": true,
+            "explanation": "When enabled, grantPutEventsTo() will use resource policies with Statement IDs for service principals."
+          },
+          "@aws-cdk/core:aspectPrioritiesMutating": {
+            "recommendedValue": true,
+            "explanation": "When set to true, Aspects added by the construct library on your behalf will be given a priority of MUTATING."
+          },
+          "@aws-cdk/aws-dynamodb:retainTableReplica": {
+            "recommendedValue": true,
+            "explanation": "When enabled, table replica will be default to the removal policy of source table unless specified otherwise."
+          },
+          "@aws-cdk/cognito:logUserPoolClientSecretValue": {
+            "recommendedValue": false,
+            "explanation": "When disabled, the value of the user pool client secret will not be logged in the custom resource lambda function logs."
+          },
+          "@aws-cdk/pipelines:reduceCrossAccountActionRoleTrustScope": {
+            "recommendedValue": true,
+            "explanation": "When enabled, scopes down the trust policy for the cross-account action role",
+            "unconfiguredBehavesLike": {
+              "v2": true
+            }
+          },
+          "@aws-cdk/aws-stepfunctions:useDistributedMapResultWriterV2": {
+            "recommendedValue": true,
+            "explanation": "When enabled, the resultWriterV2 property of DistributedMap will be used insted of resultWriter"
+          },
+          "@aws-cdk/s3-notifications:addS3TrustKeyPolicyForSnsSubscriptions": {
+            "recommendedValue": true,
+            "explanation": "Add an S3 trust policy to a KMS key resource policy for SNS subscriptions."
+          },
+          "@aws-cdk/aws-ec2:requirePrivateSubnetsForEgressOnlyInternetGateway": {
+            "recommendedValue": true,
+            "explanation": "When enabled, the EgressOnlyGateway resource is only created if private subnets are defined in the dual-stack VPC."
+          },
+          "@aws-cdk/aws-ec2-alpha:useResourceIdForVpcV2Migration": {
+            "recommendedValue": false,
+            "explanation": "When enabled, use resource IDs for VPC V2 migration"
+          },
+          "@aws-cdk/aws-s3:publicAccessBlockedByDefault": {
+            "recommendedValue": true,
+            "explanation": "When enabled, setting any combination of options for BlockPublicAccess will automatically set true for any options not defined."
+          },
+          "@aws-cdk/aws-lambda:useCdkManagedLogGroup": {
+            "recommendedValue": true,
+            "explanation": "When enabled, CDK creates and manages loggroup for the lambda function"
+          },
+          "@aws-cdk/aws-elasticloadbalancingv2:networkLoadBalancerWithSecurityGroupByDefault": {
+            "recommendedValue": true,
+            "explanation": "When enabled, Network Load Balancer will be created with a security group by default."
+          },
+          "@aws-cdk/aws-stepfunctions-tasks:httpInvokeDynamicJsonPathEndpoint": {
+            "recommendedValue": true,
+            "explanation": "When enabled, allows using a dynamic apiEndpoint with JSONPath format in HttpInvoke tasks.",
+            "unconfiguredBehavesLike": {
+              "v2": true
+            }
+          },
+          "@aws-cdk/aws-ecs-patterns:uniqueTargetGroupId": {
+            "recommendedValue": true,
+            "explanation": "When enabled, ECS patterns will generate unique target group IDs to prevent conflicts during load balancer replacement"
+          },
+          "@aws-cdk/aws-route53-patterns:useDistribution": {
+            "recommendedValue": true,
+            "explanation": "Use the `Distribution` resource instead of `CloudFrontWebDistribution`"
+          }
+        }
+      }
+    }
+  },
+  "minimumCliVersion": "2.1033.0"
+}

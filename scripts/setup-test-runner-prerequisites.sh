@@ -173,9 +173,10 @@ cat > $POLICY_FILE << EOF
       "Action": [
         "neptune-db:connect",
         "neptune-db:ReadDataViaQuery",
-        "neptune-db:WriteDataViaQuery"
+        "neptune-db:WriteDataViaQuery",
+        "neptune-db:DeleteDataViaQuery"
       ],
-      "Resource": "arn:aws:neptune-db:$REGION:$ACCOUNT_ID:$NEPTUNE_CLUSTER_ID/*"
+      "Resource": "arn:aws:neptune-db:$REGION:$ACCOUNT_ID:cluster-*/*"
     },
     {
       "Effect": "Allow",
@@ -211,6 +212,14 @@ cat > $POLICY_FILE << EOF
         "events:PutEvents"
       ],
       "Resource": "arn:aws:events:$REGION:$ACCOUNT_ID:event-bus/cc-native-events"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "cloudformation:DescribeStacks",
+        "cloudformation:DescribeStackOutputs"
+      ],
+      "Resource": "arn:aws:cloudformation:$REGION:$ACCOUNT_ID:stack/CCNativeStack/*"
     }
   ]
 }

@@ -1,0 +1,5060 @@
+{
+ "Resources": {
+  "EvidenceLedgerBucket3A5BFB25": {
+   "Type": "AWS::S3::Bucket",
+   "Properties": {
+    "BucketEncryption": {
+     "ServerSideEncryptionConfiguration": [
+      {
+       "ServerSideEncryptionByDefault": {
+        "SSEAlgorithm": "AES256"
+       }
+      }
+     ]
+    },
+    "BucketName": "cc-native-evidence-ledger-661268174397-us-west-2",
+    "VersioningConfiguration": {
+     "Status": "Enabled"
+    }
+   },
+   "UpdateReplacePolicy": "Retain",
+   "DeletionPolicy": "Retain",
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/EvidenceLedgerBucket/Resource"
+   }
+  },
+  "EvidenceLedgerBucketPolicyE4997D34": {
+   "Type": "AWS::S3::BucketPolicy",
+   "Properties": {
+    "Bucket": {
+     "Ref": "EvidenceLedgerBucket3A5BFB25"
+    },
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": "s3:*",
+       "Condition": {
+        "Bool": {
+         "aws:SecureTransport": "false"
+        }
+       },
+       "Effect": "Deny",
+       "Principal": {
+        "AWS": "*"
+       },
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "EvidenceLedgerBucket3A5BFB25",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "EvidenceLedgerBucket3A5BFB25",
+             "Arn"
+            ]
+           },
+           "/*"
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     "Version": "2012-10-17"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/EvidenceLedgerBucket/Policy/Resource"
+   }
+  },
+  "WorldStateSnapshotsBucket7B77A435": {
+   "Type": "AWS::S3::Bucket",
+   "Properties": {
+    "BucketEncryption": {
+     "ServerSideEncryptionConfiguration": [
+      {
+       "ServerSideEncryptionByDefault": {
+        "SSEAlgorithm": "AES256"
+       }
+      }
+     ]
+    },
+    "BucketName": "cc-native-world-state-snapshots-661268174397-us-west-2",
+    "VersioningConfiguration": {
+     "Status": "Enabled"
+    }
+   },
+   "UpdateReplacePolicy": "Retain",
+   "DeletionPolicy": "Retain",
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/WorldStateSnapshotsBucket/Resource"
+   }
+  },
+  "WorldStateSnapshotsBucketPolicy37D77781": {
+   "Type": "AWS::S3::BucketPolicy",
+   "Properties": {
+    "Bucket": {
+     "Ref": "WorldStateSnapshotsBucket7B77A435"
+    },
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": "s3:*",
+       "Condition": {
+        "Bool": {
+         "aws:SecureTransport": "false"
+        }
+       },
+       "Effect": "Deny",
+       "Principal": {
+        "AWS": "*"
+       },
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "WorldStateSnapshotsBucket7B77A435",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "WorldStateSnapshotsBucket7B77A435",
+             "Arn"
+            ]
+           },
+           "/*"
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     "Version": "2012-10-17"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/WorldStateSnapshotsBucket/Policy/Resource"
+   }
+  },
+  "SchemaRegistryBucketAD895CE8": {
+   "Type": "AWS::S3::Bucket",
+   "Properties": {
+    "BucketEncryption": {
+     "ServerSideEncryptionConfiguration": [
+      {
+       "ServerSideEncryptionByDefault": {
+        "SSEAlgorithm": "AES256"
+       }
+      }
+     ]
+    },
+    "BucketName": "cc-native-schema-registry-661268174397-us-west-2",
+    "VersioningConfiguration": {
+     "Status": "Enabled"
+    }
+   },
+   "UpdateReplacePolicy": "Retain",
+   "DeletionPolicy": "Retain",
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/SchemaRegistryBucket/Resource"
+   }
+  },
+  "SchemaRegistryBucketPolicyF79BCF0C": {
+   "Type": "AWS::S3::BucketPolicy",
+   "Properties": {
+    "Bucket": {
+     "Ref": "SchemaRegistryBucketAD895CE8"
+    },
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": "s3:*",
+       "Condition": {
+        "Bool": {
+         "aws:SecureTransport": "false"
+        }
+       },
+       "Effect": "Deny",
+       "Principal": {
+        "AWS": "*"
+       },
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "SchemaRegistryBucketAD895CE8",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "SchemaRegistryBucketAD895CE8",
+             "Arn"
+            ]
+           },
+           "/*"
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     "Version": "2012-10-17"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/SchemaRegistryBucket/Policy/Resource"
+   }
+  },
+  "ArtifactsBucket2AAC5544": {
+   "Type": "AWS::S3::Bucket",
+   "Properties": {
+    "BucketEncryption": {
+     "ServerSideEncryptionConfiguration": [
+      {
+       "ServerSideEncryptionByDefault": {
+        "SSEAlgorithm": "AES256"
+       }
+      }
+     ]
+    },
+    "BucketName": "cc-native-artifacts-661268174397-us-west-2",
+    "VersioningConfiguration": {
+     "Status": "Enabled"
+    }
+   },
+   "UpdateReplacePolicy": "Retain",
+   "DeletionPolicy": "Retain",
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ArtifactsBucket/Resource"
+   }
+  },
+  "ArtifactsBucketPolicy852CB646": {
+   "Type": "AWS::S3::BucketPolicy",
+   "Properties": {
+    "Bucket": {
+     "Ref": "ArtifactsBucket2AAC5544"
+    },
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": "s3:*",
+       "Condition": {
+        "Bool": {
+         "aws:SecureTransport": "false"
+        }
+       },
+       "Effect": "Deny",
+       "Principal": {
+        "AWS": "*"
+       },
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "ArtifactsBucket2AAC5544",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "ArtifactsBucket2AAC5544",
+             "Arn"
+            ]
+           },
+           "/*"
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     "Version": "2012-10-17"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ArtifactsBucket/Policy/Resource"
+   }
+  },
+  "LedgerArchivesBucket5FE74194": {
+   "Type": "AWS::S3::Bucket",
+   "Properties": {
+    "BucketEncryption": {
+     "ServerSideEncryptionConfiguration": [
+      {
+       "ServerSideEncryptionByDefault": {
+        "SSEAlgorithm": "AES256"
+       }
+      }
+     ]
+    },
+    "BucketName": "cc-native-ledger-archives-661268174397-us-west-2",
+    "VersioningConfiguration": {
+     "Status": "Enabled"
+    }
+   },
+   "UpdateReplacePolicy": "Retain",
+   "DeletionPolicy": "Retain",
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/LedgerArchivesBucket/Resource"
+   }
+  },
+  "LedgerArchivesBucketPolicy042BE1F6": {
+   "Type": "AWS::S3::BucketPolicy",
+   "Properties": {
+    "Bucket": {
+     "Ref": "LedgerArchivesBucket5FE74194"
+    },
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": "s3:*",
+       "Condition": {
+        "Bool": {
+         "aws:SecureTransport": "false"
+        }
+       },
+       "Effect": "Deny",
+       "Principal": {
+        "AWS": "*"
+       },
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "LedgerArchivesBucket5FE74194",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "LedgerArchivesBucket5FE74194",
+             "Arn"
+            ]
+           },
+           "/*"
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     "Version": "2012-10-17"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/LedgerArchivesBucket/Policy/Resource"
+   }
+  },
+  "WorldStateTableD92FBF82": {
+   "Type": "AWS::DynamoDB::Table",
+   "Properties": {
+    "AttributeDefinitions": [
+     {
+      "AttributeName": "pk",
+      "AttributeType": "S"
+     },
+     {
+      "AttributeName": "sk",
+      "AttributeType": "S"
+     },
+     {
+      "AttributeName": "gsi1pk",
+      "AttributeType": "S"
+     },
+     {
+      "AttributeName": "gsi1sk",
+      "AttributeType": "S"
+     }
+    ],
+    "BillingMode": "PAY_PER_REQUEST",
+    "GlobalSecondaryIndexes": [
+     {
+      "IndexName": "entityType-index",
+      "KeySchema": [
+       {
+        "AttributeName": "gsi1pk",
+        "KeyType": "HASH"
+       },
+       {
+        "AttributeName": "gsi1sk",
+        "KeyType": "RANGE"
+       }
+      ],
+      "Projection": {
+       "ProjectionType": "ALL"
+      }
+     }
+    ],
+    "KeySchema": [
+     {
+      "AttributeName": "pk",
+      "KeyType": "HASH"
+     },
+     {
+      "AttributeName": "sk",
+      "KeyType": "RANGE"
+     }
+    ],
+    "PointInTimeRecoverySpecification": {
+     "PointInTimeRecoveryEnabled": true
+    },
+    "TableName": "cc-native-world-state"
+   },
+   "UpdateReplacePolicy": "Retain",
+   "DeletionPolicy": "Retain",
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/WorldStateTable/Resource"
+   }
+  },
+  "EvidenceIndexTableCC0C8C88": {
+   "Type": "AWS::DynamoDB::Table",
+   "Properties": {
+    "AttributeDefinitions": [
+     {
+      "AttributeName": "pk",
+      "AttributeType": "S"
+     },
+     {
+      "AttributeName": "sk",
+      "AttributeType": "S"
+     },
+     {
+      "AttributeName": "gsi1pk",
+      "AttributeType": "S"
+     },
+     {
+      "AttributeName": "gsi1sk",
+      "AttributeType": "S"
+     }
+    ],
+    "BillingMode": "PAY_PER_REQUEST",
+    "GlobalSecondaryIndexes": [
+     {
+      "IndexName": "entityType-index",
+      "KeySchema": [
+       {
+        "AttributeName": "gsi1pk",
+        "KeyType": "HASH"
+       },
+       {
+        "AttributeName": "gsi1sk",
+        "KeyType": "RANGE"
+       }
+      ],
+      "Projection": {
+       "ProjectionType": "ALL"
+      }
+     }
+    ],
+    "KeySchema": [
+     {
+      "AttributeName": "pk",
+      "KeyType": "HASH"
+     },
+     {
+      "AttributeName": "sk",
+      "KeyType": "RANGE"
+     }
+    ],
+    "PointInTimeRecoverySpecification": {
+     "PointInTimeRecoveryEnabled": true
+    },
+    "TableName": "cc-native-evidence-index"
+   },
+   "UpdateReplacePolicy": "Retain",
+   "DeletionPolicy": "Retain",
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/EvidenceIndexTable/Resource"
+   }
+  },
+  "SnapshotsIndexTable28F25CBB": {
+   "Type": "AWS::DynamoDB::Table",
+   "Properties": {
+    "AttributeDefinitions": [
+     {
+      "AttributeName": "pk",
+      "AttributeType": "S"
+     },
+     {
+      "AttributeName": "sk",
+      "AttributeType": "S"
+     },
+     {
+      "AttributeName": "gsi1pk",
+      "AttributeType": "S"
+     },
+     {
+      "AttributeName": "gsi1sk",
+      "AttributeType": "S"
+     }
+    ],
+    "BillingMode": "PAY_PER_REQUEST",
+    "GlobalSecondaryIndexes": [
+     {
+      "IndexName": "entityType-index",
+      "KeySchema": [
+       {
+        "AttributeName": "gsi1pk",
+        "KeyType": "HASH"
+       },
+       {
+        "AttributeName": "gsi1sk",
+        "KeyType": "RANGE"
+       }
+      ],
+      "Projection": {
+       "ProjectionType": "ALL"
+      }
+     }
+    ],
+    "KeySchema": [
+     {
+      "AttributeName": "pk",
+      "KeyType": "HASH"
+     },
+     {
+      "AttributeName": "sk",
+      "KeyType": "RANGE"
+     }
+    ],
+    "PointInTimeRecoverySpecification": {
+     "PointInTimeRecoveryEnabled": true
+    },
+    "TableName": "cc-native-snapshots-index"
+   },
+   "UpdateReplacePolicy": "Retain",
+   "DeletionPolicy": "Retain",
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/SnapshotsIndexTable/Resource"
+   }
+  },
+  "SchemaRegistryTableD1184F6E": {
+   "Type": "AWS::DynamoDB::Table",
+   "Properties": {
+    "AttributeDefinitions": [
+     {
+      "AttributeName": "pk",
+      "AttributeType": "S"
+     },
+     {
+      "AttributeName": "sk",
+      "AttributeType": "S"
+     }
+    ],
+    "BillingMode": "PAY_PER_REQUEST",
+    "KeySchema": [
+     {
+      "AttributeName": "pk",
+      "KeyType": "HASH"
+     },
+     {
+      "AttributeName": "sk",
+      "KeyType": "RANGE"
+     }
+    ],
+    "PointInTimeRecoverySpecification": {
+     "PointInTimeRecoveryEnabled": true
+    },
+    "TableName": "cc-native-schema-registry"
+   },
+   "UpdateReplacePolicy": "Retain",
+   "DeletionPolicy": "Retain",
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/SchemaRegistryTable/Resource"
+   }
+  },
+  "CriticalFieldRegistryTable5513C5F7": {
+   "Type": "AWS::DynamoDB::Table",
+   "Properties": {
+    "AttributeDefinitions": [
+     {
+      "AttributeName": "pk",
+      "AttributeType": "S"
+     },
+     {
+      "AttributeName": "sk",
+      "AttributeType": "S"
+     }
+    ],
+    "BillingMode": "PAY_PER_REQUEST",
+    "KeySchema": [
+     {
+      "AttributeName": "pk",
+      "KeyType": "HASH"
+     },
+     {
+      "AttributeName": "sk",
+      "KeyType": "RANGE"
+     }
+    ],
+    "PointInTimeRecoverySpecification": {
+     "PointInTimeRecoveryEnabled": true
+    },
+    "TableName": "cc-native-critical-field-registry"
+   },
+   "UpdateReplacePolicy": "Retain",
+   "DeletionPolicy": "Retain",
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/CriticalFieldRegistryTable/Resource"
+   }
+  },
+  "AccountsTable81C15AE5": {
+   "Type": "AWS::DynamoDB::Table",
+   "Properties": {
+    "AttributeDefinitions": [
+     {
+      "AttributeName": "tenantId",
+      "AttributeType": "S"
+     },
+     {
+      "AttributeName": "accountId",
+      "AttributeType": "S"
+     }
+    ],
+    "BillingMode": "PAY_PER_REQUEST",
+    "KeySchema": [
+     {
+      "AttributeName": "tenantId",
+      "KeyType": "HASH"
+     },
+     {
+      "AttributeName": "accountId",
+      "KeyType": "RANGE"
+     }
+    ],
+    "PointInTimeRecoverySpecification": {
+     "PointInTimeRecoveryEnabled": true
+    },
+    "TableName": "cc-native-accounts"
+   },
+   "UpdateReplacePolicy": "Retain",
+   "DeletionPolicy": "Retain",
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/AccountsTable/Resource"
+   }
+  },
+  "SignalsTableE8D63F6D": {
+   "Type": "AWS::DynamoDB::Table",
+   "Properties": {
+    "AttributeDefinitions": [
+     {
+      "AttributeName": "tenantId",
+      "AttributeType": "S"
+     },
+     {
+      "AttributeName": "signalId",
+      "AttributeType": "S"
+     },
+     {
+      "AttributeName": "accountId",
+      "AttributeType": "S"
+     },
+     {
+      "AttributeName": "timestamp",
+      "AttributeType": "S"
+     }
+    ],
+    "BillingMode": "PAY_PER_REQUEST",
+    "GlobalSecondaryIndexes": [
+     {
+      "IndexName": "accountId-index",
+      "KeySchema": [
+       {
+        "AttributeName": "accountId",
+        "KeyType": "HASH"
+       },
+       {
+        "AttributeName": "timestamp",
+        "KeyType": "RANGE"
+       }
+      ],
+      "Projection": {
+       "ProjectionType": "ALL"
+      }
+     }
+    ],
+    "KeySchema": [
+     {
+      "AttributeName": "tenantId",
+      "KeyType": "HASH"
+     },
+     {
+      "AttributeName": "signalId",
+      "KeyType": "RANGE"
+     }
+    ],
+    "PointInTimeRecoverySpecification": {
+     "PointInTimeRecoveryEnabled": true
+    },
+    "TableName": "cc-native-signals"
+   },
+   "UpdateReplacePolicy": "Retain",
+   "DeletionPolicy": "Retain",
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/SignalsTable/Resource"
+   }
+  },
+  "ToolRunsTableEF3E8A61": {
+   "Type": "AWS::DynamoDB::Table",
+   "Properties": {
+    "AttributeDefinitions": [
+     {
+      "AttributeName": "traceId",
+      "AttributeType": "S"
+     },
+     {
+      "AttributeName": "toolRunId",
+      "AttributeType": "S"
+     }
+    ],
+    "BillingMode": "PAY_PER_REQUEST",
+    "KeySchema": [
+     {
+      "AttributeName": "traceId",
+      "KeyType": "HASH"
+     },
+     {
+      "AttributeName": "toolRunId",
+      "KeyType": "RANGE"
+     }
+    ],
+    "PointInTimeRecoverySpecification": {
+     "PointInTimeRecoveryEnabled": true
+    },
+    "TableName": "cc-native-tool-runs"
+   },
+   "UpdateReplacePolicy": "Retain",
+   "DeletionPolicy": "Retain",
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ToolRunsTable/Resource"
+   }
+  },
+  "ApprovalRequestsTableEACE774C": {
+   "Type": "AWS::DynamoDB::Table",
+   "Properties": {
+    "AttributeDefinitions": [
+     {
+      "AttributeName": "tenantId",
+      "AttributeType": "S"
+     },
+     {
+      "AttributeName": "requestId",
+      "AttributeType": "S"
+     }
+    ],
+    "BillingMode": "PAY_PER_REQUEST",
+    "KeySchema": [
+     {
+      "AttributeName": "tenantId",
+      "KeyType": "HASH"
+     },
+     {
+      "AttributeName": "requestId",
+      "KeyType": "RANGE"
+     }
+    ],
+    "PointInTimeRecoverySpecification": {
+     "PointInTimeRecoveryEnabled": true
+    },
+    "TableName": "cc-native-approval-requests"
+   },
+   "UpdateReplacePolicy": "Retain",
+   "DeletionPolicy": "Retain",
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ApprovalRequestsTable/Resource"
+   }
+  },
+  "ActionQueueTable5BA20E48": {
+   "Type": "AWS::DynamoDB::Table",
+   "Properties": {
+    "AttributeDefinitions": [
+     {
+      "AttributeName": "tenantId",
+      "AttributeType": "S"
+     },
+     {
+      "AttributeName": "actionId",
+      "AttributeType": "S"
+     }
+    ],
+    "BillingMode": "PAY_PER_REQUEST",
+    "KeySchema": [
+     {
+      "AttributeName": "tenantId",
+      "KeyType": "HASH"
+     },
+     {
+      "AttributeName": "actionId",
+      "KeyType": "RANGE"
+     }
+    ],
+    "PointInTimeRecoverySpecification": {
+     "PointInTimeRecoveryEnabled": true
+    },
+    "TableName": "cc-native-action-queue"
+   },
+   "UpdateReplacePolicy": "Retain",
+   "DeletionPolicy": "Retain",
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ActionQueueTable/Resource"
+   }
+  },
+  "PolicyConfigTableE9468135": {
+   "Type": "AWS::DynamoDB::Table",
+   "Properties": {
+    "AttributeDefinitions": [
+     {
+      "AttributeName": "tenantId",
+      "AttributeType": "S"
+     },
+     {
+      "AttributeName": "policyId",
+      "AttributeType": "S"
+     }
+    ],
+    "BillingMode": "PAY_PER_REQUEST",
+    "KeySchema": [
+     {
+      "AttributeName": "tenantId",
+      "KeyType": "HASH"
+     },
+     {
+      "AttributeName": "policyId",
+      "KeyType": "RANGE"
+     }
+    ],
+    "PointInTimeRecoverySpecification": {
+     "PointInTimeRecoveryEnabled": true
+    },
+    "TableName": "cc-native-policy-config"
+   },
+   "UpdateReplacePolicy": "Retain",
+   "DeletionPolicy": "Retain",
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/PolicyConfigTable/Resource"
+   }
+  },
+  "LedgerTable38A58B60": {
+   "Type": "AWS::DynamoDB::Table",
+   "Properties": {
+    "AttributeDefinitions": [
+     {
+      "AttributeName": "pk",
+      "AttributeType": "S"
+     },
+     {
+      "AttributeName": "sk",
+      "AttributeType": "S"
+     },
+     {
+      "AttributeName": "gsi1pk",
+      "AttributeType": "S"
+     },
+     {
+      "AttributeName": "gsi1sk",
+      "AttributeType": "S"
+     },
+     {
+      "AttributeName": "gsi2pk",
+      "AttributeType": "S"
+     },
+     {
+      "AttributeName": "gsi2sk",
+      "AttributeType": "S"
+     }
+    ],
+    "BillingMode": "PAY_PER_REQUEST",
+    "GlobalSecondaryIndexes": [
+     {
+      "IndexName": "gsi1-index",
+      "KeySchema": [
+       {
+        "AttributeName": "gsi1pk",
+        "KeyType": "HASH"
+       },
+       {
+        "AttributeName": "gsi1sk",
+        "KeyType": "RANGE"
+       }
+      ],
+      "Projection": {
+       "ProjectionType": "ALL"
+      }
+     },
+     {
+      "IndexName": "gsi2-index",
+      "KeySchema": [
+       {
+        "AttributeName": "gsi2pk",
+        "KeyType": "HASH"
+       },
+       {
+        "AttributeName": "gsi2sk",
+        "KeyType": "RANGE"
+       }
+      ],
+      "Projection": {
+       "ProjectionType": "ALL"
+      }
+     }
+    ],
+    "KeySchema": [
+     {
+      "AttributeName": "pk",
+      "KeyType": "HASH"
+     },
+     {
+      "AttributeName": "sk",
+      "KeyType": "RANGE"
+     }
+    ],
+    "PointInTimeRecoverySpecification": {
+     "PointInTimeRecoveryEnabled": true
+    },
+    "TableName": "cc-native-ledger"
+   },
+   "UpdateReplacePolicy": "Retain",
+   "DeletionPolicy": "Retain",
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/LedgerTable/Resource"
+   }
+  },
+  "CacheTableC1E6DF7E": {
+   "Type": "AWS::DynamoDB::Table",
+   "Properties": {
+    "AttributeDefinitions": [
+     {
+      "AttributeName": "cacheKey",
+      "AttributeType": "S"
+     }
+    ],
+    "BillingMode": "PAY_PER_REQUEST",
+    "KeySchema": [
+     {
+      "AttributeName": "cacheKey",
+      "KeyType": "HASH"
+     }
+    ],
+    "TableName": "cc-native-cache",
+    "TimeToLiveSpecification": {
+     "AttributeName": "ttl",
+     "Enabled": true
+    }
+   },
+   "UpdateReplacePolicy": "Retain",
+   "DeletionPolicy": "Retain",
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/CacheTable/Resource"
+   }
+  },
+  "TenantsTableB701DC57": {
+   "Type": "AWS::DynamoDB::Table",
+   "Properties": {
+    "AttributeDefinitions": [
+     {
+      "AttributeName": "tenantId",
+      "AttributeType": "S"
+     }
+    ],
+    "BillingMode": "PAY_PER_REQUEST",
+    "KeySchema": [
+     {
+      "AttributeName": "tenantId",
+      "KeyType": "HASH"
+     }
+    ],
+    "PointInTimeRecoverySpecification": {
+     "PointInTimeRecoveryEnabled": true
+    },
+    "TableName": "cc-native-tenants"
+   },
+   "UpdateReplacePolicy": "Retain",
+   "DeletionPolicy": "Retain",
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/TenantsTable/Resource"
+   }
+  },
+  "MethodologyTable8F16BBDE": {
+   "Type": "AWS::DynamoDB::Table",
+   "Properties": {
+    "AttributeDefinitions": [
+     {
+      "AttributeName": "pk",
+      "AttributeType": "S"
+     },
+     {
+      "AttributeName": "sk",
+      "AttributeType": "S"
+     },
+     {
+      "AttributeName": "gsi1pk",
+      "AttributeType": "S"
+     },
+     {
+      "AttributeName": "gsi1sk",
+      "AttributeType": "S"
+     }
+    ],
+    "BillingMode": "PAY_PER_REQUEST",
+    "GlobalSecondaryIndexes": [
+     {
+      "IndexName": "tenant-status-index",
+      "KeySchema": [
+       {
+        "AttributeName": "gsi1pk",
+        "KeyType": "HASH"
+       },
+       {
+        "AttributeName": "gsi1sk",
+        "KeyType": "RANGE"
+       }
+      ],
+      "Projection": {
+       "ProjectionType": "ALL"
+      }
+     }
+    ],
+    "KeySchema": [
+     {
+      "AttributeName": "pk",
+      "KeyType": "HASH"
+     },
+     {
+      "AttributeName": "sk",
+      "KeyType": "RANGE"
+     }
+    ],
+    "PointInTimeRecoverySpecification": {
+     "PointInTimeRecoveryEnabled": true
+    },
+    "TableName": "cc-native-methodology"
+   },
+   "UpdateReplacePolicy": "Retain",
+   "DeletionPolicy": "Retain",
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/MethodologyTable/Resource"
+   }
+  },
+  "AssessmentTable25EB317A": {
+   "Type": "AWS::DynamoDB::Table",
+   "Properties": {
+    "AttributeDefinitions": [
+     {
+      "AttributeName": "pk",
+      "AttributeType": "S"
+     },
+     {
+      "AttributeName": "sk",
+      "AttributeType": "S"
+     },
+     {
+      "AttributeName": "gsi1pk",
+      "AttributeType": "S"
+     },
+     {
+      "AttributeName": "gsi1sk",
+      "AttributeType": "S"
+     }
+    ],
+    "BillingMode": "PAY_PER_REQUEST",
+    "GlobalSecondaryIndexes": [
+     {
+      "IndexName": "opportunity-methodology-index",
+      "KeySchema": [
+       {
+        "AttributeName": "gsi1pk",
+        "KeyType": "HASH"
+       },
+       {
+        "AttributeName": "gsi1sk",
+        "KeyType": "RANGE"
+       }
+      ],
+      "Projection": {
+       "ProjectionType": "ALL"
+      }
+     }
+    ],
+    "KeySchema": [
+     {
+      "AttributeName": "pk",
+      "KeyType": "HASH"
+     },
+     {
+      "AttributeName": "sk",
+      "KeyType": "RANGE"
+     }
+    ],
+    "PointInTimeRecoverySpecification": {
+     "PointInTimeRecoveryEnabled": true
+    },
+    "TableName": "cc-native-assessment"
+   },
+   "UpdateReplacePolicy": "Retain",
+   "DeletionPolicy": "Retain",
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/AssessmentTable/Resource"
+   }
+  },
+  "IdentitiesTableCD62DAD4": {
+   "Type": "AWS::DynamoDB::Table",
+   "Properties": {
+    "AttributeDefinitions": [
+     {
+      "AttributeName": "pk",
+      "AttributeType": "S"
+     },
+     {
+      "AttributeName": "sk",
+      "AttributeType": "S"
+     },
+     {
+      "AttributeName": "gsi1pk",
+      "AttributeType": "S"
+     },
+     {
+      "AttributeName": "gsi1sk",
+      "AttributeType": "S"
+     }
+    ],
+    "BillingMode": "PAY_PER_REQUEST",
+    "GlobalSecondaryIndexes": [
+     {
+      "IndexName": "tenant-index",
+      "KeySchema": [
+       {
+        "AttributeName": "gsi1pk",
+        "KeyType": "HASH"
+       },
+       {
+        "AttributeName": "gsi1sk",
+        "KeyType": "RANGE"
+       }
+      ],
+      "Projection": {
+       "ProjectionType": "ALL"
+      }
+     }
+    ],
+    "KeySchema": [
+     {
+      "AttributeName": "pk",
+      "KeyType": "HASH"
+     },
+     {
+      "AttributeName": "sk",
+      "KeyType": "RANGE"
+     }
+    ],
+    "PointInTimeRecoverySpecification": {
+     "PointInTimeRecoveryEnabled": true
+    },
+    "TableName": "cc-native-identities"
+   },
+   "UpdateReplacePolicy": "Retain",
+   "DeletionPolicy": "Retain",
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/IdentitiesTable/Resource"
+   }
+  },
+  "CCNativeEventBus892049F2": {
+   "Type": "AWS::Events::EventBus",
+   "Properties": {
+    "Name": "cc-native-events"
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/CCNativeEventBus/Resource"
+   }
+  },
+  "TenantEncryptionKey1880BF35": {
+   "Type": "AWS::KMS::Key",
+   "Properties": {
+    "Description": "KMS key for tenant data encryption",
+    "EnableKeyRotation": true,
+    "KeyPolicy": {
+     "Statement": [
+      {
+       "Action": "kms:*",
+       "Effect": "Allow",
+       "Principal": {
+        "AWS": "arn:aws:iam::661268174397:root"
+       },
+       "Resource": "*"
+      }
+     ],
+     "Version": "2012-10-17"
+    }
+   },
+   "UpdateReplacePolicy": "Retain",
+   "DeletionPolicy": "Retain",
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/TenantEncryptionKey/Resource"
+   }
+  },
+  "AgentRoleF4A42D6B": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": [
+         "bedrock.amazonaws.com",
+         "lambda.amazonaws.com"
+        ]
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "Description": "Read-only IAM role for autonomous agents (World Model read access only)",
+    "RoleName": "cc-native-agent-role"
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/AgentRole/Resource"
+   }
+  },
+  "AgentRoleDefaultPolicy1027F5D2": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": [
+        "dynamodb:GetItem",
+        "dynamodb:Query",
+        "dynamodb:Scan"
+       ],
+       "Condition": {
+        "StringEquals": {
+         "dynamodb:ReadConsistency": "eventual"
+        }
+       },
+       "Effect": "Allow",
+       "Resource": "arn:aws:dynamodb:us-west-2:661268174397:table/cc-native-*"
+      },
+      {
+       "Action": "s3:GetObject",
+       "Effect": "Allow",
+       "Resource": [
+        {
+         "Fn::Join": [
+          "",
+          [
+           "arn:aws:s3:::",
+           {
+            "Ref": "EvidenceLedgerBucket3A5BFB25"
+           },
+           "/evidence/*"
+          ]
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           "arn:aws:s3:::",
+           {
+            "Ref": "WorldStateSnapshotsBucket7B77A435"
+           },
+           "/snapshots/*"
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "Action": [
+        "dynamodb:BatchWriteItem",
+        "dynamodb:DeleteItem",
+        "dynamodb:PutItem",
+        "dynamodb:UpdateItem",
+        "s3:DeleteObject",
+        "s3:PutObject",
+        "s3:PutObjectAcl"
+       ],
+       "Effect": "Deny",
+       "Resource": "*"
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "AgentRoleDefaultPolicy1027F5D2",
+    "Roles": [
+     {
+      "Ref": "AgentRoleF4A42D6B"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/AgentRole/DefaultPolicy/Resource"
+   }
+  },
+  "UserPool6BA7E5F2": {
+   "Type": "AWS::Cognito::UserPool",
+   "Properties": {
+    "AccountRecoverySetting": {
+     "RecoveryMechanisms": [
+      {
+       "Name": "verified_email",
+       "Priority": 1
+      }
+     ]
+    },
+    "AdminCreateUserConfig": {
+     "AllowAdminCreateUserOnly": true
+    },
+    "AutoVerifiedAttributes": [
+     "email"
+    ],
+    "EmailVerificationMessage": "The verification code to your new account is {####}",
+    "EmailVerificationSubject": "Verify your new account",
+    "Policies": {
+     "PasswordPolicy": {
+      "MinimumLength": 12,
+      "RequireLowercase": true,
+      "RequireNumbers": true,
+      "RequireSymbols": true,
+      "RequireUppercase": true
+     }
+    },
+    "SmsVerificationMessage": "The verification code to your new account is {####}",
+    "UserPoolName": "cc-native-users",
+    "UsernameAttributes": [
+     "email"
+    ],
+    "VerificationMessageTemplate": {
+     "DefaultEmailOption": "CONFIRM_WITH_CODE",
+     "EmailMessage": "The verification code to your new account is {####}",
+     "EmailSubject": "Verify your new account",
+     "SmsMessage": "The verification code to your new account is {####}"
+    }
+   },
+   "UpdateReplacePolicy": "Retain",
+   "DeletionPolicy": "Retain",
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/UserPool/Resource"
+   }
+  },
+  "UserPoolWebClient4C9370B0": {
+   "Type": "AWS::Cognito::UserPoolClient",
+   "Properties": {
+    "AllowedOAuthFlows": [
+     "implicit",
+     "code"
+    ],
+    "AllowedOAuthFlowsUserPoolClient": true,
+    "AllowedOAuthScopes": [
+     "profile",
+     "phone",
+     "email",
+     "openid",
+     "aws.cognito.signin.user.admin"
+    ],
+    "CallbackURLs": [
+     "https://example.com"
+    ],
+    "ClientName": "cc-native-web-client",
+    "ExplicitAuthFlows": [
+     "ALLOW_USER_PASSWORD_AUTH",
+     "ALLOW_USER_SRP_AUTH",
+     "ALLOW_REFRESH_TOKEN_AUTH"
+    ],
+    "GenerateSecret": false,
+    "PreventUserExistenceErrors": "ENABLED",
+    "SupportedIdentityProviders": [
+     "COGNITO"
+    ],
+    "UserPoolId": {
+     "Ref": "UserPool6BA7E5F2"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/UserPool/WebClient/Resource"
+   }
+  },
+  "NeptuneInfrastructureCCNativeVpc9CABA391": {
+   "Type": "AWS::EC2::VPC",
+   "Properties": {
+    "CidrBlock": "10.0.0.0/16",
+    "EnableDnsHostnames": true,
+    "EnableDnsSupport": true,
+    "InstanceTenancy": "default",
+    "Tags": [
+     {
+      "Key": "Name",
+      "Value": "cc-native-vpc"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/NeptuneInfrastructure/CCNativeVpc/Resource"
+   }
+  },
+  "NeptuneInfrastructureCCNativeVpcNeptuneIsolatedSubnet1SubnetA7BEE99D": {
+   "Type": "AWS::EC2::Subnet",
+   "Properties": {
+    "AvailabilityZone": "us-west-2a",
+    "CidrBlock": "10.0.0.0/24",
+    "MapPublicIpOnLaunch": false,
+    "Tags": [
+     {
+      "Key": "aws-cdk:subnet-name",
+      "Value": "NeptuneIsolated"
+     },
+     {
+      "Key": "aws-cdk:subnet-type",
+      "Value": "Isolated"
+     },
+     {
+      "Key": "Name",
+      "Value": "CCNativeStack/NeptuneInfrastructure/CCNativeVpc/NeptuneIsolatedSubnet1"
+     }
+    ],
+    "VpcId": {
+     "Ref": "NeptuneInfrastructureCCNativeVpc9CABA391"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/NeptuneInfrastructure/CCNativeVpc/NeptuneIsolatedSubnet1/Subnet"
+   }
+  },
+  "NeptuneInfrastructureCCNativeVpcNeptuneIsolatedSubnet1RouteTable23335C61": {
+   "Type": "AWS::EC2::RouteTable",
+   "Properties": {
+    "Tags": [
+     {
+      "Key": "Name",
+      "Value": "CCNativeStack/NeptuneInfrastructure/CCNativeVpc/NeptuneIsolatedSubnet1"
+     }
+    ],
+    "VpcId": {
+     "Ref": "NeptuneInfrastructureCCNativeVpc9CABA391"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/NeptuneInfrastructure/CCNativeVpc/NeptuneIsolatedSubnet1/RouteTable"
+   }
+  },
+  "NeptuneInfrastructureCCNativeVpcNeptuneIsolatedSubnet1RouteTableAssociation9F6FC58C": {
+   "Type": "AWS::EC2::SubnetRouteTableAssociation",
+   "Properties": {
+    "RouteTableId": {
+     "Ref": "NeptuneInfrastructureCCNativeVpcNeptuneIsolatedSubnet1RouteTable23335C61"
+    },
+    "SubnetId": {
+     "Ref": "NeptuneInfrastructureCCNativeVpcNeptuneIsolatedSubnet1SubnetA7BEE99D"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/NeptuneInfrastructure/CCNativeVpc/NeptuneIsolatedSubnet1/RouteTableAssociation"
+   }
+  },
+  "NeptuneInfrastructureCCNativeVpcNeptuneIsolatedSubnet2SubnetD9369810": {
+   "Type": "AWS::EC2::Subnet",
+   "Properties": {
+    "AvailabilityZone": "us-west-2b",
+    "CidrBlock": "10.0.1.0/24",
+    "MapPublicIpOnLaunch": false,
+    "Tags": [
+     {
+      "Key": "aws-cdk:subnet-name",
+      "Value": "NeptuneIsolated"
+     },
+     {
+      "Key": "aws-cdk:subnet-type",
+      "Value": "Isolated"
+     },
+     {
+      "Key": "Name",
+      "Value": "CCNativeStack/NeptuneInfrastructure/CCNativeVpc/NeptuneIsolatedSubnet2"
+     }
+    ],
+    "VpcId": {
+     "Ref": "NeptuneInfrastructureCCNativeVpc9CABA391"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/NeptuneInfrastructure/CCNativeVpc/NeptuneIsolatedSubnet2/Subnet"
+   }
+  },
+  "NeptuneInfrastructureCCNativeVpcNeptuneIsolatedSubnet2RouteTable41D2F6EF": {
+   "Type": "AWS::EC2::RouteTable",
+   "Properties": {
+    "Tags": [
+     {
+      "Key": "Name",
+      "Value": "CCNativeStack/NeptuneInfrastructure/CCNativeVpc/NeptuneIsolatedSubnet2"
+     }
+    ],
+    "VpcId": {
+     "Ref": "NeptuneInfrastructureCCNativeVpc9CABA391"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/NeptuneInfrastructure/CCNativeVpc/NeptuneIsolatedSubnet2/RouteTable"
+   }
+  },
+  "NeptuneInfrastructureCCNativeVpcNeptuneIsolatedSubnet2RouteTableAssociationB0458231": {
+   "Type": "AWS::EC2::SubnetRouteTableAssociation",
+   "Properties": {
+    "RouteTableId": {
+     "Ref": "NeptuneInfrastructureCCNativeVpcNeptuneIsolatedSubnet2RouteTable41D2F6EF"
+    },
+    "SubnetId": {
+     "Ref": "NeptuneInfrastructureCCNativeVpcNeptuneIsolatedSubnet2SubnetD9369810"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/NeptuneInfrastructure/CCNativeVpc/NeptuneIsolatedSubnet2/RouteTableAssociation"
+   }
+  },
+  "NeptuneInfrastructureCCNativeVpcRestrictDefaultSecurityGroupCustomResource617E4544": {
+   "Type": "Custom::VpcRestrictDefaultSG",
+   "Properties": {
+    "ServiceToken": {
+     "Fn::GetAtt": [
+      "CustomVpcRestrictDefaultSGCustomResourceProviderHandlerDC833E5E",
+      "Arn"
+     ]
+    },
+    "DefaultSecurityGroupId": {
+     "Fn::GetAtt": [
+      "NeptuneInfrastructureCCNativeVpc9CABA391",
+      "DefaultSecurityGroup"
+     ]
+    },
+    "Account": "661268174397"
+   },
+   "UpdateReplacePolicy": "Delete",
+   "DeletionPolicy": "Delete",
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/NeptuneInfrastructure/CCNativeVpc/RestrictDefaultSecurityGroupCustomResource/Default"
+   }
+  },
+  "VPCFlowLogGroup": {
+   "Type": "AWS::Logs::LogGroup",
+   "Properties": {
+    "LogGroupName": "/aws/vpc/cc-native-flow-logs",
+    "RetentionInDays": 30
+   },
+   "UpdateReplacePolicy": "Retain",
+   "DeletionPolicy": "Retain",
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/NeptuneInfrastructure/VPCFlowLogGroup/Resource"
+   }
+  },
+  "NeptuneInfrastructureVPCFlowLogRole52BBBE1D": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "vpc-flow-logs.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "Description": "IAM role for VPC Flow Logs"
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/NeptuneInfrastructure/VPCFlowLogRole/Resource"
+   }
+  },
+  "NeptuneInfrastructureVPCFlowLogRoleDefaultPolicy402D435E": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": [
+        "logs:CreateLogGroup",
+        "logs:CreateLogStream",
+        "logs:DescribeLogGroups",
+        "logs:DescribeLogStreams",
+        "logs:PutLogEvents"
+       ],
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::GetAtt": [
+         "VPCFlowLogGroup",
+         "Arn"
+        ]
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "NeptuneInfrastructureVPCFlowLogRoleDefaultPolicy402D435E",
+    "Roles": [
+     {
+      "Ref": "NeptuneInfrastructureVPCFlowLogRole52BBBE1D"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/NeptuneInfrastructure/VPCFlowLogRole/DefaultPolicy/Resource"
+   }
+  },
+  "NeptuneInfrastructureVPCFlowLogE91936D4": {
+   "Type": "AWS::EC2::FlowLog",
+   "Properties": {
+    "DeliverLogsPermissionArn": {
+     "Fn::GetAtt": [
+      "NeptuneInfrastructureVPCFlowLogRole52BBBE1D",
+      "Arn"
+     ]
+    },
+    "LogDestinationType": "cloud-watch-logs",
+    "LogGroupName": {
+     "Ref": "VPCFlowLogGroup"
+    },
+    "ResourceId": {
+     "Ref": "NeptuneInfrastructureCCNativeVpc9CABA391"
+    },
+    "ResourceType": "VPC",
+    "Tags": [
+     {
+      "Key": "Name",
+      "Value": "CCNativeStack/NeptuneInfrastructure/VPCFlowLog"
+     }
+    ],
+    "TrafficType": "ALL"
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/NeptuneInfrastructure/VPCFlowLog/FlowLog"
+   }
+  },
+  "NeptuneAuditLogGroup": {
+   "Type": "AWS::Logs::LogGroup",
+   "Properties": {
+    "LogGroupName": "/aws/neptune/cluster/cc-native-neptune-cluster/audit",
+    "RetentionInDays": 30
+   },
+   "UpdateReplacePolicy": "Retain",
+   "DeletionPolicy": "Retain",
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/NeptuneInfrastructure/NeptuneAuditLogGroup/Resource"
+   }
+  },
+  "NeptuneInfrastructureNeptuneLogsRole6C0E7822": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "rds.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "Description": "IAM role for Neptune to write audit logs to CloudWatch"
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/NeptuneInfrastructure/NeptuneLogsRole/Resource"
+   }
+  },
+  "NeptuneInfrastructureNeptuneLogsRoleDefaultPolicyB8D02316": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": [
+        "logs:CreateLogGroup",
+        "logs:CreateLogStream",
+        "logs:DescribeLogStreams",
+        "logs:PutLogEvents"
+       ],
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::GetAtt": [
+         "NeptuneAuditLogGroup",
+         "Arn"
+        ]
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "NeptuneInfrastructureNeptuneLogsRoleDefaultPolicyB8D02316",
+    "Roles": [
+     {
+      "Ref": "NeptuneInfrastructureNeptuneLogsRole6C0E7822"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/NeptuneInfrastructure/NeptuneLogsRole/DefaultPolicy/Resource"
+   }
+  },
+  "NeptuneInfrastructureNeptuneSecurityGroup4DAE2150": {
+   "Type": "AWS::EC2::SecurityGroup",
+   "Properties": {
+    "GroupDescription": "Security group for Neptune cluster (VPC-only access)",
+    "SecurityGroupEgress": [
+     {
+      "CidrIp": "255.255.255.255/32",
+      "Description": "Disallow all traffic",
+      "FromPort": 252,
+      "IpProtocol": "icmp",
+      "ToPort": 86
+     }
+    ],
+    "VpcId": {
+     "Ref": "NeptuneInfrastructureCCNativeVpc9CABA391"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/NeptuneInfrastructure/NeptuneSecurityGroup/Resource"
+   }
+  },
+  "NeptuneInfrastructureNeptuneSecurityGroupfromCCNativeStackNeptuneInfrastructureGraphMaterializerSecurityGroup2826C302818277890D32": {
+   "Type": "AWS::EC2::SecurityGroupIngress",
+   "Properties": {
+    "Description": "Allow Gremlin connections from graph-materializer Lambda",
+    "FromPort": 8182,
+    "GroupId": {
+     "Fn::GetAtt": [
+      "NeptuneInfrastructureNeptuneSecurityGroup4DAE2150",
+      "GroupId"
+     ]
+    },
+    "IpProtocol": "tcp",
+    "SourceSecurityGroupId": {
+     "Fn::GetAtt": [
+      "NeptuneInfrastructureGraphMaterializerSecurityGroupE324FDAD",
+      "GroupId"
+     ]
+    },
+    "ToPort": 8182
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/NeptuneInfrastructure/NeptuneSecurityGroup/from CCNativeStackNeptuneInfrastructureGraphMaterializerSecurityGroup2826C302:8182"
+   }
+  },
+  "NeptuneInfrastructureNeptuneSecurityGroupfromCCNativeStackNeptuneInfrastructureSynthesisEngineSecurityGroup3BB6D47F8182C918F650": {
+   "Type": "AWS::EC2::SecurityGroupIngress",
+   "Properties": {
+    "Description": "Allow Gremlin connections from synthesis-engine Lambda",
+    "FromPort": 8182,
+    "GroupId": {
+     "Fn::GetAtt": [
+      "NeptuneInfrastructureNeptuneSecurityGroup4DAE2150",
+      "GroupId"
+     ]
+    },
+    "IpProtocol": "tcp",
+    "SourceSecurityGroupId": {
+     "Fn::GetAtt": [
+      "NeptuneInfrastructureSynthesisEngineSecurityGroup862BB426",
+      "GroupId"
+     ]
+    },
+    "ToPort": 8182
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/NeptuneInfrastructure/NeptuneSecurityGroup/from CCNativeStackNeptuneInfrastructureSynthesisEngineSecurityGroup3BB6D47F:8182"
+   }
+  },
+  "NeptuneInfrastructureGraphMaterializerSecurityGroupE324FDAD": {
+   "Type": "AWS::EC2::SecurityGroup",
+   "Properties": {
+    "GroupDescription": "Security group for graph-materializer Lambda function",
+    "SecurityGroupEgress": [
+     {
+      "CidrIp": {
+       "Fn::GetAtt": [
+        "NeptuneInfrastructureCCNativeVpc9CABA391",
+        "CidrBlock"
+       ]
+      },
+      "Description": "Allow HTTPS to AWS services via VPC endpoints (DynamoDB, EventBridge, CloudWatch Logs)",
+      "FromPort": 443,
+      "IpProtocol": "tcp",
+      "ToPort": 443
+     }
+    ],
+    "VpcId": {
+     "Ref": "NeptuneInfrastructureCCNativeVpc9CABA391"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/NeptuneInfrastructure/GraphMaterializerSecurityGroup/Resource"
+   }
+  },
+  "NeptuneInfrastructureGraphMaterializerSecurityGrouptoCCNativeStackNeptuneInfrastructureNeptuneSecurityGroup570D658A81821AAE957F": {
+   "Type": "AWS::EC2::SecurityGroupEgress",
+   "Properties": {
+    "Description": "Allow Gremlin connections to Neptune",
+    "DestinationSecurityGroupId": {
+     "Fn::GetAtt": [
+      "NeptuneInfrastructureNeptuneSecurityGroup4DAE2150",
+      "GroupId"
+     ]
+    },
+    "FromPort": 8182,
+    "GroupId": {
+     "Fn::GetAtt": [
+      "NeptuneInfrastructureGraphMaterializerSecurityGroupE324FDAD",
+      "GroupId"
+     ]
+    },
+    "IpProtocol": "tcp",
+    "ToPort": 8182
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/NeptuneInfrastructure/GraphMaterializerSecurityGroup/to CCNativeStackNeptuneInfrastructureNeptuneSecurityGroup570D658A:8182"
+   }
+  },
+  "NeptuneInfrastructureSynthesisEngineSecurityGroup862BB426": {
+   "Type": "AWS::EC2::SecurityGroup",
+   "Properties": {
+    "GroupDescription": "Security group for synthesis-engine Lambda function",
+    "SecurityGroupEgress": [
+     {
+      "CidrIp": {
+       "Fn::GetAtt": [
+        "NeptuneInfrastructureCCNativeVpc9CABA391",
+        "CidrBlock"
+       ]
+      },
+      "Description": "Allow HTTPS to AWS services via VPC endpoints (DynamoDB, EventBridge, CloudWatch Logs)",
+      "FromPort": 443,
+      "IpProtocol": "tcp",
+      "ToPort": 443
+     }
+    ],
+    "VpcId": {
+     "Ref": "NeptuneInfrastructureCCNativeVpc9CABA391"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/NeptuneInfrastructure/SynthesisEngineSecurityGroup/Resource"
+   }
+  },
+  "NeptuneInfrastructureSynthesisEngineSecurityGrouptoCCNativeStackNeptuneInfrastructureNeptuneSecurityGroup570D658A8182B1C69328": {
+   "Type": "AWS::EC2::SecurityGroupEgress",
+   "Properties": {
+    "Description": "Allow Gremlin connections to Neptune",
+    "DestinationSecurityGroupId": {
+     "Fn::GetAtt": [
+      "NeptuneInfrastructureNeptuneSecurityGroup4DAE2150",
+      "GroupId"
+     ]
+    },
+    "FromPort": 8182,
+    "GroupId": {
+     "Fn::GetAtt": [
+      "NeptuneInfrastructureSynthesisEngineSecurityGroup862BB426",
+      "GroupId"
+     ]
+    },
+    "IpProtocol": "tcp",
+    "ToPort": 8182
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/NeptuneInfrastructure/SynthesisEngineSecurityGroup/to CCNativeStackNeptuneInfrastructureNeptuneSecurityGroup570D658A:8182"
+   }
+  },
+  "NeptuneInfrastructureNeptuneSubnetGroup829B75F7": {
+   "Type": "AWS::Neptune::DBSubnetGroup",
+   "Properties": {
+    "DBSubnetGroupDescription": "Subnet group for Neptune cluster",
+    "DBSubnetGroupName": "cc-native-neptune-subnet-group",
+    "SubnetIds": [
+     {
+      "Ref": "NeptuneInfrastructureCCNativeVpcNeptuneIsolatedSubnet1SubnetA7BEE99D"
+     },
+     {
+      "Ref": "NeptuneInfrastructureCCNativeVpcNeptuneIsolatedSubnet2SubnetD9369810"
+     }
+    ],
+    "Tags": [
+     {
+      "Key": "Name",
+      "Value": "cc-native-neptune-subnet-group"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/NeptuneInfrastructure/NeptuneSubnetGroup"
+   }
+  },
+  "NeptuneInfrastructureNeptuneParameterGroupB1C5FC2E": {
+   "Type": "AWS::Neptune::DBClusterParameterGroup",
+   "Properties": {
+    "Description": "Parameter group for Neptune cluster",
+    "Family": "neptune1.4",
+    "Parameters": {
+     "neptune_query_timeout": "120000",
+     "neptune_enable_audit_log": "1"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/NeptuneInfrastructure/NeptuneParameterGroup"
+   }
+  },
+  "NeptuneInfrastructureNeptuneCluster6F50D8EC": {
+   "Type": "AWS::Neptune::DBCluster",
+   "Properties": {
+    "BackupRetentionPeriod": 7,
+    "DBClusterIdentifier": "cc-native-neptune-cluster",
+    "DBClusterParameterGroupName": {
+     "Ref": "NeptuneInfrastructureNeptuneParameterGroupB1C5FC2E"
+    },
+    "DBSubnetGroupName": {
+     "Ref": "NeptuneInfrastructureNeptuneSubnetGroup829B75F7"
+    },
+    "DeletionProtection": false,
+    "EnableCloudwatchLogsExports": [
+     "audit"
+    ],
+    "IamAuthEnabled": true,
+    "PreferredBackupWindow": "03:00-04:00",
+    "PreferredMaintenanceWindow": "sun:04:00-sun:05:00",
+    "StorageEncrypted": true,
+    "Tags": [
+     {
+      "Key": "Name",
+      "Value": "cc-native-neptune-cluster"
+     }
+    ],
+    "VpcSecurityGroupIds": [
+     {
+      "Fn::GetAtt": [
+       "NeptuneInfrastructureNeptuneSecurityGroup4DAE2150",
+       "GroupId"
+      ]
+     }
+    ]
+   },
+   "DependsOn": [
+    "NeptuneAuditLogGroup"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/NeptuneInfrastructure/NeptuneCluster"
+   }
+  },
+  "NeptuneInfrastructureNeptuneInstance4C2DEC15": {
+   "Type": "AWS::Neptune::DBInstance",
+   "Properties": {
+    "DBClusterIdentifier": {
+     "Ref": "NeptuneInfrastructureNeptuneCluster6F50D8EC"
+    },
+    "DBInstanceClass": "db.r5.large",
+    "DBInstanceIdentifier": "cc-native-neptune-instance",
+    "DBSubnetGroupName": {
+     "Ref": "NeptuneInfrastructureNeptuneSubnetGroup829B75F7"
+    },
+    "PubliclyAccessible": false,
+    "Tags": [
+     {
+      "Key": "Name",
+      "Value": "cc-native-neptune-instance"
+     }
+    ]
+   },
+   "DependsOn": [
+    "NeptuneInfrastructureNeptuneCluster6F50D8EC"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/NeptuneInfrastructure/NeptuneInstance"
+   }
+  },
+  "NeptuneInfrastructureNeptuneAccessRole3BE029B3": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "Description": "IAM role for Lambda functions to access Neptune cluster",
+    "RoleName": "cc-native-neptune-access-role"
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/NeptuneInfrastructure/NeptuneAccessRole/Resource"
+   }
+  },
+  "NeptuneInfrastructureNeptuneAccessRoleDefaultPolicy70BE82DD": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": [
+        "neptune-db:ReadDataViaQuery",
+        "neptune-db:WriteDataViaQuery",
+        "neptune-db:connect"
+       ],
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::Join": [
+         "",
+         [
+          "arn:aws:neptune-db:us-west-2:661268174397:",
+          {
+           "Ref": "NeptuneInfrastructureNeptuneCluster6F50D8EC"
+          },
+          "/*"
+         ]
+        ]
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "NeptuneInfrastructureNeptuneAccessRoleDefaultPolicy70BE82DD",
+    "Roles": [
+     {
+      "Ref": "NeptuneInfrastructureNeptuneAccessRole3BE029B3"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/NeptuneInfrastructure/NeptuneAccessRole/DefaultPolicy/Resource"
+   }
+  },
+  "NeptuneInfrastructureSSMEndpointSecurityGroup5899AF6F": {
+   "Type": "AWS::EC2::SecurityGroup",
+   "Properties": {
+    "GroupDescription": "CCNativeStack/NeptuneInfrastructure/SSMEndpoint/SecurityGroup",
+    "SecurityGroupEgress": [
+     {
+      "CidrIp": "0.0.0.0/0",
+      "Description": "Allow all outbound traffic by default",
+      "IpProtocol": "-1"
+     }
+    ],
+    "SecurityGroupIngress": [
+     {
+      "CidrIp": {
+       "Fn::GetAtt": [
+        "NeptuneInfrastructureCCNativeVpc9CABA391",
+        "CidrBlock"
+       ]
+      },
+      "Description": {
+       "Fn::Join": [
+        "",
+        [
+         "from ",
+         {
+          "Fn::GetAtt": [
+           "NeptuneInfrastructureCCNativeVpc9CABA391",
+           "CidrBlock"
+          ]
+         },
+         ":443"
+        ]
+       ]
+      },
+      "FromPort": 443,
+      "IpProtocol": "tcp",
+      "ToPort": 443
+     }
+    ],
+    "VpcId": {
+     "Ref": "NeptuneInfrastructureCCNativeVpc9CABA391"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/NeptuneInfrastructure/SSMEndpoint/SecurityGroup/Resource"
+   }
+  },
+  "NeptuneInfrastructureSSMEndpoint4E59F374": {
+   "Type": "AWS::EC2::VPCEndpoint",
+   "Properties": {
+    "PrivateDnsEnabled": true,
+    "SecurityGroupIds": [
+     {
+      "Fn::GetAtt": [
+       "NeptuneInfrastructureSSMEndpointSecurityGroup5899AF6F",
+       "GroupId"
+      ]
+     }
+    ],
+    "ServiceName": "com.amazonaws.us-west-2.ssm",
+    "SubnetIds": [
+     {
+      "Ref": "NeptuneInfrastructureCCNativeVpcNeptuneIsolatedSubnet1SubnetA7BEE99D"
+     },
+     {
+      "Ref": "NeptuneInfrastructureCCNativeVpcNeptuneIsolatedSubnet2SubnetD9369810"
+     }
+    ],
+    "VpcEndpointType": "Interface",
+    "VpcId": {
+     "Ref": "NeptuneInfrastructureCCNativeVpc9CABA391"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/NeptuneInfrastructure/SSMEndpoint/Resource"
+   }
+  },
+  "NeptuneInfrastructureSSMMessagesEndpointSecurityGroup8DF937A8": {
+   "Type": "AWS::EC2::SecurityGroup",
+   "Properties": {
+    "GroupDescription": "CCNativeStack/NeptuneInfrastructure/SSMMessagesEndpoint/SecurityGroup",
+    "SecurityGroupEgress": [
+     {
+      "CidrIp": "0.0.0.0/0",
+      "Description": "Allow all outbound traffic by default",
+      "IpProtocol": "-1"
+     }
+    ],
+    "SecurityGroupIngress": [
+     {
+      "CidrIp": {
+       "Fn::GetAtt": [
+        "NeptuneInfrastructureCCNativeVpc9CABA391",
+        "CidrBlock"
+       ]
+      },
+      "Description": {
+       "Fn::Join": [
+        "",
+        [
+         "from ",
+         {
+          "Fn::GetAtt": [
+           "NeptuneInfrastructureCCNativeVpc9CABA391",
+           "CidrBlock"
+          ]
+         },
+         ":443"
+        ]
+       ]
+      },
+      "FromPort": 443,
+      "IpProtocol": "tcp",
+      "ToPort": 443
+     }
+    ],
+    "VpcId": {
+     "Ref": "NeptuneInfrastructureCCNativeVpc9CABA391"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/NeptuneInfrastructure/SSMMessagesEndpoint/SecurityGroup/Resource"
+   }
+  },
+  "NeptuneInfrastructureSSMMessagesEndpointDC0D55D0": {
+   "Type": "AWS::EC2::VPCEndpoint",
+   "Properties": {
+    "PrivateDnsEnabled": true,
+    "SecurityGroupIds": [
+     {
+      "Fn::GetAtt": [
+       "NeptuneInfrastructureSSMMessagesEndpointSecurityGroup8DF937A8",
+       "GroupId"
+      ]
+     }
+    ],
+    "ServiceName": "com.amazonaws.us-west-2.ssmmessages",
+    "SubnetIds": [
+     {
+      "Ref": "NeptuneInfrastructureCCNativeVpcNeptuneIsolatedSubnet1SubnetA7BEE99D"
+     },
+     {
+      "Ref": "NeptuneInfrastructureCCNativeVpcNeptuneIsolatedSubnet2SubnetD9369810"
+     }
+    ],
+    "VpcEndpointType": "Interface",
+    "VpcId": {
+     "Ref": "NeptuneInfrastructureCCNativeVpc9CABA391"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/NeptuneInfrastructure/SSMMessagesEndpoint/Resource"
+   }
+  },
+  "NeptuneInfrastructureEC2MessagesEndpointSecurityGroupDE1907F7": {
+   "Type": "AWS::EC2::SecurityGroup",
+   "Properties": {
+    "GroupDescription": "CCNativeStack/NeptuneInfrastructure/EC2MessagesEndpoint/SecurityGroup",
+    "SecurityGroupEgress": [
+     {
+      "CidrIp": "0.0.0.0/0",
+      "Description": "Allow all outbound traffic by default",
+      "IpProtocol": "-1"
+     }
+    ],
+    "SecurityGroupIngress": [
+     {
+      "CidrIp": {
+       "Fn::GetAtt": [
+        "NeptuneInfrastructureCCNativeVpc9CABA391",
+        "CidrBlock"
+       ]
+      },
+      "Description": {
+       "Fn::Join": [
+        "",
+        [
+         "from ",
+         {
+          "Fn::GetAtt": [
+           "NeptuneInfrastructureCCNativeVpc9CABA391",
+           "CidrBlock"
+          ]
+         },
+         ":443"
+        ]
+       ]
+      },
+      "FromPort": 443,
+      "IpProtocol": "tcp",
+      "ToPort": 443
+     }
+    ],
+    "VpcId": {
+     "Ref": "NeptuneInfrastructureCCNativeVpc9CABA391"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/NeptuneInfrastructure/EC2MessagesEndpoint/SecurityGroup/Resource"
+   }
+  },
+  "NeptuneInfrastructureEC2MessagesEndpoint7625F63B": {
+   "Type": "AWS::EC2::VPCEndpoint",
+   "Properties": {
+    "PrivateDnsEnabled": true,
+    "SecurityGroupIds": [
+     {
+      "Fn::GetAtt": [
+       "NeptuneInfrastructureEC2MessagesEndpointSecurityGroupDE1907F7",
+       "GroupId"
+      ]
+     }
+    ],
+    "ServiceName": "com.amazonaws.us-west-2.ec2messages",
+    "SubnetIds": [
+     {
+      "Ref": "NeptuneInfrastructureCCNativeVpcNeptuneIsolatedSubnet1SubnetA7BEE99D"
+     },
+     {
+      "Ref": "NeptuneInfrastructureCCNativeVpcNeptuneIsolatedSubnet2SubnetD9369810"
+     }
+    ],
+    "VpcEndpointType": "Interface",
+    "VpcId": {
+     "Ref": "NeptuneInfrastructureCCNativeVpc9CABA391"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/NeptuneInfrastructure/EC2MessagesEndpoint/Resource"
+   }
+  },
+  "NeptuneInfrastructureS3Endpoint8E3AD8A7": {
+   "Type": "AWS::EC2::VPCEndpoint",
+   "Properties": {
+    "RouteTableIds": [
+     {
+      "Ref": "NeptuneInfrastructureCCNativeVpcNeptuneIsolatedSubnet1RouteTable23335C61"
+     },
+     {
+      "Ref": "NeptuneInfrastructureCCNativeVpcNeptuneIsolatedSubnet2RouteTable41D2F6EF"
+     }
+    ],
+    "ServiceName": {
+     "Fn::Join": [
+      "",
+      [
+       "com.amazonaws.",
+       {
+        "Ref": "AWS::Region"
+       },
+       ".s3"
+      ]
+     ]
+    },
+    "VpcEndpointType": "Gateway",
+    "VpcId": {
+     "Ref": "NeptuneInfrastructureCCNativeVpc9CABA391"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/NeptuneInfrastructure/S3Endpoint/Resource"
+   }
+  },
+  "NeptuneInfrastructureDynamoDBEndpoint4D439FBD": {
+   "Type": "AWS::EC2::VPCEndpoint",
+   "Properties": {
+    "RouteTableIds": [
+     {
+      "Ref": "NeptuneInfrastructureCCNativeVpcNeptuneIsolatedSubnet1RouteTable23335C61"
+     },
+     {
+      "Ref": "NeptuneInfrastructureCCNativeVpcNeptuneIsolatedSubnet2RouteTable41D2F6EF"
+     }
+    ],
+    "ServiceName": {
+     "Fn::Join": [
+      "",
+      [
+       "com.amazonaws.",
+       {
+        "Ref": "AWS::Region"
+       },
+       ".dynamodb"
+      ]
+     ]
+    },
+    "VpcEndpointType": "Gateway",
+    "VpcId": {
+     "Ref": "NeptuneInfrastructureCCNativeVpc9CABA391"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/NeptuneInfrastructure/DynamoDBEndpoint/Resource"
+   }
+  },
+  "NeptuneInfrastructureEventBridgeEndpointSecurityGroup4236C4D5": {
+   "Type": "AWS::EC2::SecurityGroup",
+   "Properties": {
+    "GroupDescription": "CCNativeStack/NeptuneInfrastructure/EventBridgeEndpoint/SecurityGroup",
+    "SecurityGroupEgress": [
+     {
+      "CidrIp": "0.0.0.0/0",
+      "Description": "Allow all outbound traffic by default",
+      "IpProtocol": "-1"
+     }
+    ],
+    "SecurityGroupIngress": [
+     {
+      "CidrIp": {
+       "Fn::GetAtt": [
+        "NeptuneInfrastructureCCNativeVpc9CABA391",
+        "CidrBlock"
+       ]
+      },
+      "Description": {
+       "Fn::Join": [
+        "",
+        [
+         "from ",
+         {
+          "Fn::GetAtt": [
+           "NeptuneInfrastructureCCNativeVpc9CABA391",
+           "CidrBlock"
+          ]
+         },
+         ":443"
+        ]
+       ]
+      },
+      "FromPort": 443,
+      "IpProtocol": "tcp",
+      "ToPort": 443
+     }
+    ],
+    "VpcId": {
+     "Ref": "NeptuneInfrastructureCCNativeVpc9CABA391"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/NeptuneInfrastructure/EventBridgeEndpoint/SecurityGroup/Resource"
+   }
+  },
+  "NeptuneInfrastructureEventBridgeEndpoint7FA73CBF": {
+   "Type": "AWS::EC2::VPCEndpoint",
+   "Properties": {
+    "PrivateDnsEnabled": true,
+    "SecurityGroupIds": [
+     {
+      "Fn::GetAtt": [
+       "NeptuneInfrastructureEventBridgeEndpointSecurityGroup4236C4D5",
+       "GroupId"
+      ]
+     }
+    ],
+    "ServiceName": "com.amazonaws.us-west-2.events",
+    "SubnetIds": [
+     {
+      "Ref": "NeptuneInfrastructureCCNativeVpcNeptuneIsolatedSubnet1SubnetA7BEE99D"
+     },
+     {
+      "Ref": "NeptuneInfrastructureCCNativeVpcNeptuneIsolatedSubnet2SubnetD9369810"
+     }
+    ],
+    "VpcEndpointType": "Interface",
+    "VpcId": {
+     "Ref": "NeptuneInfrastructureCCNativeVpc9CABA391"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/NeptuneInfrastructure/EventBridgeEndpoint/Resource"
+   }
+  },
+  "NeptuneInfrastructureCloudWatchLogsEndpointSecurityGroupF0AB1F65": {
+   "Type": "AWS::EC2::SecurityGroup",
+   "Properties": {
+    "GroupDescription": "CCNativeStack/NeptuneInfrastructure/CloudWatchLogsEndpoint/SecurityGroup",
+    "SecurityGroupEgress": [
+     {
+      "CidrIp": "0.0.0.0/0",
+      "Description": "Allow all outbound traffic by default",
+      "IpProtocol": "-1"
+     }
+    ],
+    "SecurityGroupIngress": [
+     {
+      "CidrIp": {
+       "Fn::GetAtt": [
+        "NeptuneInfrastructureCCNativeVpc9CABA391",
+        "CidrBlock"
+       ]
+      },
+      "Description": {
+       "Fn::Join": [
+        "",
+        [
+         "from ",
+         {
+          "Fn::GetAtt": [
+           "NeptuneInfrastructureCCNativeVpc9CABA391",
+           "CidrBlock"
+          ]
+         },
+         ":443"
+        ]
+       ]
+      },
+      "FromPort": 443,
+      "IpProtocol": "tcp",
+      "ToPort": 443
+     }
+    ],
+    "VpcId": {
+     "Ref": "NeptuneInfrastructureCCNativeVpc9CABA391"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/NeptuneInfrastructure/CloudWatchLogsEndpoint/SecurityGroup/Resource"
+   }
+  },
+  "NeptuneInfrastructureCloudWatchLogsEndpoint6ED07965": {
+   "Type": "AWS::EC2::VPCEndpoint",
+   "Properties": {
+    "PrivateDnsEnabled": true,
+    "SecurityGroupIds": [
+     {
+      "Fn::GetAtt": [
+       "NeptuneInfrastructureCloudWatchLogsEndpointSecurityGroupF0AB1F65",
+       "GroupId"
+      ]
+     }
+    ],
+    "ServiceName": "com.amazonaws.us-west-2.logs",
+    "SubnetIds": [
+     {
+      "Ref": "NeptuneInfrastructureCCNativeVpcNeptuneIsolatedSubnet1SubnetA7BEE99D"
+     },
+     {
+      "Ref": "NeptuneInfrastructureCCNativeVpcNeptuneIsolatedSubnet2SubnetD9369810"
+     }
+    ],
+    "VpcEndpointType": "Interface",
+    "VpcId": {
+     "Ref": "NeptuneInfrastructureCCNativeVpc9CABA391"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/NeptuneInfrastructure/CloudWatchLogsEndpoint/Resource"
+   }
+  },
+  "CustomVpcRestrictDefaultSGCustomResourceProviderRole26592FE0": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Version": "2012-10-17",
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ]
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Sub": "arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+     }
+    ],
+    "Policies": [
+     {
+      "PolicyName": "Inline",
+      "PolicyDocument": {
+       "Version": "2012-10-17",
+       "Statement": [
+        {
+         "Effect": "Allow",
+         "Action": [
+          "ec2:AuthorizeSecurityGroupIngress",
+          "ec2:AuthorizeSecurityGroupEgress",
+          "ec2:RevokeSecurityGroupIngress",
+          "ec2:RevokeSecurityGroupEgress"
+         ],
+         "Resource": [
+          {
+           "Fn::Join": [
+            "",
+            [
+             "arn:aws:ec2:us-west-2:661268174397:security-group/",
+             {
+              "Fn::GetAtt": [
+               "NeptuneInfrastructureCCNativeVpc9CABA391",
+               "DefaultSecurityGroup"
+              ]
+             }
+            ]
+           ]
+          }
+         ]
+        }
+       ]
+      }
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/Custom::VpcRestrictDefaultSGCustomResourceProvider/Role"
+   }
+  },
+  "CustomVpcRestrictDefaultSGCustomResourceProviderHandlerDC833E5E": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Code": {
+     "S3Bucket": "cdk-hnb659fds-assets-661268174397-us-west-2",
+     "S3Key": "7fa1e366ee8a9ded01fc355f704cff92bfd179574e6f9cfee800a3541df1b200.zip"
+    },
+    "Timeout": 900,
+    "MemorySize": 128,
+    "Handler": "__entrypoint__.handler",
+    "Role": {
+     "Fn::GetAtt": [
+      "CustomVpcRestrictDefaultSGCustomResourceProviderRole26592FE0",
+      "Arn"
+     ]
+    },
+    "Runtime": "nodejs22.x",
+    "Description": "Lambda function for removing all inbound/outbound rules from the VPC default security group"
+   },
+   "DependsOn": [
+    "CustomVpcRestrictDefaultSGCustomResourceProviderRole26592FE0"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/Custom::VpcRestrictDefaultSGCustomResourceProvider/Handler",
+    "aws:asset:path": "asset.7fa1e366ee8a9ded01fc355f704cff92bfd179574e6f9cfee800a3541df1b200",
+    "aws:asset:property": "Code"
+   }
+  },
+  "AccountPostureStateTable": {
+   "Type": "AWS::DynamoDB::Table",
+   "Properties": {
+    "AttributeDefinitions": [
+     {
+      "AttributeName": "pk",
+      "AttributeType": "S"
+     },
+     {
+      "AttributeName": "sk",
+      "AttributeType": "S"
+     },
+     {
+      "AttributeName": "gsi1pk",
+      "AttributeType": "S"
+     },
+     {
+      "AttributeName": "gsi1sk",
+      "AttributeType": "S"
+     }
+    ],
+    "BillingMode": "PAY_PER_REQUEST",
+    "GlobalSecondaryIndexes": [
+     {
+      "IndexName": "tenant-posture-index",
+      "KeySchema": [
+       {
+        "AttributeName": "gsi1pk",
+        "KeyType": "HASH"
+       },
+       {
+        "AttributeName": "gsi1sk",
+        "KeyType": "RANGE"
+       }
+      ],
+      "Projection": {
+       "ProjectionType": "ALL"
+      }
+     }
+    ],
+    "KeySchema": [
+     {
+      "AttributeName": "pk",
+      "KeyType": "HASH"
+     },
+     {
+      "AttributeName": "sk",
+      "KeyType": "RANGE"
+     }
+    ],
+    "PointInTimeRecoverySpecification": {
+     "PointInTimeRecoveryEnabled": true
+    },
+    "TableName": "cc-native-account-posture-state"
+   },
+   "UpdateReplacePolicy": "Retain",
+   "DeletionPolicy": "Retain",
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/GraphIntelligenceHandlers/AccountPostureStateTable/Resource"
+   }
+  },
+  "GraphMaterializationStatusTable": {
+   "Type": "AWS::DynamoDB::Table",
+   "Properties": {
+    "AttributeDefinitions": [
+     {
+      "AttributeName": "pk",
+      "AttributeType": "S"
+     }
+    ],
+    "BillingMode": "PAY_PER_REQUEST",
+    "KeySchema": [
+     {
+      "AttributeName": "pk",
+      "KeyType": "HASH"
+     }
+    ],
+    "PointInTimeRecoverySpecification": {
+     "PointInTimeRecoveryEnabled": true
+    },
+    "TableName": "cc-native-graph-materialization-status"
+   },
+   "UpdateReplacePolicy": "Retain",
+   "DeletionPolicy": "Retain",
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/GraphIntelligenceHandlers/GraphMaterializationStatusTable/Resource"
+   }
+  },
+  "GraphIntelligenceHandlersGraphMaterializerDlq875ECC3E": {
+   "Type": "AWS::SQS::Queue",
+   "Properties": {
+    "MessageRetentionPeriod": 1209600,
+    "QueueName": "cc-native-graph-materializer-handler-dlq"
+   },
+   "UpdateReplacePolicy": "Delete",
+   "DeletionPolicy": "Delete",
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/GraphIntelligenceHandlers/GraphMaterializerDlq/Resource"
+   }
+  },
+  "GraphIntelligenceHandlersGraphMaterializerDlqPolicy9E1EF859": {
+   "Type": "AWS::SQS::QueuePolicy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sqs:SendMessage",
+       "Condition": {
+        "ArnEquals": {
+         "aws:SourceArn": {
+          "Fn::GetAtt": [
+           "GraphIntelligenceHandlersSignalDetectedToGraphMaterializerRule1A475BC7",
+           "Arn"
+          ]
+         }
+        }
+       },
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "events.amazonaws.com"
+       },
+       "Resource": {
+        "Fn::GetAtt": [
+         "GraphIntelligenceHandlersGraphMaterializerDlq875ECC3E",
+         "Arn"
+        ]
+       },
+       "Sid": "AllowEventRuleCCNativeStackGraphIntelligenceHandlersSignalDetectedToGraphMaterializerRuleA355D2E1"
+      },
+      {
+       "Action": "sqs:SendMessage",
+       "Condition": {
+        "ArnEquals": {
+         "aws:SourceArn": {
+          "Fn::GetAtt": [
+           "GraphIntelligenceHandlersSignalCreatedToGraphMaterializerRule3158BF8B",
+           "Arn"
+          ]
+         }
+        }
+       },
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "events.amazonaws.com"
+       },
+       "Resource": {
+        "Fn::GetAtt": [
+         "GraphIntelligenceHandlersGraphMaterializerDlq875ECC3E",
+         "Arn"
+        ]
+       },
+       "Sid": "AllowEventRuleCCNativeStackGraphIntelligenceHandlersSignalCreatedToGraphMaterializerRule4CD164C4"
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "Queues": [
+     {
+      "Ref": "GraphIntelligenceHandlersGraphMaterializerDlq875ECC3E"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/GraphIntelligenceHandlers/GraphMaterializerDlq/Policy/Resource"
+   }
+  },
+  "GraphIntelligenceHandlersSynthesisEngineDlq0BCDE437": {
+   "Type": "AWS::SQS::Queue",
+   "Properties": {
+    "MessageRetentionPeriod": 1209600,
+    "QueueName": "cc-native-synthesis-engine-handler-dlq"
+   },
+   "UpdateReplacePolicy": "Delete",
+   "DeletionPolicy": "Delete",
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/GraphIntelligenceHandlers/SynthesisEngineDlq/Resource"
+   }
+  },
+  "GraphIntelligenceHandlersSynthesisEngineDlqPolicy0E00FC4C": {
+   "Type": "AWS::SQS::QueuePolicy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sqs:SendMessage",
+       "Condition": {
+        "ArnEquals": {
+         "aws:SourceArn": {
+          "Fn::GetAtt": [
+           "GraphIntelligenceHandlersGraphMaterializedToSynthesisRule94B777F4",
+           "Arn"
+          ]
+         }
+        }
+       },
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "events.amazonaws.com"
+       },
+       "Resource": {
+        "Fn::GetAtt": [
+         "GraphIntelligenceHandlersSynthesisEngineDlq0BCDE437",
+         "Arn"
+        ]
+       },
+       "Sid": "AllowEventRuleCCNativeStackGraphIntelligenceHandlersGraphMaterializedToSynthesisRuleA5CA9D5C"
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "Queues": [
+     {
+      "Ref": "GraphIntelligenceHandlersSynthesisEngineDlq0BCDE437"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/GraphIntelligenceHandlers/SynthesisEngineDlq/Policy/Resource"
+   }
+  },
+  "GraphIntelligenceHandlersGraphMaterializerRole864DFE90": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "Description": "IAM role for graph-materializer Lambda function",
+    "ManagedPolicyArns": [
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+       ]
+      ]
+     }
+    ],
+    "RoleName": "cc-native-graph-materializer-role"
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/GraphIntelligenceHandlers/GraphMaterializerRole/Resource"
+   }
+  },
+  "GraphIntelligenceHandlersGraphMaterializerRoleDefaultPolicy29F61D7F": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sqs:SendMessage",
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::GetAtt": [
+         "GraphIntelligenceHandlersGraphMaterializerDlq875ECC3E",
+         "Arn"
+        ]
+       }
+      },
+      {
+       "Action": [
+        "dynamodb:BatchGetItem",
+        "dynamodb:ConditionCheckItem",
+        "dynamodb:DescribeTable",
+        "dynamodb:GetItem",
+        "dynamodb:GetRecords",
+        "dynamodb:GetShardIterator",
+        "dynamodb:Query",
+        "dynamodb:Scan"
+       ],
+       "Effect": "Allow",
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "AccountsTable81C15AE5",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::GetAtt": [
+          "SignalsTableE8D63F6D",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "SignalsTableE8D63F6D",
+             "Arn"
+            ]
+           },
+           "/index/*"
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "Action": [
+        "dynamodb:BatchGetItem",
+        "dynamodb:BatchWriteItem",
+        "dynamodb:ConditionCheckItem",
+        "dynamodb:DeleteItem",
+        "dynamodb:DescribeTable",
+        "dynamodb:GetItem",
+        "dynamodb:GetRecords",
+        "dynamodb:GetShardIterator",
+        "dynamodb:PutItem",
+        "dynamodb:Query",
+        "dynamodb:Scan",
+        "dynamodb:UpdateItem"
+       ],
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::GetAtt": [
+         "GraphMaterializationStatusTable",
+         "Arn"
+        ]
+       }
+      },
+      {
+       "Action": [
+        "dynamodb:BatchWriteItem",
+        "dynamodb:DeleteItem",
+        "dynamodb:DescribeTable",
+        "dynamodb:PutItem",
+        "dynamodb:UpdateItem"
+       ],
+       "Effect": "Allow",
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "LedgerTable38A58B60",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "LedgerTable38A58B60",
+             "Arn"
+            ]
+           },
+           "/index/*"
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "Action": "events:PutEvents",
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::GetAtt": [
+         "CCNativeEventBus892049F2",
+         "Arn"
+        ]
+       }
+      },
+      {
+       "Action": [
+        "neptune-db:ReadDataViaQuery",
+        "neptune-db:WriteDataViaQuery",
+        "neptune-db:connect"
+       ],
+       "Condition": {
+        "Bool": {
+         "aws:SecureTransport": "true"
+        },
+        "StringEquals": {
+         "neptune-db:QueryLanguage": "gremlin"
+        }
+       },
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::Join": [
+         "",
+         [
+          "arn:aws:neptune-db:us-west-2:661268174397:",
+          {
+           "Ref": "NeptuneInfrastructureNeptuneCluster6F50D8EC"
+          },
+          "/*"
+         ]
+        ]
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "GraphIntelligenceHandlersGraphMaterializerRoleDefaultPolicy29F61D7F",
+    "Roles": [
+     {
+      "Ref": "GraphIntelligenceHandlersGraphMaterializerRole864DFE90"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/GraphIntelligenceHandlers/GraphMaterializerRole/DefaultPolicy/Resource"
+   }
+  },
+  "GraphIntelligenceHandlersSynthesisEngineRole23D96DDD": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "Description": "IAM role for synthesis-engine Lambda function",
+    "ManagedPolicyArns": [
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+       ]
+      ]
+     }
+    ],
+    "RoleName": "cc-native-synthesis-engine-role"
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/GraphIntelligenceHandlers/SynthesisEngineRole/Resource"
+   }
+  },
+  "GraphIntelligenceHandlersSynthesisEngineRoleDefaultPolicy6372121D": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sqs:SendMessage",
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::GetAtt": [
+         "GraphIntelligenceHandlersSynthesisEngineDlq0BCDE437",
+         "Arn"
+        ]
+       }
+      },
+      {
+       "Action": [
+        "dynamodb:BatchGetItem",
+        "dynamodb:ConditionCheckItem",
+        "dynamodb:DescribeTable",
+        "dynamodb:GetItem",
+        "dynamodb:GetRecords",
+        "dynamodb:GetShardIterator",
+        "dynamodb:Query",
+        "dynamodb:Scan"
+       ],
+       "Effect": "Allow",
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "AccountsTable81C15AE5",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::GetAtt": [
+          "GraphMaterializationStatusTable",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::GetAtt": [
+          "SignalsTableE8D63F6D",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "SignalsTableE8D63F6D",
+             "Arn"
+            ]
+           },
+           "/index/*"
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "Action": [
+        "dynamodb:BatchGetItem",
+        "dynamodb:BatchWriteItem",
+        "dynamodb:ConditionCheckItem",
+        "dynamodb:DeleteItem",
+        "dynamodb:DescribeTable",
+        "dynamodb:GetItem",
+        "dynamodb:GetRecords",
+        "dynamodb:GetShardIterator",
+        "dynamodb:PutItem",
+        "dynamodb:Query",
+        "dynamodb:Scan",
+        "dynamodb:UpdateItem"
+       ],
+       "Effect": "Allow",
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "AccountPostureStateTable",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "AccountPostureStateTable",
+             "Arn"
+            ]
+           },
+           "/index/*"
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "Action": [
+        "dynamodb:BatchWriteItem",
+        "dynamodb:DeleteItem",
+        "dynamodb:DescribeTable",
+        "dynamodb:PutItem",
+        "dynamodb:UpdateItem"
+       ],
+       "Effect": "Allow",
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "LedgerTable38A58B60",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "LedgerTable38A58B60",
+             "Arn"
+            ]
+           },
+           "/index/*"
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "Action": [
+        "neptune-db:ReadDataViaQuery",
+        "neptune-db:WriteDataViaQuery",
+        "neptune-db:connect"
+       ],
+       "Condition": {
+        "Bool": {
+         "aws:SecureTransport": "true"
+        },
+        "StringEquals": {
+         "neptune-db:QueryLanguage": "gremlin"
+        }
+       },
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::Join": [
+         "",
+         [
+          "arn:aws:neptune-db:us-west-2:661268174397:",
+          {
+           "Ref": "NeptuneInfrastructureNeptuneCluster6F50D8EC"
+          },
+          "/*"
+         ]
+        ]
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "GraphIntelligenceHandlersSynthesisEngineRoleDefaultPolicy6372121D",
+    "Roles": [
+     {
+      "Ref": "GraphIntelligenceHandlersSynthesisEngineRole23D96DDD"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/GraphIntelligenceHandlers/SynthesisEngineRole/DefaultPolicy/Resource"
+   }
+  },
+  "GraphMaterializerHandler": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Code": {
+     "S3Bucket": "cdk-hnb659fds-assets-661268174397-us-west-2",
+     "S3Key": "6c2e123062019994a95b77105615939087ee662e18551abfb67bbb7c0bb415cf.zip"
+    },
+    "DeadLetterConfig": {
+     "TargetArn": {
+      "Fn::GetAtt": [
+       "GraphIntelligenceHandlersGraphMaterializerDlq875ECC3E",
+       "Arn"
+      ]
+     }
+    },
+    "Environment": {
+     "Variables": {
+      "ACCOUNTS_TABLE_NAME": {
+       "Ref": "AccountsTable81C15AE5"
+      },
+      "SIGNALS_TABLE_NAME": {
+       "Ref": "SignalsTableE8D63F6D"
+      },
+      "LEDGER_TABLE_NAME": {
+       "Ref": "LedgerTable38A58B60"
+      },
+      "EVENT_BUS_NAME": {
+       "Ref": "CCNativeEventBus892049F2"
+      },
+      "NEPTUNE_CLUSTER_ENDPOINT": {
+       "Fn::GetAtt": [
+        "NeptuneInfrastructureNeptuneCluster6F50D8EC",
+        "Endpoint"
+       ]
+      },
+      "NEPTUNE_CLUSTER_PORT": {
+       "Fn::GetAtt": [
+        "NeptuneInfrastructureNeptuneCluster6F50D8EC",
+        "Port"
+       ]
+      },
+      "ACCOUNT_POSTURE_STATE_TABLE_NAME": {
+       "Ref": "AccountPostureStateTable"
+      },
+      "GRAPH_MATERIALIZATION_STATUS_TABLE_NAME": {
+       "Ref": "GraphMaterializationStatusTable"
+      }
+     }
+    },
+    "FunctionName": "cc-native-graph-materializer-handler",
+    "Handler": "index.handler",
+    "MemorySize": 1024,
+    "Role": {
+     "Fn::GetAtt": [
+      "GraphIntelligenceHandlersGraphMaterializerRole864DFE90",
+      "Arn"
+     ]
+    },
+    "Runtime": "nodejs20.x",
+    "Timeout": 300,
+    "VpcConfig": {
+     "SecurityGroupIds": [
+      {
+       "Fn::GetAtt": [
+        "NeptuneInfrastructureGraphMaterializerSecurityGroupE324FDAD",
+        "GroupId"
+       ]
+      }
+     ],
+     "SubnetIds": [
+      {
+       "Ref": "NeptuneInfrastructureCCNativeVpcNeptuneIsolatedSubnet1SubnetA7BEE99D"
+      },
+      {
+       "Ref": "NeptuneInfrastructureCCNativeVpcNeptuneIsolatedSubnet2SubnetD9369810"
+      }
+     ]
+    }
+   },
+   "DependsOn": [
+    "GraphIntelligenceHandlersGraphMaterializerRoleDefaultPolicy29F61D7F",
+    "GraphIntelligenceHandlersGraphMaterializerRole864DFE90",
+    "NeptuneInfrastructureCCNativeVpcNeptuneIsolatedSubnet1RouteTableAssociation9F6FC58C",
+    "NeptuneInfrastructureCCNativeVpcNeptuneIsolatedSubnet2RouteTableAssociationB0458231"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/GraphIntelligenceHandlers/GraphMaterializerHandler/Resource",
+    "aws:asset:path": "/Users/rameshpaturu/Documents/projects/lambda/cc-native",
+    "aws:asset:is-bundled": true,
+    "aws:asset:property": "Code"
+   }
+  },
+  "GraphIntelligenceHandlersGraphMaterializerHandlerEventInvokeConfig326AD5A9": {
+   "Type": "AWS::Lambda::EventInvokeConfig",
+   "Properties": {
+    "FunctionName": {
+     "Ref": "GraphMaterializerHandler"
+    },
+    "MaximumRetryAttempts": 2,
+    "Qualifier": "$LATEST"
+   },
+   "DependsOn": [
+    "NeptuneInfrastructureCCNativeVpcNeptuneIsolatedSubnet1RouteTableAssociation9F6FC58C",
+    "NeptuneInfrastructureCCNativeVpcNeptuneIsolatedSubnet2RouteTableAssociationB0458231"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/GraphIntelligenceHandlers/GraphMaterializerHandler/EventInvokeConfig/Resource"
+   }
+  },
+  "SynthesisEngineHandler": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Code": {
+     "S3Bucket": "cdk-hnb659fds-assets-661268174397-us-west-2",
+     "S3Key": "5f70dc10b340655b10f78604e94c8d6d39cc377389e38840f1e3682585861714.zip"
+    },
+    "DeadLetterConfig": {
+     "TargetArn": {
+      "Fn::GetAtt": [
+       "GraphIntelligenceHandlersSynthesisEngineDlq0BCDE437",
+       "Arn"
+      ]
+     }
+    },
+    "Environment": {
+     "Variables": {
+      "ACCOUNTS_TABLE_NAME": {
+       "Ref": "AccountsTable81C15AE5"
+      },
+      "SIGNALS_TABLE_NAME": {
+       "Ref": "SignalsTableE8D63F6D"
+      },
+      "LEDGER_TABLE_NAME": {
+       "Ref": "LedgerTable38A58B60"
+      },
+      "EVENT_BUS_NAME": {
+       "Ref": "CCNativeEventBus892049F2"
+      },
+      "NEPTUNE_CLUSTER_ENDPOINT": {
+       "Fn::GetAtt": [
+        "NeptuneInfrastructureNeptuneCluster6F50D8EC",
+        "Endpoint"
+       ]
+      },
+      "NEPTUNE_CLUSTER_PORT": {
+       "Fn::GetAtt": [
+        "NeptuneInfrastructureNeptuneCluster6F50D8EC",
+        "Port"
+       ]
+      },
+      "ACCOUNT_POSTURE_STATE_TABLE_NAME": {
+       "Ref": "AccountPostureStateTable"
+      },
+      "GRAPH_MATERIALIZATION_STATUS_TABLE_NAME": {
+       "Ref": "GraphMaterializationStatusTable"
+      }
+     }
+    },
+    "FunctionName": "cc-native-synthesis-engine-handler",
+    "Handler": "index.handler",
+    "MemorySize": 1024,
+    "Role": {
+     "Fn::GetAtt": [
+      "GraphIntelligenceHandlersSynthesisEngineRole23D96DDD",
+      "Arn"
+     ]
+    },
+    "Runtime": "nodejs20.x",
+    "Timeout": 180,
+    "VpcConfig": {
+     "SecurityGroupIds": [
+      {
+       "Fn::GetAtt": [
+        "NeptuneInfrastructureSynthesisEngineSecurityGroup862BB426",
+        "GroupId"
+       ]
+      }
+     ],
+     "SubnetIds": [
+      {
+       "Ref": "NeptuneInfrastructureCCNativeVpcNeptuneIsolatedSubnet1SubnetA7BEE99D"
+      },
+      {
+       "Ref": "NeptuneInfrastructureCCNativeVpcNeptuneIsolatedSubnet2SubnetD9369810"
+      }
+     ]
+    }
+   },
+   "DependsOn": [
+    "GraphIntelligenceHandlersSynthesisEngineRoleDefaultPolicy6372121D",
+    "GraphIntelligenceHandlersSynthesisEngineRole23D96DDD",
+    "NeptuneInfrastructureCCNativeVpcNeptuneIsolatedSubnet1RouteTableAssociation9F6FC58C",
+    "NeptuneInfrastructureCCNativeVpcNeptuneIsolatedSubnet2RouteTableAssociationB0458231"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/GraphIntelligenceHandlers/SynthesisEngineHandler/Resource",
+    "aws:asset:path": "/Users/rameshpaturu/Documents/projects/lambda/cc-native",
+    "aws:asset:is-bundled": true,
+    "aws:asset:property": "Code"
+   }
+  },
+  "GraphIntelligenceHandlersSynthesisEngineHandlerEventInvokeConfig426F220B": {
+   "Type": "AWS::Lambda::EventInvokeConfig",
+   "Properties": {
+    "FunctionName": {
+     "Ref": "SynthesisEngineHandler"
+    },
+    "MaximumRetryAttempts": 2,
+    "Qualifier": "$LATEST"
+   },
+   "DependsOn": [
+    "NeptuneInfrastructureCCNativeVpcNeptuneIsolatedSubnet1RouteTableAssociation9F6FC58C",
+    "NeptuneInfrastructureCCNativeVpcNeptuneIsolatedSubnet2RouteTableAssociationB0458231"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/GraphIntelligenceHandlers/SynthesisEngineHandler/EventInvokeConfig/Resource"
+   }
+  },
+  "GraphIntelligenceHandlersSignalDetectedToGraphMaterializerRule1A475BC7": {
+   "Type": "AWS::Events::Rule",
+   "Properties": {
+    "EventBusName": {
+     "Ref": "CCNativeEventBus892049F2"
+    },
+    "EventPattern": {
+     "source": [
+      "cc-native.perception"
+     ],
+     "detail-type": [
+      "SIGNAL_DETECTED"
+     ]
+    },
+    "State": "ENABLED",
+    "Targets": [
+     {
+      "Arn": {
+       "Fn::GetAtt": [
+        "GraphMaterializerHandler",
+        "Arn"
+       ]
+      },
+      "DeadLetterConfig": {
+       "Arn": {
+        "Fn::GetAtt": [
+         "GraphIntelligenceHandlersGraphMaterializerDlq875ECC3E",
+         "Arn"
+        ]
+       }
+      },
+      "Id": "Target0",
+      "RetryPolicy": {
+       "MaximumRetryAttempts": 2
+      }
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/GraphIntelligenceHandlers/SignalDetectedToGraphMaterializerRule/Resource"
+   }
+  },
+  "GraphIntelligenceHandlersSignalDetectedToGraphMaterializerRuleAllowEventRuleCCNativeStackGraphIntelligenceHandlersGraphMaterializerHandler2AD3E9DC170D41E4": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "GraphMaterializerHandler",
+      "Arn"
+     ]
+    },
+    "Principal": "events.amazonaws.com",
+    "SourceArn": {
+     "Fn::GetAtt": [
+      "GraphIntelligenceHandlersSignalDetectedToGraphMaterializerRule1A475BC7",
+      "Arn"
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/GraphIntelligenceHandlers/SignalDetectedToGraphMaterializerRule/AllowEventRuleCCNativeStackGraphIntelligenceHandlersGraphMaterializerHandler2AD3E9DC"
+   }
+  },
+  "GraphIntelligenceHandlersSignalCreatedToGraphMaterializerRule3158BF8B": {
+   "Type": "AWS::Events::Rule",
+   "Properties": {
+    "EventBusName": {
+     "Ref": "CCNativeEventBus892049F2"
+    },
+    "EventPattern": {
+     "source": [
+      "cc-native.perception"
+     ],
+     "detail-type": [
+      "SIGNAL_CREATED"
+     ]
+    },
+    "State": "ENABLED",
+    "Targets": [
+     {
+      "Arn": {
+       "Fn::GetAtt": [
+        "GraphMaterializerHandler",
+        "Arn"
+       ]
+      },
+      "DeadLetterConfig": {
+       "Arn": {
+        "Fn::GetAtt": [
+         "GraphIntelligenceHandlersGraphMaterializerDlq875ECC3E",
+         "Arn"
+        ]
+       }
+      },
+      "Id": "Target0",
+      "RetryPolicy": {
+       "MaximumRetryAttempts": 2
+      }
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/GraphIntelligenceHandlers/SignalCreatedToGraphMaterializerRule/Resource"
+   }
+  },
+  "GraphIntelligenceHandlersSignalCreatedToGraphMaterializerRuleAllowEventRuleCCNativeStackGraphIntelligenceHandlersGraphMaterializerHandler2AD3E9DC05FEF707": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "GraphMaterializerHandler",
+      "Arn"
+     ]
+    },
+    "Principal": "events.amazonaws.com",
+    "SourceArn": {
+     "Fn::GetAtt": [
+      "GraphIntelligenceHandlersSignalCreatedToGraphMaterializerRule3158BF8B",
+      "Arn"
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/GraphIntelligenceHandlers/SignalCreatedToGraphMaterializerRule/AllowEventRuleCCNativeStackGraphIntelligenceHandlersGraphMaterializerHandler2AD3E9DC"
+   }
+  },
+  "GraphIntelligenceHandlersGraphMaterializedToSynthesisRule94B777F4": {
+   "Type": "AWS::Events::Rule",
+   "Properties": {
+    "EventBusName": {
+     "Ref": "CCNativeEventBus892049F2"
+    },
+    "EventPattern": {
+     "source": [
+      "cc-native.graph"
+     ],
+     "detail-type": [
+      "GRAPH_MATERIALIZED"
+     ]
+    },
+    "State": "ENABLED",
+    "Targets": [
+     {
+      "Arn": {
+       "Fn::GetAtt": [
+        "SynthesisEngineHandler",
+        "Arn"
+       ]
+      },
+      "DeadLetterConfig": {
+       "Arn": {
+        "Fn::GetAtt": [
+         "GraphIntelligenceHandlersSynthesisEngineDlq0BCDE437",
+         "Arn"
+        ]
+       }
+      },
+      "Id": "Target0",
+      "RetryPolicy": {
+       "MaximumRetryAttempts": 2
+      }
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/GraphIntelligenceHandlers/GraphMaterializedToSynthesisRule/Resource"
+   }
+  },
+  "GraphIntelligenceHandlersGraphMaterializedToSynthesisRuleAllowEventRuleCCNativeStackGraphIntelligenceHandlersSynthesisEngineHandler045C593E22975BE8": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "SynthesisEngineHandler",
+      "Arn"
+     ]
+    },
+    "Principal": "events.amazonaws.com",
+    "SourceArn": {
+     "Fn::GetAtt": [
+      "GraphIntelligenceHandlersGraphMaterializedToSynthesisRule94B777F4",
+      "Arn"
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/GraphIntelligenceHandlers/GraphMaterializedToSynthesisRule/AllowEventRuleCCNativeStackGraphIntelligenceHandlersSynthesisEngineHandler045C593E"
+   }
+  },
+  "SecurityMonitoringSecurityAlertsTopic976B7E04": {
+   "Type": "AWS::SNS::Topic",
+   "Properties": {
+    "DisplayName": "CC Native Security Alerts",
+    "TopicName": "cc-native-security-alerts"
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/SecurityMonitoring/SecurityAlertsTopic/Resource"
+   }
+  },
+  "SecurityMonitoringNeptuneUnauthorizedConnectionsB8CD92BB": {
+   "Type": "AWS::CloudWatch::Alarm",
+   "Properties": {
+    "AlarmActions": [
+     {
+      "Ref": "SecurityMonitoringSecurityAlertsTopic976B7E04"
+     }
+    ],
+    "AlarmName": "cc-native-neptune-unauthorized-connections",
+    "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+    "Dimensions": [
+     {
+      "Name": "DBClusterIdentifier",
+      "Value": {
+       "Ref": "NeptuneInfrastructureNeptuneCluster6F50D8EC"
+      }
+     }
+    ],
+    "EvaluationPeriods": 1,
+    "MetricName": "DatabaseConnections",
+    "Namespace": "AWS/Neptune",
+    "Period": 300,
+    "Statistic": "Sum",
+    "Threshold": 100,
+    "TreatMissingData": "notBreaching"
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/SecurityMonitoring/NeptuneUnauthorizedConnections/Resource"
+   }
+  },
+  "SecurityMonitoringGraphMaterializerErrors7E76685B": {
+   "Type": "AWS::CloudWatch::Alarm",
+   "Properties": {
+    "AlarmActions": [
+     {
+      "Ref": "SecurityMonitoringSecurityAlertsTopic976B7E04"
+     }
+    ],
+    "AlarmName": "cc-native-graph-materializer-errors",
+    "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+    "Dimensions": [
+     {
+      "Name": "FunctionName",
+      "Value": {
+       "Ref": "GraphMaterializerHandler"
+      }
+     }
+    ],
+    "EvaluationPeriods": 1,
+    "MetricName": "Errors",
+    "Namespace": "AWS/Lambda",
+    "Period": 300,
+    "Statistic": "Sum",
+    "Threshold": 5,
+    "TreatMissingData": "notBreaching"
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/SecurityMonitoring/GraphMaterializerErrors/Resource"
+   }
+  },
+  "SecurityMonitoringSynthesisEngineErrorsE0DB3F13": {
+   "Type": "AWS::CloudWatch::Alarm",
+   "Properties": {
+    "AlarmActions": [
+     {
+      "Ref": "SecurityMonitoringSecurityAlertsTopic976B7E04"
+     }
+    ],
+    "AlarmName": "cc-native-synthesis-engine-errors",
+    "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+    "Dimensions": [
+     {
+      "Name": "FunctionName",
+      "Value": {
+       "Ref": "SynthesisEngineHandler"
+      }
+     }
+    ],
+    "EvaluationPeriods": 1,
+    "MetricName": "Errors",
+    "Namespace": "AWS/Lambda",
+    "Period": 300,
+    "Statistic": "Sum",
+    "Threshold": 5,
+    "TreatMissingData": "notBreaching"
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/SecurityMonitoring/SynthesisEngineErrors/Resource"
+   }
+  },
+  "SecurityMonitoringHighDynamoDBEndpointTraffic04E6B06B": {
+   "Type": "AWS::CloudWatch::Alarm",
+   "Properties": {
+    "AlarmActions": [
+     {
+      "Ref": "SecurityMonitoringSecurityAlertsTopic976B7E04"
+     }
+    ],
+    "AlarmName": "cc-native-high-dynamodb-endpoint-traffic",
+    "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+    "Dimensions": [
+     {
+      "Name": "ServiceName",
+      "Value": "com.amazonaws.us-west-2.dynamodb"
+     }
+    ],
+    "EvaluationPeriods": 2,
+    "MetricName": "BytesProcessed",
+    "Namespace": "AWS/PrivateLinkEndpoints",
+    "Period": 300,
+    "Statistic": "Sum",
+    "Threshold": 1000000000,
+    "TreatMissingData": "notBreaching"
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/SecurityMonitoring/HighDynamoDBEndpointTraffic/Resource"
+   }
+  },
+  "SecurityMonitoringNeptuneIAMAuthFailure5B61A41C": {
+   "Type": "AWS::Logs::MetricFilter",
+   "Properties": {
+    "FilterPattern": "\"AUTHENTICATION_FAILED\"",
+    "LogGroupName": "/aws/neptune/cluster/cc-native-neptune-cluster/audit",
+    "MetricTransformations": [
+     {
+      "MetricName": "NeptuneIAMAuthFailures",
+      "MetricNamespace": "CCNative/Security",
+      "MetricValue": "1"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/SecurityMonitoring/NeptuneIAMAuthFailure/Resource"
+   }
+  },
+  "SecurityMonitoringNeptuneIAMAuthFailureAlarmF4453F7B": {
+   "Type": "AWS::CloudWatch::Alarm",
+   "Properties": {
+    "AlarmActions": [
+     {
+      "Ref": "SecurityMonitoringSecurityAlertsTopic976B7E04"
+     }
+    ],
+    "AlarmName": "cc-native-neptune-iam-auth-failure",
+    "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+    "EvaluationPeriods": 1,
+    "MetricName": "NeptuneIAMAuthFailures",
+    "Namespace": "CCNative/Security",
+    "Period": 300,
+    "Statistic": "Sum",
+    "Threshold": 3,
+    "TreatMissingData": "notBreaching"
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/SecurityMonitoring/NeptuneIAMAuthFailureAlarm/Resource"
+   }
+  },
+  "PerceptionHandlersConnectorPollDlq14318C64": {
+   "Type": "AWS::SQS::Queue",
+   "Properties": {
+    "MessageRetentionPeriod": 1209600,
+    "QueueName": "cc-native-connector-poll-handler-dlq"
+   },
+   "UpdateReplacePolicy": "Delete",
+   "DeletionPolicy": "Delete",
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/PerceptionHandlers/ConnectorPollDlq/Resource"
+   }
+  },
+  "PerceptionHandlersSignalDetectionDlqEC9EFCCF": {
+   "Type": "AWS::SQS::Queue",
+   "Properties": {
+    "MessageRetentionPeriod": 1209600,
+    "QueueName": "cc-native-signal-detection-handler-dlq"
+   },
+   "UpdateReplacePolicy": "Delete",
+   "DeletionPolicy": "Delete",
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/PerceptionHandlers/SignalDetectionDlq/Resource"
+   }
+  },
+  "PerceptionHandlersSignalDetectionDlqPolicy834340B6": {
+   "Type": "AWS::SQS::QueuePolicy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sqs:SendMessage",
+       "Condition": {
+        "ArnEquals": {
+         "aws:SourceArn": {
+          "Fn::GetAtt": [
+           "PerceptionHandlersConnectorPollCompletedRule339EDE78",
+           "Arn"
+          ]
+         }
+        }
+       },
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "events.amazonaws.com"
+       },
+       "Resource": {
+        "Fn::GetAtt": [
+         "PerceptionHandlersSignalDetectionDlqEC9EFCCF",
+         "Arn"
+        ]
+       },
+       "Sid": "AllowEventRuleCCNativeStackPerceptionHandlersConnectorPollCompletedRule6585D47A"
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "Queues": [
+     {
+      "Ref": "PerceptionHandlersSignalDetectionDlqEC9EFCCF"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/PerceptionHandlers/SignalDetectionDlq/Policy/Resource"
+   }
+  },
+  "PerceptionHandlersLifecycleInferenceDlq6448FBB8": {
+   "Type": "AWS::SQS::Queue",
+   "Properties": {
+    "MessageRetentionPeriod": 1209600,
+    "QueueName": "cc-native-lifecycle-inference-handler-dlq"
+   },
+   "UpdateReplacePolicy": "Delete",
+   "DeletionPolicy": "Delete",
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/PerceptionHandlers/LifecycleInferenceDlq/Resource"
+   }
+  },
+  "PerceptionHandlersLifecycleInferenceDlqPolicy390C7857": {
+   "Type": "AWS::SQS::QueuePolicy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sqs:SendMessage",
+       "Condition": {
+        "ArnEquals": {
+         "aws:SourceArn": {
+          "Fn::GetAtt": [
+           "PerceptionHandlersSignalDetectedRule4DCF0A68",
+           "Arn"
+          ]
+         }
+        }
+       },
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "events.amazonaws.com"
+       },
+       "Resource": {
+        "Fn::GetAtt": [
+         "PerceptionHandlersLifecycleInferenceDlq6448FBB8",
+         "Arn"
+        ]
+       },
+       "Sid": "AllowEventRuleCCNativeStackPerceptionHandlersSignalDetectedRule1EF2B003"
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "Queues": [
+     {
+      "Ref": "PerceptionHandlersLifecycleInferenceDlq6448FBB8"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/PerceptionHandlers/LifecycleInferenceDlq/Policy/Resource"
+   }
+  },
+  "PerceptionHandlersConnectorPollHandlerServiceRole81041944": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+       ]
+      ]
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/PerceptionHandlers/ConnectorPollHandler/ServiceRole/Resource"
+   }
+  },
+  "PerceptionHandlersConnectorPollHandlerServiceRoleDefaultPolicy4F818644": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sqs:SendMessage",
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::GetAtt": [
+         "PerceptionHandlersConnectorPollDlq14318C64",
+         "Arn"
+        ]
+       }
+      },
+      {
+       "Action": [
+        "s3:Abort*",
+        "s3:DeleteObject*",
+        "s3:GetBucket*",
+        "s3:GetObject*",
+        "s3:List*",
+        "s3:PutObject",
+        "s3:PutObjectLegalHold",
+        "s3:PutObjectRetention",
+        "s3:PutObjectTagging",
+        "s3:PutObjectVersionTagging"
+       ],
+       "Effect": "Allow",
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "EvidenceLedgerBucket3A5BFB25",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "EvidenceLedgerBucket3A5BFB25",
+             "Arn"
+            ]
+           },
+           "/*"
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "Action": [
+        "dynamodb:BatchGetItem",
+        "dynamodb:BatchWriteItem",
+        "dynamodb:ConditionCheckItem",
+        "dynamodb:DeleteItem",
+        "dynamodb:DescribeTable",
+        "dynamodb:GetItem",
+        "dynamodb:GetRecords",
+        "dynamodb:GetShardIterator",
+        "dynamodb:PutItem",
+        "dynamodb:Query",
+        "dynamodb:Scan",
+        "dynamodb:UpdateItem"
+       ],
+       "Effect": "Allow",
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "EvidenceIndexTableCC0C8C88",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "EvidenceIndexTableCC0C8C88",
+             "Arn"
+            ]
+           },
+           "/index/*"
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "Action": "events:PutEvents",
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::GetAtt": [
+         "CCNativeEventBus892049F2",
+         "Arn"
+        ]
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "PerceptionHandlersConnectorPollHandlerServiceRoleDefaultPolicy4F818644",
+    "Roles": [
+     {
+      "Ref": "PerceptionHandlersConnectorPollHandlerServiceRole81041944"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/PerceptionHandlers/ConnectorPollHandler/ServiceRole/DefaultPolicy/Resource"
+   }
+  },
+  "ConnectorPollHandler": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Code": {
+     "S3Bucket": "cdk-hnb659fds-assets-661268174397-us-west-2",
+     "S3Key": "e817edb026fdf06443f60a83b2a443bb1bc052934f61c2dfd96ef41942518354.zip"
+    },
+    "DeadLetterConfig": {
+     "TargetArn": {
+      "Fn::GetAtt": [
+       "PerceptionHandlersConnectorPollDlq14318C64",
+       "Arn"
+      ]
+     }
+    },
+    "Environment": {
+     "Variables": {
+      "ACCOUNTS_TABLE_NAME": {
+       "Ref": "AccountsTable81C15AE5"
+      },
+      "SIGNALS_TABLE_NAME": {
+       "Ref": "SignalsTableE8D63F6D"
+      },
+      "LEDGER_TABLE_NAME": {
+       "Ref": "LedgerTable38A58B60"
+      },
+      "EVIDENCE_INDEX_TABLE_NAME": {
+       "Ref": "EvidenceIndexTableCC0C8C88"
+      },
+      "EVIDENCE_LEDGER_BUCKET": {
+       "Ref": "EvidenceLedgerBucket3A5BFB25"
+      },
+      "EVENT_BUS_NAME": {
+       "Ref": "CCNativeEventBus892049F2"
+      }
+     }
+    },
+    "FunctionName": "cc-native-connector-poll-handler",
+    "Handler": "index.handler",
+    "MemorySize": 512,
+    "Role": {
+     "Fn::GetAtt": [
+      "PerceptionHandlersConnectorPollHandlerServiceRole81041944",
+      "Arn"
+     ]
+    },
+    "Runtime": "nodejs20.x",
+    "Timeout": 900
+   },
+   "DependsOn": [
+    "PerceptionHandlersConnectorPollHandlerServiceRoleDefaultPolicy4F818644",
+    "PerceptionHandlersConnectorPollHandlerServiceRole81041944"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/PerceptionHandlers/ConnectorPollHandler/Resource",
+    "aws:asset:path": "/Users/rameshpaturu/Documents/projects/lambda/cc-native",
+    "aws:asset:is-bundled": true,
+    "aws:asset:property": "Code"
+   }
+  },
+  "PerceptionHandlersConnectorPollHandlerEventInvokeConfigA9A7C9F7": {
+   "Type": "AWS::Lambda::EventInvokeConfig",
+   "Properties": {
+    "FunctionName": {
+     "Ref": "ConnectorPollHandler"
+    },
+    "MaximumRetryAttempts": 2,
+    "Qualifier": "$LATEST"
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/PerceptionHandlers/ConnectorPollHandler/EventInvokeConfig/Resource"
+   }
+  },
+  "PerceptionHandlersSignalDetectionHandlerServiceRoleB8FA54A9": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+       ]
+      ]
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/PerceptionHandlers/SignalDetectionHandler/ServiceRole/Resource"
+   }
+  },
+  "PerceptionHandlersSignalDetectionHandlerServiceRoleDefaultPolicyBE3A145F": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sqs:SendMessage",
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::GetAtt": [
+         "PerceptionHandlersSignalDetectionDlqEC9EFCCF",
+         "Arn"
+        ]
+       }
+      },
+      {
+       "Action": [
+        "s3:GetBucket*",
+        "s3:GetObject*",
+        "s3:List*"
+       ],
+       "Effect": "Allow",
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "EvidenceLedgerBucket3A5BFB25",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "EvidenceLedgerBucket3A5BFB25",
+             "Arn"
+            ]
+           },
+           "/*"
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "Action": [
+        "dynamodb:BatchGetItem",
+        "dynamodb:BatchWriteItem",
+        "dynamodb:ConditionCheckItem",
+        "dynamodb:DeleteItem",
+        "dynamodb:DescribeTable",
+        "dynamodb:GetItem",
+        "dynamodb:GetRecords",
+        "dynamodb:GetShardIterator",
+        "dynamodb:PutItem",
+        "dynamodb:Query",
+        "dynamodb:Scan",
+        "dynamodb:UpdateItem"
+       ],
+       "Effect": "Allow",
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "AccountsTable81C15AE5",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::GetAtt": [
+          "SignalsTableE8D63F6D",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "SignalsTableE8D63F6D",
+             "Arn"
+            ]
+           },
+           "/index/*"
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "Action": [
+        "dynamodb:BatchWriteItem",
+        "dynamodb:DeleteItem",
+        "dynamodb:DescribeTable",
+        "dynamodb:PutItem",
+        "dynamodb:UpdateItem"
+       ],
+       "Effect": "Allow",
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "LedgerTable38A58B60",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "LedgerTable38A58B60",
+             "Arn"
+            ]
+           },
+           "/index/*"
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "Action": "events:PutEvents",
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::GetAtt": [
+         "CCNativeEventBus892049F2",
+         "Arn"
+        ]
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "PerceptionHandlersSignalDetectionHandlerServiceRoleDefaultPolicyBE3A145F",
+    "Roles": [
+     {
+      "Ref": "PerceptionHandlersSignalDetectionHandlerServiceRoleB8FA54A9"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/PerceptionHandlers/SignalDetectionHandler/ServiceRole/DefaultPolicy/Resource"
+   }
+  },
+  "SignalDetectionHandler": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Code": {
+     "S3Bucket": "cdk-hnb659fds-assets-661268174397-us-west-2",
+     "S3Key": "968e33ee76507eaf60271aef60f7bc2a1576704cb63e33f3dca55f10645b10b9.zip"
+    },
+    "DeadLetterConfig": {
+     "TargetArn": {
+      "Fn::GetAtt": [
+       "PerceptionHandlersSignalDetectionDlqEC9EFCCF",
+       "Arn"
+      ]
+     }
+    },
+    "Environment": {
+     "Variables": {
+      "ACCOUNTS_TABLE_NAME": {
+       "Ref": "AccountsTable81C15AE5"
+      },
+      "SIGNALS_TABLE_NAME": {
+       "Ref": "SignalsTableE8D63F6D"
+      },
+      "LEDGER_TABLE_NAME": {
+       "Ref": "LedgerTable38A58B60"
+      },
+      "EVIDENCE_INDEX_TABLE_NAME": {
+       "Ref": "EvidenceIndexTableCC0C8C88"
+      },
+      "EVIDENCE_LEDGER_BUCKET": {
+       "Ref": "EvidenceLedgerBucket3A5BFB25"
+      },
+      "EVENT_BUS_NAME": {
+       "Ref": "CCNativeEventBus892049F2"
+      }
+     }
+    },
+    "FunctionName": "cc-native-signal-detection-handler",
+    "Handler": "index.handler",
+    "MemorySize": 1024,
+    "Role": {
+     "Fn::GetAtt": [
+      "PerceptionHandlersSignalDetectionHandlerServiceRoleB8FA54A9",
+      "Arn"
+     ]
+    },
+    "Runtime": "nodejs20.x",
+    "Timeout": 900
+   },
+   "DependsOn": [
+    "PerceptionHandlersSignalDetectionHandlerServiceRoleDefaultPolicyBE3A145F",
+    "PerceptionHandlersSignalDetectionHandlerServiceRoleB8FA54A9"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/PerceptionHandlers/SignalDetectionHandler/Resource",
+    "aws:asset:path": "/Users/rameshpaturu/Documents/projects/lambda/cc-native",
+    "aws:asset:is-bundled": true,
+    "aws:asset:property": "Code"
+   }
+  },
+  "PerceptionHandlersSignalDetectionHandlerEventInvokeConfig846FC90C": {
+   "Type": "AWS::Lambda::EventInvokeConfig",
+   "Properties": {
+    "FunctionName": {
+     "Ref": "SignalDetectionHandler"
+    },
+    "MaximumRetryAttempts": 2,
+    "Qualifier": "$LATEST"
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/PerceptionHandlers/SignalDetectionHandler/EventInvokeConfig/Resource"
+   }
+  },
+  "PerceptionHandlersLifecycleInferenceHandlerServiceRoleD091F351": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+       ]
+      ]
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/PerceptionHandlers/LifecycleInferenceHandler/ServiceRole/Resource"
+   }
+  },
+  "PerceptionHandlersLifecycleInferenceHandlerServiceRoleDefaultPolicy2147626F": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sqs:SendMessage",
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::GetAtt": [
+         "PerceptionHandlersLifecycleInferenceDlq6448FBB8",
+         "Arn"
+        ]
+       }
+      },
+      {
+       "Action": [
+        "dynamodb:BatchGetItem",
+        "dynamodb:BatchWriteItem",
+        "dynamodb:ConditionCheckItem",
+        "dynamodb:DeleteItem",
+        "dynamodb:DescribeTable",
+        "dynamodb:GetItem",
+        "dynamodb:GetRecords",
+        "dynamodb:GetShardIterator",
+        "dynamodb:PutItem",
+        "dynamodb:Query",
+        "dynamodb:Scan",
+        "dynamodb:UpdateItem"
+       ],
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::GetAtt": [
+         "AccountsTable81C15AE5",
+         "Arn"
+        ]
+       }
+      },
+      {
+       "Action": [
+        "dynamodb:BatchGetItem",
+        "dynamodb:ConditionCheckItem",
+        "dynamodb:DescribeTable",
+        "dynamodb:GetItem",
+        "dynamodb:GetRecords",
+        "dynamodb:GetShardIterator",
+        "dynamodb:Query",
+        "dynamodb:Scan"
+       ],
+       "Effect": "Allow",
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "SignalsTableE8D63F6D",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "SignalsTableE8D63F6D",
+             "Arn"
+            ]
+           },
+           "/index/*"
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "Action": [
+        "dynamodb:BatchWriteItem",
+        "dynamodb:DeleteItem",
+        "dynamodb:DescribeTable",
+        "dynamodb:PutItem",
+        "dynamodb:UpdateItem"
+       ],
+       "Effect": "Allow",
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "LedgerTable38A58B60",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "LedgerTable38A58B60",
+             "Arn"
+            ]
+           },
+           "/index/*"
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "Action": "events:PutEvents",
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::GetAtt": [
+         "CCNativeEventBus892049F2",
+         "Arn"
+        ]
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "PerceptionHandlersLifecycleInferenceHandlerServiceRoleDefaultPolicy2147626F",
+    "Roles": [
+     {
+      "Ref": "PerceptionHandlersLifecycleInferenceHandlerServiceRoleD091F351"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/PerceptionHandlers/LifecycleInferenceHandler/ServiceRole/DefaultPolicy/Resource"
+   }
+  },
+  "LifecycleInferenceHandler": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Code": {
+     "S3Bucket": "cdk-hnb659fds-assets-661268174397-us-west-2",
+     "S3Key": "54c23d0738aeb8f5684e3ef2bacd68527ef857722564c96e5ee17fcf8d340c03.zip"
+    },
+    "DeadLetterConfig": {
+     "TargetArn": {
+      "Fn::GetAtt": [
+       "PerceptionHandlersLifecycleInferenceDlq6448FBB8",
+       "Arn"
+      ]
+     }
+    },
+    "Environment": {
+     "Variables": {
+      "ACCOUNTS_TABLE_NAME": {
+       "Ref": "AccountsTable81C15AE5"
+      },
+      "SIGNALS_TABLE_NAME": {
+       "Ref": "SignalsTableE8D63F6D"
+      },
+      "LEDGER_TABLE_NAME": {
+       "Ref": "LedgerTable38A58B60"
+      },
+      "EVIDENCE_INDEX_TABLE_NAME": {
+       "Ref": "EvidenceIndexTableCC0C8C88"
+      },
+      "EVIDENCE_LEDGER_BUCKET": {
+       "Ref": "EvidenceLedgerBucket3A5BFB25"
+      },
+      "EVENT_BUS_NAME": {
+       "Ref": "CCNativeEventBus892049F2"
+      }
+     }
+    },
+    "FunctionName": "cc-native-lifecycle-inference-handler",
+    "Handler": "index.handler",
+    "MemorySize": 512,
+    "Role": {
+     "Fn::GetAtt": [
+      "PerceptionHandlersLifecycleInferenceHandlerServiceRoleD091F351",
+      "Arn"
+     ]
+    },
+    "Runtime": "nodejs20.x",
+    "Timeout": 300
+   },
+   "DependsOn": [
+    "PerceptionHandlersLifecycleInferenceHandlerServiceRoleDefaultPolicy2147626F",
+    "PerceptionHandlersLifecycleInferenceHandlerServiceRoleD091F351"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/PerceptionHandlers/LifecycleInferenceHandler/Resource",
+    "aws:asset:path": "/Users/rameshpaturu/Documents/projects/lambda/cc-native",
+    "aws:asset:is-bundled": true,
+    "aws:asset:property": "Code"
+   }
+  },
+  "PerceptionHandlersLifecycleInferenceHandlerEventInvokeConfigA9D00F52": {
+   "Type": "AWS::Lambda::EventInvokeConfig",
+   "Properties": {
+    "FunctionName": {
+     "Ref": "LifecycleInferenceHandler"
+    },
+    "MaximumRetryAttempts": 2,
+    "Qualifier": "$LATEST"
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/PerceptionHandlers/LifecycleInferenceHandler/EventInvokeConfig/Resource"
+   }
+  },
+  "PerceptionHandlersConnectorPollCompletedRule339EDE78": {
+   "Type": "AWS::Events::Rule",
+   "Properties": {
+    "EventBusName": {
+     "Ref": "CCNativeEventBus892049F2"
+    },
+    "EventPattern": {
+     "source": [
+      "cc-native.perception"
+     ],
+     "detail-type": [
+      "CONNECTOR_POLL_COMPLETED"
+     ]
+    },
+    "State": "ENABLED",
+    "Targets": [
+     {
+      "Arn": {
+       "Fn::GetAtt": [
+        "SignalDetectionHandler",
+        "Arn"
+       ]
+      },
+      "DeadLetterConfig": {
+       "Arn": {
+        "Fn::GetAtt": [
+         "PerceptionHandlersSignalDetectionDlqEC9EFCCF",
+         "Arn"
+        ]
+       }
+      },
+      "Id": "Target0",
+      "RetryPolicy": {
+       "MaximumRetryAttempts": 2
+      }
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/PerceptionHandlers/ConnectorPollCompletedRule/Resource"
+   }
+  },
+  "PerceptionHandlersConnectorPollCompletedRuleAllowEventRuleCCNativeStackPerceptionHandlersSignalDetectionHandler86A6DCFB606B8ED5": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "SignalDetectionHandler",
+      "Arn"
+     ]
+    },
+    "Principal": "events.amazonaws.com",
+    "SourceArn": {
+     "Fn::GetAtt": [
+      "PerceptionHandlersConnectorPollCompletedRule339EDE78",
+      "Arn"
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/PerceptionHandlers/ConnectorPollCompletedRule/AllowEventRuleCCNativeStackPerceptionHandlersSignalDetectionHandler86A6DCFB"
+   }
+  },
+  "PerceptionHandlersSignalDetectedRule4DCF0A68": {
+   "Type": "AWS::Events::Rule",
+   "Properties": {
+    "EventBusName": {
+     "Ref": "CCNativeEventBus892049F2"
+    },
+    "EventPattern": {
+     "source": [
+      "cc-native.perception"
+     ],
+     "detail-type": [
+      "SIGNAL_DETECTED",
+      "SIGNAL_CREATED"
+     ]
+    },
+    "State": "ENABLED",
+    "Targets": [
+     {
+      "Arn": {
+       "Fn::GetAtt": [
+        "LifecycleInferenceHandler",
+        "Arn"
+       ]
+      },
+      "DeadLetterConfig": {
+       "Arn": {
+        "Fn::GetAtt": [
+         "PerceptionHandlersLifecycleInferenceDlq6448FBB8",
+         "Arn"
+        ]
+       }
+      },
+      "Id": "Target0",
+      "RetryPolicy": {
+       "MaximumRetryAttempts": 2
+      }
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/PerceptionHandlers/SignalDetectedRule/Resource"
+   }
+  },
+  "PerceptionHandlersSignalDetectedRuleAllowEventRuleCCNativeStackPerceptionHandlersLifecycleInferenceHandler109F8B97A730B0FE": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "LifecycleInferenceHandler",
+      "Arn"
+     ]
+    },
+    "Principal": "events.amazonaws.com",
+    "SourceArn": {
+     "Fn::GetAtt": [
+      "PerceptionHandlersSignalDetectedRule4DCF0A68",
+      "Arn"
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/PerceptionHandlers/SignalDetectedRule/AllowEventRuleCCNativeStackPerceptionHandlersLifecycleInferenceHandler109F8B97"
+   }
+  },
+  "CDKMetadata": {
+   "Type": "AWS::CDK::Metadata",
+   "Properties": {
+    "Analytics": "v2:deflate64:H4sIAAAAAAAA/31T3W7aMBR+lt4brwVp0i4hhQq12zLouK2Mc8gMjk/mY4OQ5XefbNOAVm03+X6T+DjOmI8nn/n9nTjRSDaHkVZbHtZOyAMTJ3oLNOFh5uUBHKt25sIK1KiVPF/tiy5iJggia85GdNhseXgVWw2pm0lkcATjiId5wpmnFA185Us3YWSHjnh4hvymZzhHpkTHwwovnYTXpRQWmcTWKIc8/CSwNaJO4cDfSaUVGHcbFScykGMeNr1M2aauWG3VUThY+60pW3FlK/QOhvmKf/WmRCiVcAoNW2g8vWCbau90DdJb5c5PFn2f7/+vsTStBaIP/rzYS+PA7oSETS/npulRlek2dTXIJ+HgJM43jcg0tsTDC7bDWwf+FZxVcqG0A5uCWx2Zgd55AzxUO/M4K7MPz3icVdqTA1sLKzpwYD9GRSwNOWEkREa/iYcfHnzezELy9fqJb2RkWnTbRrwZbGBP/FuGhTcy7zdN3gQROOLTBJdyXuzQyYduaY54gArNTrXDSfzbrMF2ikihiYwM8fCKvcoHJJPIpEbfnISTv3iYamG7lGUSI1sBobcSWOXJYXeVO/OPqLZ4VA3Y9CuxPMDaiVaZvJjv3vXeRZYG53v6dBzf84cv/OFuT0qNrDdOdcBXBf8ABOH+geUDAAA="
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/CDKMetadata/Default"
+   }
+  }
+ },
+ "Outputs": {
+  "EvidenceLedgerBucketName": {
+   "Description": "S3 bucket for evidence ledger (versioned, World Model truth)",
+   "Value": {
+    "Ref": "EvidenceLedgerBucket3A5BFB25"
+   }
+  },
+  "WorldStateSnapshotsBucketName": {
+   "Description": "S3 bucket for world state snapshots (versioned)",
+   "Value": {
+    "Ref": "WorldStateSnapshotsBucket7B77A435"
+   }
+  },
+  "SchemaRegistryBucketName": {
+   "Description": "S3 bucket for schema registry definitions (versioned)",
+   "Value": {
+    "Ref": "SchemaRegistryBucketAD895CE8"
+   }
+  },
+  "ArtifactsBucketName": {
+   "Description": "S3 bucket for artifacts (briefs, summaries, etc.)",
+   "Value": {
+    "Ref": "ArtifactsBucket2AAC5544"
+   }
+  },
+  "LedgerArchivesBucketName": {
+   "Description": "S3 bucket for execution ledger archives",
+   "Value": {
+    "Ref": "LedgerArchivesBucket5FE74194"
+   }
+  },
+  "EventBusName": {
+   "Description": "EventBridge custom event bus name",
+   "Value": {
+    "Ref": "CCNativeEventBus892049F2"
+   }
+  },
+  "WorldStateTableName": {
+   "Description": "DynamoDB table for computed world state (belief layer)",
+   "Value": {
+    "Ref": "WorldStateTableD92FBF82"
+   }
+  },
+  "EvidenceIndexTableName": {
+   "Description": "DynamoDB table for evidence index (points to S3 evidence)",
+   "Value": {
+    "Ref": "EvidenceIndexTableCC0C8C88"
+   }
+  },
+  "SnapshotsIndexTableName": {
+   "Description": "DynamoDB table for snapshots index (points to S3 snapshots)",
+   "Value": {
+    "Ref": "SnapshotsIndexTable28F25CBB"
+   }
+  },
+  "SchemaRegistryTableName": {
+   "Description": "DynamoDB table for schema registry index",
+   "Value": {
+    "Ref": "SchemaRegistryTableD1184F6E"
+   }
+  },
+  "CriticalFieldRegistryTableName": {
+   "Description": "DynamoDB table for critical field registry",
+   "Value": {
+    "Ref": "CriticalFieldRegistryTable5513C5F7"
+   }
+  },
+  "LedgerTableName": {
+   "Description": "DynamoDB table for execution ledger (append-only audit trail)",
+   "Value": {
+    "Ref": "LedgerTable38A58B60"
+   }
+  },
+  "CacheTableName": {
+   "Description": "DynamoDB table for TTL-based cache",
+   "Value": {
+    "Ref": "CacheTableC1E6DF7E"
+   }
+  },
+  "TenantsTableName": {
+   "Description": "DynamoDB table for tenant configuration and metadata",
+   "Value": {
+    "Ref": "TenantsTableB701DC57"
+   }
+  },
+  "AccountsTableName": {
+   "Description": "DynamoDB table for account metadata",
+   "Value": {
+    "Ref": "AccountsTable81C15AE5"
+   }
+  },
+  "SignalsTableName": {
+   "Description": "DynamoDB table for signals",
+   "Value": {
+    "Ref": "SignalsTableE8D63F6D"
+   }
+  },
+  "MethodologyTableName": {
+   "Description": "DynamoDB table for methodology definitions",
+   "Value": {
+    "Ref": "MethodologyTable8F16BBDE"
+   }
+  },
+  "AssessmentTableName": {
+   "Description": "DynamoDB table for methodology assessments",
+   "Value": {
+    "Ref": "AssessmentTable25EB317A"
+   }
+  },
+  "IdentitiesTableName": {
+   "Description": "DynamoDB table for user and agent identities",
+   "Value": {
+    "Ref": "IdentitiesTableCD62DAD4"
+   }
+  },
+  "AgentRoleArn": {
+   "Description": "IAM role ARN for autonomous agents (read-only access)",
+   "Value": {
+    "Fn::GetAtt": [
+     "AgentRoleF4A42D6B",
+     "Arn"
+    ]
+   }
+  },
+  "UserPoolId": {
+   "Description": "Cognito User Pool ID for user authentication",
+   "Value": {
+    "Ref": "UserPool6BA7E5F2"
+   }
+  },
+  "UserPoolClientId": {
+   "Description": "Cognito User Pool Client ID",
+   "Value": {
+    "Ref": "UserPoolWebClient4C9370B0"
+   }
+  },
+  "NeptuneClusterEndpoint": {
+   "Description": "Neptune cluster endpoint (Gremlin)",
+   "Value": {
+    "Fn::GetAtt": [
+     "NeptuneInfrastructureNeptuneCluster6F50D8EC",
+     "Endpoint"
+    ]
+   }
+  },
+  "NeptuneClusterPort": {
+   "Description": "Neptune cluster port (Gremlin)",
+   "Value": {
+    "Fn::GetAtt": [
+     "NeptuneInfrastructureNeptuneCluster6F50D8EC",
+     "Port"
+    ]
+   }
+  },
+  "NeptuneClusterIdentifier": {
+   "Description": "Neptune cluster identifier",
+   "Value": {
+    "Ref": "NeptuneInfrastructureNeptuneCluster6F50D8EC"
+   }
+  },
+  "NeptuneAccessRoleArn": {
+   "Description": "IAM role ARN for accessing Neptune cluster",
+   "Value": {
+    "Fn::GetAtt": [
+     "NeptuneInfrastructureNeptuneAccessRole3BE029B3",
+     "Arn"
+    ]
+   }
+  },
+  "VpcId": {
+   "Description": "VPC ID for Neptune cluster",
+   "Value": {
+    "Ref": "NeptuneInfrastructureCCNativeVpc9CABA391"
+   }
+  },
+  "NeptuneSubnetIds": {
+   "Description": "Comma-separated list of Neptune subnet IDs (for test runner setup)",
+   "Value": {
+    "Fn::Join": [
+     "",
+     [
+      {
+       "Ref": "NeptuneInfrastructureCCNativeVpcNeptuneIsolatedSubnet1SubnetA7BEE99D"
+      },
+      ",",
+      {
+       "Ref": "NeptuneInfrastructureCCNativeVpcNeptuneIsolatedSubnet2SubnetD9369810"
+      }
+     ]
+    ]
+   }
+  },
+  "NeptuneSubnetId": {
+   "Description": "First Neptune subnet ID (for test runner setup)",
+   "Value": {
+    "Ref": "NeptuneInfrastructureCCNativeVpcNeptuneIsolatedSubnet1SubnetA7BEE99D"
+   }
+  },
+  "ConnectorPollHandlerArn": {
+   "Description": "ARN of connector poll handler Lambda function",
+   "Value": {
+    "Fn::GetAtt": [
+     "ConnectorPollHandler",
+     "Arn"
+    ]
+   }
+  },
+  "SignalDetectionHandlerArn": {
+   "Description": "ARN of signal detection handler Lambda function",
+   "Value": {
+    "Fn::GetAtt": [
+     "SignalDetectionHandler",
+     "Arn"
+    ]
+   }
+  },
+  "LifecycleInferenceHandlerArn": {
+   "Description": "ARN of lifecycle inference handler Lambda function",
+   "Value": {
+    "Fn::GetAtt": [
+     "LifecycleInferenceHandler",
+     "Arn"
+    ]
+   }
+  },
+  "GraphMaterializerHandlerArn": {
+   "Description": "ARN of graph materializer handler Lambda function",
+   "Value": {
+    "Fn::GetAtt": [
+     "GraphMaterializerHandler",
+     "Arn"
+    ]
+   }
+  },
+  "SynthesisEngineHandlerArn": {
+   "Description": "ARN of synthesis engine handler Lambda function",
+   "Value": {
+    "Fn::GetAtt": [
+     "SynthesisEngineHandler",
+     "Arn"
+    ]
+   }
+  },
+  "AccountPostureStateTableName": {
+   "Description": "DynamoDB table for account posture state read model",
+   "Value": {
+    "Ref": "AccountPostureStateTable"
+   }
+  },
+  "GraphMaterializationStatusTableName": {
+   "Description": "DynamoDB table for graph materialization status (synthesis gating)",
+   "Value": {
+    "Ref": "GraphMaterializationStatusTable"
+   }
+  }
+ },
+ "Parameters": {
+  "BootstrapVersion": {
+   "Type": "AWS::SSM::Parameter::Value<String>",
+   "Default": "/cdk-bootstrap/hnb659fds/version",
+   "Description": "Version of the CDK Bootstrap resources in this environment, automatically retrieved from SSM Parameter Store. [cdk:skip]"
+  }
+ },
+ "Rules": {
+  "CheckBootstrapVersion": {
+   "Assertions": [
+    {
+     "Assert": {
+      "Fn::Not": [
+       {
+        "Fn::Contains": [
+         [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5"
+         ],
+         {
+          "Ref": "BootstrapVersion"
+         }
+        ]
+       }
+      ]
+     },
+     "AssertDescription": "CDK bootstrap stack version 6 required. Please run 'cdk bootstrap' with a recent version of the CDK CLI."
+    }
+   ]
+  }
+ }
+}

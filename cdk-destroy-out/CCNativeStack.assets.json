@@ -1,0 +1,111 @@
+{
+  "version": "48.0.0",
+  "files": {
+    "7fa1e366ee8a9ded01fc355f704cff92bfd179574e6f9cfee800a3541df1b200": {
+      "displayName": "CCNativeStack/Custom::VpcRestrictDefaultSGCustomResourceProvider Code",
+      "source": {
+        "path": "asset.7fa1e366ee8a9ded01fc355f704cff92bfd179574e6f9cfee800a3541df1b200",
+        "packaging": "zip"
+      },
+      "destinations": {
+        "661268174397-us-west-2-8f8a162b": {
+          "bucketName": "cdk-hnb659fds-assets-661268174397-us-west-2",
+          "objectKey": "7fa1e366ee8a9ded01fc355f704cff92bfd179574e6f9cfee800a3541df1b200.zip",
+          "region": "us-west-2",
+          "assumeRoleArn": "arn:${AWS::Partition}:iam::661268174397:role/cdk-hnb659fds-file-publishing-role-661268174397-us-west-2"
+        }
+      }
+    },
+    "6c2e123062019994a95b77105615939087ee662e18551abfb67bbb7c0bb415cf": {
+      "displayName": "GraphIntelligenceHandlers/GraphMaterializerHandler/Code",
+      "source": {
+        "path": "/Users/rameshpaturu/Documents/projects/lambda/cc-native",
+        "packaging": "zip"
+      },
+      "destinations": {
+        "661268174397-us-west-2-c1d77cc9": {
+          "bucketName": "cdk-hnb659fds-assets-661268174397-us-west-2",
+          "objectKey": "6c2e123062019994a95b77105615939087ee662e18551abfb67bbb7c0bb415cf.zip",
+          "region": "us-west-2",
+          "assumeRoleArn": "arn:${AWS::Partition}:iam::661268174397:role/cdk-hnb659fds-file-publishing-role-661268174397-us-west-2"
+        }
+      }
+    },
+    "5f70dc10b340655b10f78604e94c8d6d39cc377389e38840f1e3682585861714": {
+      "displayName": "GraphIntelligenceHandlers/SynthesisEngineHandler/Code",
+      "source": {
+        "path": "/Users/rameshpaturu/Documents/projects/lambda/cc-native",
+        "packaging": "zip"
+      },
+      "destinations": {
+        "661268174397-us-west-2-3d59b836": {
+          "bucketName": "cdk-hnb659fds-assets-661268174397-us-west-2",
+          "objectKey": "5f70dc10b340655b10f78604e94c8d6d39cc377389e38840f1e3682585861714.zip",
+          "region": "us-west-2",
+          "assumeRoleArn": "arn:${AWS::Partition}:iam::661268174397:role/cdk-hnb659fds-file-publishing-role-661268174397-us-west-2"
+        }
+      }
+    },
+    "e817edb026fdf06443f60a83b2a443bb1bc052934f61c2dfd96ef41942518354": {
+      "displayName": "PerceptionHandlers/ConnectorPollHandler/Code",
+      "source": {
+        "path": "/Users/rameshpaturu/Documents/projects/lambda/cc-native",
+        "packaging": "zip"
+      },
+      "destinations": {
+        "661268174397-us-west-2-588ce339": {
+          "bucketName": "cdk-hnb659fds-assets-661268174397-us-west-2",
+          "objectKey": "e817edb026fdf06443f60a83b2a443bb1bc052934f61c2dfd96ef41942518354.zip",
+          "region": "us-west-2",
+          "assumeRoleArn": "arn:${AWS::Partition}:iam::661268174397:role/cdk-hnb659fds-file-publishing-role-661268174397-us-west-2"
+        }
+      }
+    },
+    "968e33ee76507eaf60271aef60f7bc2a1576704cb63e33f3dca55f10645b10b9": {
+      "displayName": "PerceptionHandlers/SignalDetectionHandler/Code",
+      "source": {
+        "path": "/Users/rameshpaturu/Documents/projects/lambda/cc-native",
+        "packaging": "zip"
+      },
+      "destinations": {
+        "661268174397-us-west-2-01161d51": {
+          "bucketName": "cdk-hnb659fds-assets-661268174397-us-west-2",
+          "objectKey": "968e33ee76507eaf60271aef60f7bc2a1576704cb63e33f3dca55f10645b10b9.zip",
+          "region": "us-west-2",
+          "assumeRoleArn": "arn:${AWS::Partition}:iam::661268174397:role/cdk-hnb659fds-file-publishing-role-661268174397-us-west-2"
+        }
+      }
+    },
+    "54c23d0738aeb8f5684e3ef2bacd68527ef857722564c96e5ee17fcf8d340c03": {
+      "displayName": "PerceptionHandlers/LifecycleInferenceHandler/Code",
+      "source": {
+        "path": "/Users/rameshpaturu/Documents/projects/lambda/cc-native",
+        "packaging": "zip"
+      },
+      "destinations": {
+        "661268174397-us-west-2-7610783f": {
+          "bucketName": "cdk-hnb659fds-assets-661268174397-us-west-2",
+          "objectKey": "54c23d0738aeb8f5684e3ef2bacd68527ef857722564c96e5ee17fcf8d340c03.zip",
+          "region": "us-west-2",
+          "assumeRoleArn": "arn:${AWS::Partition}:iam::661268174397:role/cdk-hnb659fds-file-publishing-role-661268174397-us-west-2"
+        }
+      }
+    },
+    "4b4610e1ec9519b1965532d654696a2b90f3b30106486f3d09ff948d47c5f018": {
+      "displayName": "CCNativeStack Template",
+      "source": {
+        "path": "CCNativeStack.template.json",
+        "packaging": "file"
+      },
+      "destinations": {
+        "661268174397-us-west-2-8cba5f5c": {
+          "bucketName": "cdk-hnb659fds-assets-661268174397-us-west-2",
+          "objectKey": "4b4610e1ec9519b1965532d654696a2b90f3b30106486f3d09ff948d47c5f018.json",
+          "region": "us-west-2",
+          "assumeRoleArn": "arn:${AWS::Partition}:iam::661268174397:role/cdk-hnb659fds-file-publishing-role-661268174397-us-west-2"
+        }
+      }
+    }
+  },
+  "dockerImages": {}
+}

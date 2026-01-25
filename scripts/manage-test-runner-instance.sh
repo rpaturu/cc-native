@@ -11,6 +11,9 @@ set -e
 PROFILE="${AWS_PROFILE:-cc-native-account}"
 REGION="${AWS_REGION:-us-west-2}"
 ACTION="${1:-help}"
+# Optional: Specify Amazon Linux 2023 release version (e.g., "2023.10.20260105")
+# If not set, uses the latest available AMI
+AL2023_VERSION="${AL2023_VERSION:-}"
 
 # Load .env.local if it exists (for local overrides like GIT_REPO_URL, GIT_TOKEN)
 if [ -f .env.local ]; then
@@ -22,22 +25,27 @@ if [ -f .env ]; then
   source .env
 fi
 
+# Load .env.test-runner if it exists (required for launch, optional for teardown/status)
 if [ -f .env.test-runner ]; then
   source .env.test-runner
-else
-  echo "Error: .env.test-runner not found. Run ./scripts/setup-test-runner-prerequisites.sh first"
-  exit 1
 fi
 
-# Validate required variables
-if [ -z "$TEST_RUNNER_SECURITY_GROUP_ID" ] || [ -z "$TEST_RUNNER_INSTANCE_PROFILE_NAME" ] || [ -z "$TEST_RUNNER_KEY_NAME" ]; then
-  echo "Error: Missing required configuration. Run ./scripts/setup-test-runner-prerequisites.sh first"
-  exit 1
+# Load .env if it exists (for NEPTUNE_SUBNET_ID and other config)
+if [ -f .env ]; then
+  source .env
 fi
 
-if [ -z "$NEPTUNE_SUBNET_ID" ]; then
-  echo "Error: NEPTUNE_SUBNET_ID not found in .env"
-  exit 1
+# Validate required variables (only for actions that need them)
+if [ "$ACTION" = "launch" ] || [ "$ACTION" = "test" ] || [ "$ACTION" = "configure" ]; then
+  if [ -z "$TEST_RUNNER_SECURITY_GROUP_ID" ] || [ -z "$TEST_RUNNER_INSTANCE_PROFILE_NAME" ] || [ -z "$TEST_RUNNER_KEY_NAME" ]; then
+    echo "Error: Missing required configuration. Run ./scripts/setup-test-runner-prerequisites.sh first"
+    exit 1
+  fi
+  
+  if [ -z "$NEPTUNE_SUBNET_ID" ]; then
+    echo "Error: NEPTUNE_SUBNET_ID not found in .env"
+    exit 1
+  fi
 fi
 
 # Function to get instance ID from tag
@@ -70,34 +78,127 @@ launch_instance() {
     exit 1
   fi
 
-  # Get latest Amazon Linux 2023 AMI ID
-  echo "Finding latest Amazon Linux 2023 AMI..."
-  AMI_ID=$(aws ec2 describe-images \
-    --owners amazon \
-    --filters "Name=name,Values=al2023-ami-2023*" "Name=architecture,Values=x86_64" \
-    --query "Images | sort_by(@, &CreationDate) | [-1].ImageId" \
-    --output text \
-    --profile $PROFILE \
-    --region $REGION \
-    --no-cli-pager)
-
-  if [ -z "$AMI_ID" ] || [ "$AMI_ID" == "None" ]; then
-    echo "Error: Could not find Amazon Linux 2023 AMI"
-    exit 1
+  # Get Amazon Linux 2023 AMI ID
+  if [ -n "$AL2023_VERSION" ]; then
+    echo "Finding Amazon Linux 2023 AMI version: $AL2023_VERSION..."
+    AMI_FILTER="al2023-ami-${AL2023_VERSION}*"
+    AMI_ID=$(aws ec2 describe-images \
+      --owners amazon \
+      --filters "Name=name,Values=$AMI_FILTER" "Name=architecture,Values=x86_64" \
+      --query "Images | sort_by(@, &CreationDate) | [-1].ImageId" \
+      --output text \
+      --profile $PROFILE \
+      --region $REGION \
+      --no-cli-pager)
+    
+    if [ -z "$AMI_ID" ] || [ "$AMI_ID" == "None" ]; then
+      echo "Error: Could not find Amazon Linux 2023 AMI version: $AL2023_VERSION"
+      echo "Available versions can be found at: https://docs.aws.amazon.com/linux/al2023/release-notes/relnotes.html"
+      exit 1
+    fi
+    echo "Using AMI version $AL2023_VERSION: $AMI_ID"
+  else
+    echo "Finding latest Amazon Linux 2023 AMI..."
+    AMI_ID=$(aws ec2 describe-images \
+      --owners amazon \
+      --filters "Name=name,Values=al2023-ami-2023*" "Name=architecture,Values=x86_64" \
+      --query "Images | sort_by(@, &CreationDate) | [-1].ImageId" \
+      --output text \
+      --profile $PROFILE \
+      --region $REGION \
+      --no-cli-pager)
+    
+    if [ -z "$AMI_ID" ] || [ "$AMI_ID" == "None" ]; then
+      echo "Error: Could not find Amazon Linux 2023 AMI"
+      exit 1
+    fi
+    
+    # Get the AMI name to show which version we're using
+    AMI_NAME=$(aws ec2 describe-images \
+      --image-ids "$AMI_ID" \
+      --query "Images[0].Name" \
+      --output text \
+      --profile $PROFILE \
+      --region $REGION \
+      --no-cli-pager)
+    echo "Using latest AMI: $AMI_ID"
+    echo "AMI Name: $AMI_NAME"
   fi
-
-  echo "Using AMI: $AMI_ID"
   echo ""
 
-  # Launch instance
-  echo "Launching instance..."
+  # Create user-data script to pre-install Node.js and npm
+  # This makes test runs faster and more reliable
+  USER_DATA_SCRIPT=$(cat <<'EOF'
+#!/bin/bash
+# User data script to pre-install required tools for test runner
+set -e
+
+echo "=========================================="
+echo "Installing test runner prerequisites"
+echo "=========================================="
+
+# Install Node.js 20 directly from Amazon Linux repositories
+# This works via VPC endpoints and doesn't require internet access
+# Amazon Linux 2023 includes nodejs20 package (see release notes)
+# Note: Some AMIs may have older Node.js versions pre-installed, so we remove them first
+echo "Checking for existing Node.js installations..."
+if command -v node &> /dev/null; then
+  EXISTING_VERSION=$(node --version)
+  echo "Found existing Node.js: $EXISTING_VERSION"
+  if ! echo "$EXISTING_VERSION" | grep -qE "^v20"; then
+    echo "Removing older Node.js version to install Node.js 20..."
+    dnf remove -y nodejs nodejs18 nodejs16 2>/dev/null || true
+  fi
+fi
+
+echo "Installing Node.js 20 from Amazon Linux repositories..."
+dnf install -y nodejs20
+
+# Verify Node.js 20 is installed and being used
+echo ""
+echo "Installation complete:"
+NODE_VERSION=$(node --version 2>/dev/null || echo "not found")
+echo "Node.js version: $NODE_VERSION"
+
+# Check if we're using Node.js 20
+if echo "$NODE_VERSION" | grep -qE "^v20"; then
+  echo "✅ Node.js 20 is active"
+elif echo "$NODE_VERSION" | grep -qE "^v1[0-8]"; then
+  echo "⚠️  Warning: Node.js $NODE_VERSION detected instead of Node.js 20"
+  echo "   Checking available Node.js versions..."
+  dnf list installed | grep nodejs || echo "No nodejs packages found"
+  echo "   Attempting to ensure nodejs20 is the active version..."
+  # nodejs20 should be in PATH, but if not, we may need to use alternatives
+  which node || echo "node command not found in PATH"
+fi
+
+npm --version || echo "npm installation failed"
+
+echo "=========================================="
+echo "Test runner prerequisites installed"
+echo "=========================================="
+EOF
+)
+
+  # Encode user-data in base64 (required by AWS)
+  # Remove newlines from base64 output for compatibility
+  USER_DATA_B64=$(echo "$USER_DATA_SCRIPT" | base64 | tr -d '\n')
+
+  # Launch instance with user-data
+  # Use t3.medium (2 vCPU, 4GB RAM) for better performance with Jest + TypeScript compilation
+  # t3.micro (1 vCPU, 1GB RAM) is too small and causes Jest to hang during compilation
+  # Since instance is torn down after testing, using t3.medium is cost-effective
+  INSTANCE_TYPE="${TEST_RUNNER_INSTANCE_TYPE:-t3.medium}"
+  echo "Launching instance with pre-installed tools (Node.js, npm)..."
+  echo "Instance type: $INSTANCE_TYPE (2 vCPU, 4GB RAM - good for Jest/TypeScript compilation)"
   INSTANCE_ID=$(aws ec2 run-instances \
     --image-id $AMI_ID \
-    --instance-type t3.micro \
+    --instance-type $INSTANCE_TYPE \
     --subnet-id $NEPTUNE_SUBNET_ID \
     --security-group-ids $TEST_RUNNER_SECURITY_GROUP_ID \
     --iam-instance-profile Name=$TEST_RUNNER_INSTANCE_PROFILE_NAME \
     --key-name $TEST_RUNNER_KEY_NAME \
+    --user-data "$USER_DATA_B64" \
     --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=cc-native-test-runner}]' \
     --query "Instances[0].InstanceId" \
     --output text \
@@ -117,6 +218,10 @@ launch_instance() {
     --profile $PROFILE \
     --region $REGION \
     --no-cli-pager
+
+  echo "Waiting for user-data script to complete (installing Node.js, npm)..."
+  echo "This may take 1-2 minutes..."
+  sleep 30  # Give user-data script time to start
 
   # Save instance ID to .env.test-runner
   echo "TEST_RUNNER_INSTANCE_ID=$INSTANCE_ID" >> .env.test-runner
@@ -206,28 +311,16 @@ configure_instance() {
   echo "=========================================="
   echo "Instance ID: $INSTANCE_ID"
   echo ""
-  echo "⚠️  Note: Configuration must be done manually via SSH"
+  echo "✅ Node.js and npm are pre-installed via user-data"
   echo ""
-  echo "Once connected, run these commands:"
+  echo "⚠️  Note: Additional configuration can be done manually via SSM"
   echo ""
-  echo "# Install Node.js 20"
-  echo "curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash"
-  echo "source ~/.bashrc"
-  echo "nvm install 20"
-  echo "nvm use 20"
+  echo "Once connected, you can verify installations:"
   echo ""
-  echo "# Install git"
-  echo "sudo yum install -y git"
+  echo "  node --version"
+  echo "  npm --version"
   echo ""
-  echo "# Clone repository"
-  echo "git clone <YOUR_REPO_URL>"
-  echo "cd cc-native"
-  echo ""
-  echo "# Install dependencies"
-  echo "npm install"
-  echo ""
-  echo "# Copy .env file (from your local machine)"
-  echo "# The instance will use IAM role for AWS credentials"
+  echo "The instance uses IAM role for AWS credentials (no .env needed)"
   echo ""
   
   show_connection_info $INSTANCE_ID
@@ -485,14 +578,16 @@ teardown_instance() {
   echo "Instance ID: $INSTANCE_ID"
   echo ""
   
-  # Allow non-interactive teardown if FORCE_TEARDOWN is set
-  if [ "${FORCE_TEARDOWN:-false}" != "true" ]; then
+  # Allow non-interactive teardown if FORCE_TEARDOWN is set or if running non-interactively
+  if [ "${FORCE_TEARDOWN:-false}" != "true" ] && [ -t 0 ]; then
     read -p "Are you sure you want to terminate this instance? (yes/no): " CONFIRM
     
     if [ "$CONFIRM" != "yes" ]; then
       echo "Cancelled"
       return
     fi
+  else
+    echo "Terminating instance (non-interactive mode)..."
   fi
 
   echo "Terminating instance..."
@@ -552,6 +647,18 @@ Examples:
 Prerequisites:
   - Run ./scripts/setup-test-runner-prerequisites.sh first
   - Ensure .env and .env.test-runner files exist
+
+Environment Variables:
+  AL2023_VERSION    Optional: Specify Amazon Linux 2023 release version (e.g., "2023.10.20260105")
+                    If not set, uses the latest available AMI
+                    See: https://docs.aws.amazon.com/linux/al2023/release-notes/relnotes.html
+
+Examples:
+  # Use specific AMI version
+  AL2023_VERSION="2023.10.20260105" ./scripts/manage-test-runner-instance.sh launch
+
+  # Use latest AMI (default)
+  ./scripts/manage-test-runner-instance.sh launch
 
 EOF
 }

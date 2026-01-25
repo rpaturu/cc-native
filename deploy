@@ -13,6 +13,16 @@ fi
 CDK_PROFILE=${ADMIN_PROFILE:-${AWS_PROFILE:-default}}
 CDK_REGION=${AWS_REGION:-us-west-2}
 DEPLOYMENT_ENV=${NODE_ENV:-development}
+
+# Export CDK_DEFAULT_ACCOUNT from AWS_ACCOUNT_ID if set
+# This ensures CDK uses the correct account ID from .env.local
+if [ ! -z "$AWS_ACCOUNT_ID" ]; then
+  export CDK_DEFAULT_ACCOUNT=$AWS_ACCOUNT_ID
+  echo "Using Account ID from .env.local: $AWS_ACCOUNT_ID"
+fi
+
+# Export CDK_DEFAULT_REGION
+export CDK_DEFAULT_REGION=$CDK_REGION
 while [[ "$#" -gt 0 ]]; do case $1 in
   --profile) CDK_PROFILE="$2"; shift;;
   --region) AWS_REGION="$2"; shift;;

@@ -141,6 +141,7 @@ describe('Phase 2 Integration Tests', () => {
       neptuneConnection = NeptuneConnection.getInstance();
       try {
         // Initialize connection with timeout
+        let connectionTimeout: NodeJS.Timeout;
         await Promise.race([
           neptuneConnection.initialize({
             endpoint: neptuneEndpoint,
@@ -148,21 +149,26 @@ describe('Phase 2 Integration Tests', () => {
             region,
             iamAuthEnabled: true,
           }),
-          new Promise((_, reject) =>
-            setTimeout(() => reject(new Error('Connection timeout')), 5000)
-          ),
-        ]);
+          new Promise((_, reject) => {
+            connectionTimeout = setTimeout(() => reject(new Error('Connection timeout')), 5000);
+          }),
+        ]).finally(() => {
+          if (connectionTimeout) clearTimeout(connectionTimeout);
+        });
 
         graphService = new GraphService(neptuneConnection);
 
         // Verify connection works with a simple health check query
         try {
+          let queryTimeout: NodeJS.Timeout;
           await Promise.race([
             graphService.getVertex('test-vertex-id-that-does-not-exist'), // Simple query that should return null quickly
-            new Promise((_, reject) =>
-              setTimeout(() => reject(new Error('Query timeout - Neptune not accessible from this network')), 5000)
-            ),
-          ]);
+            new Promise((_, reject) => {
+              queryTimeout = setTimeout(() => reject(new Error('Query timeout - Neptune not accessible from this network')), 5000);
+            }),
+          ]).finally(() => {
+            if (queryTimeout) clearTimeout(queryTimeout);
+          });
           neptuneAccessible = true;
           logger.info('Neptune connection and query successful - tests will run');
         } catch (queryError: any) {

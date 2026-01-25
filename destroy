@@ -8,13 +8,25 @@ if [ -f .env.local ]; then
 fi
 
 # Parse arguments
-CDK_PROFILE=${AWS_PROFILE:-default}
+# Use ADMIN_PROFILE for deployments if available (has CloudFormation permissions)
+# Otherwise fall back to AWS_PROFILE
+CDK_PROFILE=${ADMIN_PROFILE:-${AWS_PROFILE:-default}}
 CDK_REGION=${AWS_REGION:-us-west-2}
 while [[ "$#" -gt 0 ]]; do case $1 in
   --profile) CDK_PROFILE="$2"; shift;;
   --region) AWS_REGION="$2"; shift;;
   --force) FORCE_DESTROY=true;;
 esac; shift; done
+
+# Export CDK_DEFAULT_ACCOUNT from AWS_ACCOUNT_ID if set
+# This ensures CDK uses the correct account ID from .env.local
+if [ ! -z "$AWS_ACCOUNT_ID" ]; then
+  export CDK_DEFAULT_ACCOUNT=$AWS_ACCOUNT_ID
+  echo "Using Account ID from .env.local: $AWS_ACCOUNT_ID"
+fi
+
+# Export CDK_DEFAULT_REGION
+export CDK_DEFAULT_REGION=$CDK_REGION
 
 # Check if region is set
 if [ -z "$AWS_REGION" ]; then
@@ -73,7 +85,8 @@ echo "Destroying stack: $STACK_NAME"
 echo "This may take several minutes..."
 
 # Destroy the stack
-npx cdk --profile $CDK_PROFILE --region $AWS_REGION destroy CCNativeStack --force
+# Use a different output directory to avoid conflicts with other CDK processes
+npx cdk --profile $CDK_PROFILE --region $AWS_REGION destroy CCNativeStack --force --output cdk-destroy-out
 
 echo ""
 echo "✅ Stack destruction complete!"

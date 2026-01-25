@@ -7,6 +7,11 @@
 
 import * as gremlin from 'gremlin';
 import { Logger } from '../core/Logger';
+import { fromNodeProviderChain } from '@aws-sdk/credential-providers';
+import { SignatureV4 } from '@aws-sdk/signature-v4';
+import { Sha256 } from '@aws-crypto/sha256-js';
+import { loadConfig } from '@smithy/node-config-provider';
+import { NODE_REGION_CONFIG_FILE_OPTIONS, NODE_REGION_CONFIG_OPTIONS } from '@smithy/config-resolver';
 
 // Gremlin types from package structure
 type DriverRemoteConnection = gremlin.driver.DriverRemoteConnection;
@@ -99,27 +104,103 @@ export class NeptuneConnection {
 
       const endpoint = this.config.endpoint;
       const port = this.config.port || 8182;
-      const url = `wss://${endpoint}:${port}/gremlin`;
 
-      logger.info('Connecting to Neptune', { endpoint, port, url });
+      logger.info('Connecting to Neptune', { endpoint, port, iamAuthEnabled: this.config.iamAuthEnabled !== false });
 
-      // Create connection
-      const connectionOptions: any = {
-        mimeType: 'application/vnd.gremlin-v2.0+json',
-      };
-
-      // If IAM auth is enabled, we'll use AWS SDK to sign requests
-      // For now, we'll use basic connection (IAM signing can be added later)
-      if (this.config.iamAuthEnabled !== false) {
-        // IAM signing will be handled by AWS SDK if needed
-        // For websocket connections, IAM signing is typically done via SigV4
-        logger.debug('IAM auth enabled (signing handled by AWS SDK)');
-      }
-
-      const DriverRemoteConnection = gremlin.driver.DriverRemoteConnection;
       const traversal = gremlin.process.AnonymousTraversalSource.traversal;
+      const DriverRemoteConnection = gremlin.driver.DriverRemoteConnection;
+
+      // Use IAM authentication if enabled (default: true)
+      if (this.config.iamAuthEnabled !== false) {
+        logger.debug('Using IAM authentication for Neptune (custom AWS SDK v3 SigV4)');
+        
+        // Get credentials using AWS SDK v3 credential provider chain
+        // This works with our Jest mock on EC2 (uses IAM role via instance metadata)
+        let credentials;
+        try {
+          credentials = await fromNodeProviderChain()();
+          logger.info('Retrieved credentials', { 
+            hasAccessKeyId: !!credentials.accessKeyId,
+            hasSecretAccessKey: !!credentials.secretAccessKey,
+            hasSessionToken: !!credentials.sessionToken,
+            credentialKeys: Object.keys(credentials)
+          });
+        } catch (error) {
+          logger.error('Failed to get AWS credentials', { error });
+          throw new Error('Failed to get AWS credentials for Neptune IAM authentication');
+        }
+        
+        // Get region from config or use default
+        let region = this.config.region;
+        try {
+          region = await loadConfig(NODE_REGION_CONFIG_OPTIONS, NODE_REGION_CONFIG_FILE_OPTIONS)() || this.config.region;
+        } catch (e) {
+          // Use configured region if config loading fails
+          region = this.config.region;
+        }
+        
+        // Custom SigV4 signing for Neptune WebSocket using AWS SDK v3
+        logger.debug('Creating SigV4 signer', { endpoint, port, region });
+        
+        const signer = new SignatureV4({
+          service: 'neptune-db',
+          region,
+          credentials,
+          sha256: Sha256,
+        });
+
+        // Generate WebSocket upgrade request headers
+        // sec-websocket-key must be a base64-encoded 16-byte random value (RFC 6455)
+        const now = new Date();
+        const randomBytes = Buffer.allocUnsafe(16);
+        for (let i = 0; i < 16; i++) {
+          randomBytes[i] = Math.floor(Math.random() * 256);
+        }
+        const secWebSocketKey = randomBytes.toString('base64');
+        
+        // Sign the WebSocket upgrade request
+        const signedRequest = await signer.sign({
+          method: 'GET',
+          hostname: endpoint,
+          port,
+          path: '/gremlin',
+          protocol: 'wss:',
+          headers: {
+            'host': `${endpoint}:${port}`,
+            'upgrade': 'websocket',
+            'connection': 'upgrade',
+            'sec-websocket-key': secWebSocketKey,
+            'sec-websocket-version': '13',
+            'sec-websocket-protocol': 'graphson-v2.0, graphson-v1.0'
+          },
+          query: {}
+        }, { signingDate: now });
+
+        logger.debug('SigV4 signing succeeded', { 
+          hasHeaders: !!signedRequest.headers,
+          headerCount: Object.keys(signedRequest.headers || {}).length
+        });
+
+        // Create connection with signed headers
+        const url = `wss://${endpoint}:${port}/gremlin`;
+        const connectionOptions: any = {
+          mimeType: 'application/vnd.gremlin-v2.0+json',
+          headers: signedRequest.headers,
+        };
+        
+        this.connection = new DriverRemoteConnection(url, connectionOptions);
+      } else {
+        logger.debug('Using basic connection (IAM auth disabled)');
+        
+        // Fallback to standard connection without IAM auth
+        const url = `wss://${endpoint}:${port}/gremlin`;
+        const connectionOptions: any = {
+          mimeType: 'application/vnd.gremlin-v2.0+json',
+        };
+        
+        this.connection = new DriverRemoteConnection(url, connectionOptions);
+      }
       
-      this.connection = new DriverRemoteConnection(url, connectionOptions);
       this.g = traversal().withRemote(this.connection);
 
       logger.info('Neptune connection established');

@@ -13,6 +13,7 @@ import { Logger } from '../core/Logger';
 // Gremlin types from package structure
 type GraphTraversalSource = gremlin.process.GraphTraversalSource;
 const __ = gremlin.process.statics;
+const T = gremlin.process.t;
 
 const logger = new Logger('GraphService');
 
@@ -64,14 +65,6 @@ export class GraphService implements IGraphService {
       const g = await this.getG();
       const now = this.getCurrentTimestamp();
 
-      // Build property list (exclude id, which is set separately)
-      const propertyList: any[] = [];
-      for (const [key, value] of Object.entries(properties)) {
-        if (key !== 'id') {
-          propertyList.push([key, value]);
-        }
-      }
-
       // Ensure required properties
       const finalProperties: Record<string, any> = {
         ...properties,
@@ -83,25 +76,34 @@ export class GraphService implements IGraphService {
         finalProperties.created_at = now;
       }
 
-      // Idempotent upsert pattern
-      await g
-        .V(vertexId)
-        .fold()
-        .coalesce(
-          __.unfold(), // If exists, unfold and update
-          __.addV(label).property('id', vertexId) // If not exists, create
-        )
-        .property('updated_at', now)
-        .next();
-
-      // Set all properties (this will update existing or set new)
-      const vertex = await g.V(vertexId).next();
-      if (vertex.value) {
+      // Idempotent upsert pattern for Neptune (string IDs)
+      // Check if vertex exists
+      const existingVertex = await g.V(vertexId).next();
+      
+      if (!existingVertex.value) {
+        // Vertex doesn't exist - create it with ID and all properties
+        const addVTraversal = g.addV(label).property(T.id, vertexId);
+        
+        // Set all properties during creation
         for (const [key, value] of Object.entries(finalProperties)) {
           if (key !== 'id') {
-            await g.V(vertexId).property(key, value).next();
+            addVTraversal.property(key, value);
           }
         }
+        
+        await addVTraversal.next();
+        logger.debug('Vertex created', { vertexId, label });
+      } else {
+        // Vertex exists - update properties
+        const updateTraversal = g.V(vertexId);
+        for (const [key, value] of Object.entries(finalProperties)) {
+          if (key !== 'id' && key !== 'created_at') {
+            // Don't overwrite created_at, only update updated_at and other properties
+            updateTraversal.property(key, value);
+          }
+        }
+        await updateTraversal.next();
+        logger.debug('Vertex updated', { vertexId, label });
       }
 
       logger.debug('Vertex upserted', { vertexId, label });
