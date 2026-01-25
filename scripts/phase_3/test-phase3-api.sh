@@ -125,29 +125,53 @@ USER_EXISTS=$(aws cognito-idp admin-get-user \
 if [ "$USER_EXISTS" = "None" ] || [ -z "$USER_EXISTS" ]; then
   echo "   Creating test user: ${TEST_USERNAME}..."
   
-  # Create user (suppress output but check for errors)
-  if ! aws cognito-idp admin-create-user \
+  # Create user - show command for debugging
+  CREATE_USER_CMD="aws cognito-idp admin-create-user --user-pool-id \"$USER_POOL_ID\" --username \"$TEST_USERNAME\" --user-attributes \"Name=email,Value=${TEST_USER_EMAIL}\" --temporary-password \"$TEST_PASSWORD\" --message-action SUPPRESS --region \"$REGION\" --no-cli-pager"
+  echo "   Command: $CREATE_USER_CMD"
+  
+  CREATE_USER_OUTPUT=$(aws cognito-idp admin-create-user \
     --user-pool-id "$USER_POOL_ID" \
     --username "$TEST_USERNAME" \
     --user-attributes "Name=email,Value=${TEST_USER_EMAIL}" \
     --temporary-password "$TEST_PASSWORD" \
     --message-action SUPPRESS \
     --region "$REGION" \
-    --no-cli-pager > /dev/null 2>&1; then
+    --no-cli-pager 2>&1)
+  CREATE_USER_EXIT=$?
+  
+  if [ $CREATE_USER_EXIT -ne 0 ]; then
     echo -e "${RED}❌ Failed to create test user${NC}"
-    echo "   Check AWS credentials and Cognito permissions"
+    echo "   Exit code: $CREATE_USER_EXIT"
+    echo "   Error output:"
+    echo "$CREATE_USER_OUTPUT" | jq '.' 2>/dev/null || echo "$CREATE_USER_OUTPUT"
+    echo ""
+    echo "   You can run this command manually to debug:"
+    echo "   $CREATE_USER_CMD"
     exit 1
   fi
   
-  # Set permanent password (suppress output but check for errors)
-  if ! aws cognito-idp admin-set-user-password \
+  # Set permanent password - show command for debugging
+  SET_PASSWORD_CMD="aws cognito-idp admin-set-user-password --user-pool-id \"$USER_POOL_ID\" --username \"$TEST_USERNAME\" --password \"$TEST_PASSWORD\" --permanent --region \"$REGION\" --no-cli-pager"
+  echo "   Setting permanent password..."
+  echo "   Command: $SET_PASSWORD_CMD"
+  
+  SET_PASSWORD_OUTPUT=$(aws cognito-idp admin-set-user-password \
     --user-pool-id "$USER_POOL_ID" \
     --username "$TEST_USERNAME" \
     --password "$TEST_PASSWORD" \
     --permanent \
     --region "$REGION" \
-    --no-cli-pager > /dev/null 2>&1; then
-    echo -e "${RED}❌ Failed to set user password${NC}"
+    --no-cli-pager 2>&1)
+  SET_PASSWORD_EXIT=$?
+  
+  if [ $SET_PASSWORD_EXIT -ne 0 ]; then
+    echo -e "${YELLOW}⚠️  Failed to set user password${NC}"
+    echo "   Exit code: $SET_PASSWORD_EXIT"
+    echo "   Error output:"
+    echo "$SET_PASSWORD_OUTPUT" | jq '.' 2>/dev/null || echo "$SET_PASSWORD_OUTPUT"
+    echo ""
+    echo "   You can run this command manually to debug:"
+    echo "   $SET_PASSWORD_CMD"
     echo "   Attempting to continue anyway..."
   fi
   
@@ -183,6 +207,12 @@ RETRY_DELAY=2
 
 for i in $(seq 1 $MAX_RETRIES); do
   # Try USER_PASSWORD_AUTH first (standard flow)
+  AUTH_CMD="aws cognito-idp initiate-auth --auth-flow USER_PASSWORD_AUTH --client-id \"$USER_POOL_CLIENT_ID\" --auth-parameters file://\"$AUTH_PARAMS_FILE\" --region \"$REGION\" --no-cli-pager"
+  if [ $i -eq 1 ]; then
+    echo "   Attempting USER_PASSWORD_AUTH..."
+    echo "   Command: $AUTH_CMD"
+  fi
+  
   AUTH_OUTPUT=$(aws cognito-idp initiate-auth \
     --auth-flow USER_PASSWORD_AUTH \
     --client-id "$USER_POOL_CLIENT_ID" \
@@ -197,6 +227,11 @@ for i in $(seq 1 $MAX_RETRIES); do
     if [ $i -eq 1 ]; then
       echo "   USER_PASSWORD_AUTH not available, trying ADMIN_USER_PASSWORD_AUTH..."
     fi
+    ADMIN_AUTH_CMD="aws cognito-idp admin-initiate-auth --user-pool-id \"$USER_POOL_ID\" --client-id \"$USER_POOL_CLIENT_ID\" --auth-flow ADMIN_USER_PASSWORD_AUTH --auth-parameters file://\"$AUTH_PARAMS_FILE\" --region \"$REGION\" --no-cli-pager"
+    if [ $i -eq 1 ]; then
+      echo "   Command: $ADMIN_AUTH_CMD"
+    fi
+    
     AUTH_OUTPUT=$(aws cognito-idp admin-initiate-auth \
       --user-pool-id "$USER_POOL_ID" \
       --client-id "$USER_POOL_CLIENT_ID" \
@@ -220,6 +255,10 @@ for i in $(seq 1 $MAX_RETRIES); do
     # Show full error on last attempt
     echo "   Final attempt failed. Full error:"
     echo "$AUTH_OUTPUT" | jq '.' 2>/dev/null || echo "$AUTH_OUTPUT"
+    echo ""
+    echo "   You can run these commands manually to debug:"
+    echo "   $AUTH_CMD"
+    echo "   $ADMIN_AUTH_CMD"
   fi
 done
 
