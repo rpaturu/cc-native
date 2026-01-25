@@ -124,14 +124,12 @@ export type DecisionActionProposalV1 = z.infer<
 >;
 
 /**
- * DecisionProposalV1
- * Output of the decision engine (LLM-assisted).
+ * DecisionProposalBodyV1
+ * LLM output schema (proposal body only, no IDs).
+ * Server enriches with decision_id, account_id, tenant_id, trace_id post-parse.
  */
-export const DecisionProposalV1Schema = z
+export const DecisionProposalBodyV1Schema = z
   .object({
-    decision_id: NonEmptyString, // UUID recommended
-    account_id: NonEmptyString,
-
     decision_type: DecisionTypeEnum,
 
     // Normalized reason codes at decision level (for analytics)
@@ -152,17 +150,35 @@ export const DecisionProposalV1Schema = z
 
     // Optional blocking unknowns at decision level (if BLOCKED_BY_UNKNOWNS)
     blocking_unknowns: z.array(UnknownItem).max(20).optional(),
-
-    // Optional trace/correlation fields (recommended for ledger + observability)
-    trace_id: NonEmptyString.optional(),
-    tenant_id: NonEmptyString.optional(),
-
-    // Optional timestamps (ISO 8601). Not required for minimal contract.
-    created_at: z.string().datetime().optional(),
   })
   .strict();
 
-export type DecisionProposalV1 = z.infer<typeof DecisionProposalV1Schema>;
+export type DecisionProposalBodyV1 = z.infer<typeof DecisionProposalBodyV1Schema>;
+
+/**
+ * DecisionProposalV1
+ * Enriched proposal with server-assigned IDs and metadata.
+ * This is the complete proposal after server enrichment.
+ */
+export interface DecisionProposalV1 extends DecisionProposalBodyV1 {
+  decision_id: string; // Server-assigned (not from LLM)
+  account_id: string; // Server-assigned (from context)
+  tenant_id: string; // Server-assigned (from context)
+  trace_id: string; // Server-assigned (from context)
+  created_at?: string; // Optional timestamp
+}
+
+/**
+ * DecisionProposalV1Schema (for validation of enriched proposals)
+ * Used for runtime validation of complete proposals after enrichment.
+ */
+export const DecisionProposalV1Schema: z.ZodType<DecisionProposalV1> = DecisionProposalBodyV1Schema.extend({
+  decision_id: NonEmptyString,
+  account_id: NonEmptyString,
+  tenant_id: NonEmptyString,
+  trace_id: NonEmptyString,
+  created_at: z.string().datetime().optional(),
+});
 
 /**
  * Safe parse helper (non-throwing)
@@ -285,7 +301,9 @@ export interface ActionIntentV1 {
   execution_policy: ExecutionPolicy;
   expires_at: string; // ISO timestamp
   original_decision_id: string; // Links to DecisionProposalV1.decision_id (the decision that created this proposal)
-  original_proposal_id: string; // Same as original_decision_id (proposal_id == decision_id in our model)
+  original_proposal_id: string; // Same as original_decision_id
+  // INVARIANT: proposal_id == decision_id in v1 (there is no separate proposal_id field)
+  // The decision_id is the identifier for the proposal artifact.
   supersedes_action_intent_id?: string; // If this intent was created by editing another, link to parent intent
   edited_fields: string[]; // Field names that were edited (if any)
   edited_by?: string; // User ID who edited (if edited)

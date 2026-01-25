@@ -815,15 +815,18 @@ export class DecisionSynthesisService {
       ? JSON.parse(rawResponse.content[0].text) 
       : rawResponse; // Fallback for direct JSON mode
     
-    // Validate with Zod schema (throws on invalid)
-    const proposal = DecisionProposalV1Schema.parse(responseBody);
+    // Validate LLM output (proposal body only, no IDs)
+    const proposalBody = DecisionProposalBodyV1Schema.parse(responseBody);
     
-    // Enrich with decision_id and trace_id
-    proposal.decision_id = this.generateDecisionId(context);
-    proposal.account_id = context.account_id;
-    proposal.decision_version = 'v1';
-    proposal.trace_id = context.trace_id;
-    proposal.tenant_id = context.tenant_id;
+    // Enrich with server-assigned IDs and metadata
+    const proposal: DecisionProposalV1 = {
+      ...proposalBody,
+      decision_id: this.generateDecisionId(context), // Server-assigned (non-deterministic)
+      account_id: context.account_id,
+      tenant_id: context.tenant_id,
+      trace_id: context.trace_id,
+      created_at: new Date().toISOString()
+    };
     
     return proposal;
   }
@@ -890,7 +893,8 @@ You must output valid DecisionProposalV1 JSON schema.`;
   }
   
   /**
-   * Get JSON schema for DecisionProposalV1 (for Bedrock JSON mode)
+   * Get JSON schema for DecisionProposalBodyV1 (for Bedrock JSON mode)
+   * Note: LLM returns proposal body only (no IDs). Server enriches post-parse.
    */
   private getDecisionProposalSchema(): object {
     return {
@@ -915,7 +919,7 @@ You must output valid DecisionProposalV1 JSON schema.`;
               action_type: { type: 'string', enum: Object.values(ActionTypeV1) },
               why: { type: 'array', items: { type: 'string' } },
               confidence: { type: 'number', minimum: 0, maximum: 1 },
-              risk_level: { type: 'string', enum: ['LOW', 'MEDIUM', 'HIGH'] },
+              risk_level: { type: 'string', enum: ['MINIMAL', 'LOW', 'MEDIUM', 'HIGH'] },
               requires_human: { type: 'boolean' },
               blocking_unknowns: { type: 'array', items: { type: 'string' } },
               parameters: { type: 'object' },
@@ -924,14 +928,18 @@ You must output valid DecisionProposalV1 JSON schema.`;
           }
         },
         summary: { type: 'string' },
-        decision_version: { type: 'string', const: 'v1' }
+        decision_version: { type: 'string', const: 'v1' },
+        confidence: { type: 'number', minimum: 0, maximum: 1 },
+        blocking_unknowns: { type: 'array', items: { type: 'string' } }
       }
+      // Note: decision_id, account_id, tenant_id, trace_id are NOT in schema (server-enriched)
     };
   }
   
-  // Note: Validation is handled by Zod schema (DecisionProposalV1Schema.parse)
-  // No manual validation needed - Zod provides fail-closed validation
-  
+  /**
+   * Generate decision ID (non-deterministic, server-assigned)
+   * Note: Decision IDs are not deterministic; only context assembly and policy evaluation are deterministic.
+   */
   private generateDecisionId(context: DecisionContextV1): string {
     return `decision-${context.account_id}-${Date.now()}-${Math.random().toString(36).substring(7)}`;
   }
@@ -939,14 +947,17 @@ You must output valid DecisionProposalV1 JSON schema.`;
 ```
 
 **Acceptance Criteria:**
-* LLM output always conforms to DecisionProposalV1 schema
+* LLM output always conforms to DecisionProposalBodyV1 schema (proposal body only, no IDs)
+* Server enriches proposal with decision_id, account_id, tenant_id, trace_id post-parse
 * Zod schema validation is fail-closed (throws on invalid output)
+* Bedrock JSON schema matches Zod schema (no ID fields in LLM output)
 * Bedrock JSON mode enforces schema at LLM level
 * Zod validation provides additional runtime safety
 * No tool execution from LLM
 * Confidence + rationale always present
 * Decision types are valid (PROPOSE_ACTIONS, NO_ACTION_RECOMMENDED, BLOCKED_BY_UNKNOWNS)
 * Action types are from ActionTypeV1 enum
+* Decision IDs are non-deterministic (server-assigned); only context assembly and policy evaluation are deterministic
 
 ---
 
@@ -969,13 +980,14 @@ export class PolicyGateService {
   /**
    * Evaluate action proposal against policy
    * Deterministic: same proposal → same result
+   * Evaluation order: 1) Unknown action type, 2) Blocking unknowns, 3) Tier rules
    */
   async evaluateAction(
-    proposal: ActionProposal,
+    proposal: DecisionActionProposalV1,
     policyContext: PolicyContext
   ): Promise<PolicyEvaluationResult> {
+    // Step 1: Check for unknown action type (block immediately)
     const actionPermission = policyContext.action_type_permissions[proposal.action_type];
-    
     if (!actionPermission) {
       return {
         action_intent_id: proposal.action_intent_id,
@@ -983,17 +995,33 @@ export class PolicyGateService {
         reason_codes: ['UNKNOWN_ACTION_TYPE'],
         confidence_threshold_met: false,
         risk_tier: 'HIGH',
-        requires_human: true
+        approval_required: false,
+        needs_human_input: false,
+        blocked_reason: 'UNKNOWN_ACTION_TYPE',
+        llm_requires_human: proposal.requires_human
       };
     }
     
-    // Check confidence threshold
-    const confidenceThresholdMet = proposal.confidence >= actionPermission.min_confidence;
+    // Step 2: Check for blocking unknowns (block immediately, needs human input)
+    const hasBlockingUnknowns = proposal.blocking_unknowns && proposal.blocking_unknowns.length > 0;
+    if (hasBlockingUnknowns) {
+      return {
+        action_intent_id: proposal.action_intent_id,
+        evaluation: 'BLOCKED',
+        reason_codes: ['BLOCKING_UNKNOWNS_PRESENT'],
+        confidence_threshold_met: false,
+        risk_tier: actionPermission.risk_tier,
+        approval_required: false,
+        needs_human_input: true, // Blocking unknowns require human question/input
+        blocked_reason: 'BLOCKING_UNKNOWNS_PRESENT',
+        llm_requires_human: proposal.requires_human
+      };
+    }
     
-    // Check risk tier
+    // Step 3: Evaluate by tier rules (deterministic)
+    const confidenceThresholdMet = proposal.confidence >= actionPermission.min_confidence;
     const riskTier = actionPermission.risk_tier;
     
-    // Determine evaluation result
     let evaluation: 'ALLOWED' | 'BLOCKED' | 'APPROVAL_REQUIRED';
     let reasonCodes: string[] = [];
     
@@ -1033,22 +1061,8 @@ export class PolicyGateService {
       }
     }
     
-    // Check for blocking unknowns (requires human input, not approval)
-    const hasBlockingUnknowns = proposal.blocking_unknowns && proposal.blocking_unknowns.length > 0;
-    if (hasBlockingUnknowns) {
-      evaluation = 'BLOCKED';
-      reasonCodes.push('BLOCKING_UNKNOWNS_PRESENT');
-    }
-    
-    // Check if confidence threshold is met
-    if (!confidenceThresholdMet && evaluation !== 'BLOCKED') {
-      evaluation = 'BLOCKED';
-      reasonCodes.push('CONFIDENCE_BELOW_THRESHOLD');
-    }
-    
     // Determine approval and input requirements
     const approvalRequired = evaluation === 'APPROVAL_REQUIRED';
-    const needsHumanInput = hasBlockingUnknowns; // Blocking unknowns need human question/input
     
     return {
       action_intent_id: proposal.action_intent_id,
@@ -1057,7 +1071,7 @@ export class PolicyGateService {
       confidence_threshold_met: confidenceThresholdMet,
       risk_tier: riskTier,
       approval_required: approvalRequired, // Authoritative: policy requires approval
-      needs_human_input: needsHumanInput, // Blocking unknowns require human question
+      needs_human_input: false, // No blocking unknowns at this point
       blocked_reason: evaluation === 'BLOCKED' ? reasonCodes[0] : undefined,
       llm_requires_human: proposal.requires_human // LLM's advisory field (for reference)
     };
@@ -1087,13 +1101,18 @@ export class PolicyGateService {
 }
 ```
 
-**Policy Rules (Deterministic):**
-* HIGH risk actions → Always APPROVAL_REQUIRED
-* MEDIUM risk actions → APPROVAL_REQUIRED unless LOW risk + confidence >= 0.85
-* LOW risk actions → ALLOWED if confidence >= threshold, else BLOCKED
-* MINIMAL risk actions → ALLOWED if confidence >= 0.60, else BLOCKED
-* Blocking unknowns → Always BLOCKED
-* Confidence below threshold → BLOCKED
+**Policy Rules (Deterministic, evaluated in order):**
+1. Unknown action type → BLOCKED (immediate)
+2. Blocking unknowns present → BLOCKED + needs_human_input=true (immediate)
+3. HIGH risk actions → Always APPROVAL_REQUIRED
+4. MEDIUM risk actions → APPROVAL_REQUIRED unless LOW risk + confidence >= 0.85
+5. LOW risk actions → ALLOWED if confidence >= threshold, else BLOCKED
+6. MINIMAL risk actions → ALLOWED if confidence >= 0.60, else BLOCKED
+
+**Evaluation order ensures:**
+* Blocking unknowns override tier rules (prevents confusing reason code ordering)
+* Unknown action types are caught first
+* Tier rules are only evaluated if no blocking conditions exist
 
 **Acceptance Criteria:**
 * Policy evaluation is deterministic (same input → same output)
@@ -1469,13 +1488,47 @@ export async function getAccountDecisionsHandler(event: APIGatewayProxyEvent): P
 // Approve an action proposal
 export async function approveActionHandler(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
   const actionId = event.pathParameters?.action_id;
-  const { edits } = JSON.parse(event.body || '{}');
+  const { decision_id, edits } = JSON.parse(event.body || '{}');
   const userId = event.requestContext.authorizer?.userId;
+  const tenantId = event.headers['x-tenant-id'];
   
-  // Get proposal from decision
+  // CRITICAL: Do not trust client payload. Load proposal from server storage.
+  // Approval request must pass {decision_id, action_intent_id}
+  // Server loads proposal from DecisionStore (or ledger) by decision_id
+  const decisionStore = new DecisionStore(...);
+  const proposal = await decisionStore.getDecision(decision_id, tenantId);
+  
+  if (!proposal) {
+    return {
+      statusCode: 404,
+      body: JSON.stringify({ error: 'Decision not found' })
+    };
+  }
+  
+  // Find the specific action proposal
+  const actionProposal = proposal.actions.find(a => a.action_intent_id === actionId);
+  if (!actionProposal) {
+    return {
+      statusCode: 404,
+      body: JSON.stringify({ error: 'Action proposal not found in decision' })
+    };
+  }
+  
+  // Derive tenant/account/trace from proposal (server-authoritative)
+  const accountId = proposal.account_id;
+  const traceId = proposal.trace_id;
+  
   // Create action intent
   const intentService = new ActionIntentService(...);
-  const intent = await intentService.createIntent(proposal, decisionId, userId, edits);
+  const intent = await intentService.createIntent(
+    actionProposal,
+    proposal.decision_id,
+    userId,
+    tenantId,
+    accountId,
+    traceId,
+    edits ? Object.keys(edits) : undefined
+  );
   
   // Log to ledger
   await ledgerService.append({
@@ -1485,6 +1538,7 @@ export async function approveActionHandler(event: APIGatewayProxyEvent): Promise
     traceId,
     data: {
       action_intent_id: intent.action_intent_id,
+      decision_id: proposal.decision_id,
       edited_fields: intent.edited_fields
     }
   });
@@ -1899,13 +1953,14 @@ rejectResource.addMethod('POST', new apigateway.LambdaIntegration(decisionApiHan
 3. **Budget Enforcement Test** - Budget exhaustion blocks evaluation
 4. **Trigger Cooldown Test** - Cooldown prevents decision storms
 5. **Edit Provenance Test** - Edited intents create new IDs and preserve original
-6. **Schema Validation Test** - LLM output always conforms to Zod schema
+6. **Schema Validation Test** - LLM output always conforms to DecisionProposalBodyV1 schema
 7. **Schema Invariant Test** - LLM output respects invariants:
    * No unknown keys (strict mode)
    * Confidence in [0,1]
    * Action types valid
    * Bounded counts (actions max 25, why max 20)
    * Decision type rules consistent (no actions if NO_ACTION_RECOMMENDED)
+8. **Proposal ID Invariant Test** - proposal_id == decision_id (no separate proposal_id in v1)
 
 **Acceptance Criteria:**
 * All unit tests pass
