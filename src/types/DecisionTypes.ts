@@ -348,8 +348,8 @@ function canonicalizeObject(obj: any): any {
  * 
  * Normalization ensures:
  * - Actions are sorted by stable key (action_type + target)
- * - Parameters are canonicalized (deep-sorted keys)
- * - Arrays are sorted
+ * - Parameters are canonicalized (object keys sorted, array order preserved)
+ * - Set-like arrays are sorted (why, blocking_unknowns, decision_reason_codes)
  * - Same logical proposal → same fingerprint
  * 
  * @param proposalBody - The LLM output (DecisionProposalBodyV1) before enrichment
