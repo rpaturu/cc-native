@@ -38,7 +38,7 @@ fi
 # Validate required variables (only for actions that need them)
 if [ "$ACTION" = "launch" ] || [ "$ACTION" = "test" ] || [ "$ACTION" = "configure" ]; then
   if [ -z "$TEST_RUNNER_SECURITY_GROUP_ID" ] || [ -z "$TEST_RUNNER_INSTANCE_PROFILE_NAME" ] || [ -z "$TEST_RUNNER_KEY_NAME" ]; then
-    echo "Error: Missing required configuration. Run ./scripts/setup-test-runner-prerequisites.sh first"
+    echo "Error: Missing required configuration. Run ./scripts/common/setup-test-runner-prerequisites.sh first"
     exit 1
   fi
   
@@ -338,7 +338,7 @@ check_status() {
     echo "No test runner instance found"
     echo ""
     echo "To launch an instance, run:"
-    echo "  ./scripts/manage-test-runner-instance.sh launch"
+    echo "  ./scripts/common/manage-test-runner-instance.sh launch"
     return
   fi
 
@@ -355,7 +355,7 @@ run_tests() {
   
   if [ -z "$INSTANCE_ID" ] || [ "$INSTANCE_ID" == "None" ]; then
     echo "Error: No running instance found"
-    echo "Launch an instance first: ./scripts/manage-test-runner-instance.sh launch"
+    echo "Launch an instance first: ./scripts/common/manage-test-runner-instance.sh launch"
     exit 1
   fi
 
@@ -617,7 +617,7 @@ teardown_instance() {
 # Function to show help
 show_help() {
   cat << EOF
-Usage: ./scripts/manage-test-runner-instance.sh [ACTION]
+Usage: ./scripts/common/manage-test-runner-instance.sh [ACTION]
 
 Actions:
   launch    Launch and configure a new EC2 test runner instance
@@ -629,23 +629,23 @@ Actions:
 
 Examples:
   # Launch instance
-  ./scripts/manage-test-runner-instance.sh launch
+  ./scripts/common/manage-test-runner-instance.sh launch
 
   # Check status
-  ./scripts/manage-test-runner-instance.sh status
+  ./scripts/common/manage-test-runner-instance.sh status
 
   # Show connection info
-  ./scripts/manage-test-runner-instance.sh connect
+  ./scripts/common/manage-test-runner-instance.sh connect
 
   # Run tests
   export REPO_URL="https://github.com/your-org/cc-native.git"
-  ./scripts/manage-test-runner-instance.sh test
+  ./scripts/common/manage-test-runner-instance.sh test
 
   # Terminate instance
-  ./scripts/manage-test-runner-instance.sh teardown
+  ./scripts/common/manage-test-runner-instance.sh teardown
 
 Prerequisites:
-  - Run ./scripts/setup-test-runner-prerequisites.sh first
+  - Run ./scripts/common/setup-test-runner-prerequisites.sh first
   - Ensure .env and .env.test-runner files exist
 
 Environment Variables:
@@ -655,10 +655,10 @@ Environment Variables:
 
 Examples:
   # Use specific AMI version
-  AL2023_VERSION="2023.10.20260105" ./scripts/manage-test-runner-instance.sh launch
+  AL2023_VERSION="2023.10.20260105" ./scripts/common/manage-test-runner-instance.sh launch
 
   # Use latest AMI (default)
-  ./scripts/manage-test-runner-instance.sh launch
+  ./scripts/common/manage-test-runner-instance.sh launch
 
 EOF
 }

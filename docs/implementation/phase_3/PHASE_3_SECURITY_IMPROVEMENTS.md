@@ -106,7 +106,7 @@ const decisionInfrastructure = new DecisionInfrastructure(this, 'DecisionInfrast
 **Issue:** User review mentioned missing Neptune IAM permissions for test runner role
 
 **Investigation:**
-- Test runner role is created in `scripts/setup-test-runner-prerequisites.sh`
+- Test runner role is created in `scripts/common/setup-test-runner-prerequisites.sh`
 - Role already includes Neptune permissions (lines 174-179):
   ```json
   {

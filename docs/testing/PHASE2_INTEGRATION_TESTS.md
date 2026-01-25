@@ -34,10 +34,10 @@ Run the complete workflow with a single command:
 
 ```bash
 # If you have GIT_REPO_URL and GIT_TOKEN in .env.local, you can run:
-./scripts/run-phase2-integration-tests.sh
+./scripts/phase_2/run-phase2-integration-tests.sh
 
 # Or specify repository URL:
-./scripts/run-phase2-integration-tests.sh --repo-url https://github.com/rpaturu/cc-native.git
+./scripts/phase_2/run-phase2-integration-tests.sh --repo-url https://github.com/rpaturu/cc-native.git
 ```
 
 This script will:
@@ -61,7 +61,7 @@ GIT_TOKEN=ghp_your_token_here
 
 Then simply run:
 ```bash
-./scripts/run-phase2-integration-tests.sh
+./scripts/phase_2/run-phase2-integration-tests.sh
 ```
 
 The script will automatically use `GIT_REPO_URL` and `GIT_TOKEN` from `.env.local`.
@@ -144,7 +144,7 @@ git push -u origin main
 
 4. **Use SSH with test scripts**:
    ```bash
-   ./scripts/run-phase2-integration-tests.sh \
+   ./scripts/phase_2/run-phase2-integration-tests.sh \
      --repo-url git@github.com:rpaturu/cc-native.git \
      --git-ssh-key ~/.ssh/id_ed25519_github
    ```
@@ -163,7 +163,7 @@ If you want to make the repository private:
 The `run-phase2-integration-tests.sh` script supports various options:
 
 ```bash
-./scripts/run-phase2-integration-tests.sh [OPTIONS]
+./scripts/phase_2/run-phase2-integration-tests.sh [OPTIONS]
 ```
 
 **Options**:
@@ -180,21 +180,21 @@ The `run-phase2-integration-tests.sh` script supports various options:
 **Examples**:
 ```bash
 # Full workflow (first time - sets up everything)
-./scripts/run-phase2-integration-tests.sh --repo-url https://github.com/rpaturu/cc-native.git
+./scripts/phase_2/run-phase2-integration-tests.sh --repo-url https://github.com/rpaturu/cc-native.git
 
 # Skip prerequisites (already set up)
-./scripts/run-phase2-integration-tests.sh --skip-prerequisites
+./scripts/phase_2/run-phase2-integration-tests.sh --skip-prerequisites
 
 # Use existing instance and skip prerequisites
-./scripts/run-phase2-integration-tests.sh --skip-prerequisites --skip-launch
+./scripts/phase_2/run-phase2-integration-tests.sh --skip-prerequisites --skip-launch
 
 # Private repository with token
-./scripts/run-phase2-integration-tests.sh \
+./scripts/phase_2/run-phase2-integration-tests.sh \
   --repo-url https://github.com/rpaturu/cc-native.git \
   --git-token ghp_xxxxx
 
 # Show all options
-./scripts/run-phase2-integration-tests.sh --help
+./scripts/phase_2/run-phase2-integration-tests.sh --help
 ```
 
 **Environment Variables** (alternative to command-line options):
@@ -214,15 +214,15 @@ The test runner will clone your repository from GitHub (or other git host):
 
 ```bash
 # Public repository
-./scripts/run-phase2-integration-tests.sh --repo-url https://github.com/rpaturu/cc-native.git
+./scripts/phase_2/run-phase2-integration-tests.sh --repo-url https://github.com/rpaturu/cc-native.git
 
 # Private repository with token
-./scripts/run-phase2-integration-tests.sh \
+./scripts/phase_2/run-phase2-integration-tests.sh \
   --repo-url https://github.com/rpaturu/cc-native.git \
   --git-token ghp_xxxxx
 
 # Private repository with SSH key
-./scripts/run-phase2-integration-tests.sh \
+./scripts/phase_2/run-phase2-integration-tests.sh \
   --repo-url git@github.com:rpaturu/cc-native.git \
   --git-ssh-key ~/.ssh/id_rsa
 ```
@@ -235,7 +235,7 @@ GIT_TOKEN=ghp_your_token_here
 
 Then simply run:
 ```bash
-./scripts/run-phase2-integration-tests.sh
+./scripts/phase_2/run-phase2-integration-tests.sh
 ```
 
 ## Manual Step-by-Step Workflow
@@ -260,7 +260,7 @@ This script will:
 ### Step 2: Launch EC2 Instance
 
 ```bash
-./scripts/manage-test-runner-instance.sh launch
+./scripts/common/manage-test-runner-instance.sh launch
 ```
 
 This will:
@@ -271,7 +271,7 @@ This will:
 
 **Check instance status**:
 ```bash
-./scripts/manage-test-runner-instance.sh status
+./scripts/common/manage-test-runner-instance.sh status
 ```
 
 ### Step 3: Run Tests
@@ -282,7 +282,7 @@ You can run tests in two ways:
 
 ```bash
 # Uses GIT_REPO_URL and GIT_TOKEN from .env.local if available
-./scripts/manage-test-runner-instance.sh test
+./scripts/common/manage-test-runner-instance.sh test
 ```
 
 #### Option B: Manual
@@ -305,7 +305,7 @@ npm test -- src/tests/integration/phase2.test.ts
 After testing is complete:
 
 ```bash
-./scripts/manage-test-runner-instance.sh teardown
+./scripts/common/manage-test-runner-instance.sh teardown
 ```
 
 This will:
@@ -369,7 +369,7 @@ If you get warnings about missing repository URL or token:
 
 2. **Option 2**: Use command-line arguments:
    ```bash
-   ./scripts/run-phase2-integration-tests.sh \
+   ./scripts/phase_2/run-phase2-integration-tests.sh \
      --repo-url https://github.com/rpaturu/cc-native.git \
      --git-token ghp_xxxxx
    ```
@@ -378,7 +378,7 @@ If you get warnings about missing repository URL or token:
    ```bash
    export GIT_REPO_URL="https://github.com/rpaturu/cc-native.git"
    export GIT_TOKEN="ghp_xxxxx"
-   ./scripts/run-phase2-integration-tests.sh
+   ./scripts/phase_2/run-phase2-integration-tests.sh
    ```
 
 ## Local Testing
@@ -413,5 +413,5 @@ GIT_REPO_URL=https://github.com/rpaturu/cc-native.git
 GIT_TOKEN=ghp_your_token_here
 
 # 4. Run complete test workflow
-./scripts/run-phase2-integration-tests.sh
+./scripts/phase_2/run-phase2-integration-tests.sh
 ```

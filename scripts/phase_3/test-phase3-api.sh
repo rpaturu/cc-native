@@ -1,6 +1,6 @@
 #!/bin/bash
 # Test Phase 3 Decision API Endpoints
-# Usage: ./scripts/test-phase3-api.sh
+# Usage: ./scripts/phase_3/test-phase3-api.sh
 
 set -e
 

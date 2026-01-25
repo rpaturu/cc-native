@@ -394,7 +394,7 @@ Create a comprehensive test script:
 
 ```bash
 #!/bin/bash
-# scripts/test-phase3-endpoints.sh
+# scripts/phase_3/test-phase3-api.sh
 
 set -e
 

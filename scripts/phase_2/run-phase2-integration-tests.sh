@@ -176,14 +176,14 @@ show_manual_instructions() {
   echo "   npm test -- src/tests/integration/phase2.test.ts"
   echo ""
   echo "3. If tests pass, teardown:"
-  echo "   ./scripts/manage-test-runner-instance.sh teardown"
+  echo "   ./scripts/common/manage-test-runner-instance.sh teardown"
   echo ""
 }
 
 # Step 1: Set up prerequisites
 if [ "$SKIP_PREREQUISITES" != "true" ]; then
   echo "Step 1: Setting up prerequisites..."
-  if ! ./scripts/setup-test-runner-prerequisites.sh; then
+  if ! ./scripts/common/setup-test-runner-prerequisites.sh; then
     echo "❌ Failed to set up prerequisites"
     exit 1
   fi
@@ -415,9 +415,9 @@ echo "   Size: $S3_SIZE bytes ($HUMAN_SIZE)"
 echo ""
 
 # Upload test runner script to S3 (comprehensive script for all operations)
-TEST_SCRIPT_KEY="scripts/run-tests-on-instance.sh"
+TEST_SCRIPT_KEY="scripts/common/run-tests-on-instance.sh"
 echo "Uploading test runner script to S3..."
-if ! aws s3 cp "scripts/run-tests-on-instance.sh" "s3://$S3_BUCKET/$TEST_SCRIPT_KEY" \
+if ! aws s3 cp "scripts/common/run-tests-on-instance.sh" "s3://$S3_BUCKET/$TEST_SCRIPT_KEY" \
   --profile $PROFILE \
   --region $REGION \
   --no-cli-pager; then
@@ -442,7 +442,7 @@ json_escape() {
 # Build command to download and execute the comprehensive test script
 # This avoids all JSON escaping issues - we just download and run the script
 S3_KEY="${S3_KEY:-cc-native-test.tar.gz}"
-TEST_SCRIPT_KEY="scripts/run-tests-on-instance.sh"
+TEST_SCRIPT_KEY="scripts/common/run-tests-on-instance.sh"
 TEST_SCRIPT_PATH="/root/run-tests-on-instance.sh"
 TARGET_DIR="/root/cc-native"
 
@@ -673,7 +673,7 @@ run_ssm_command() {
 # Launch or get test runner instance
 if [ "$SKIP_LAUNCH" != "true" ]; then
   echo "Step 3: Launching test runner instance..."
-  ./scripts/manage-test-runner-instance.sh launch || exit 1
+  ./scripts/common/manage-test-runner-instance.sh launch || exit 1
   echo ""
 fi
 
@@ -824,7 +824,7 @@ if [ "$DEPLOY_CODE_ONLY" = "true" ]; then
   echo "  npm test -- src/tests/integration/phase2.test.ts"
   echo ""
   echo "To teardown when done:"
-  echo "  ./scripts/manage-test-runner-instance.sh teardown"
+  echo "  ./scripts/common/manage-test-runner-instance.sh teardown"
   echo ""
   exit 0
 fi
@@ -848,7 +848,7 @@ if [ "$STOP_AFTER_SETUP" = "true" ]; then
   echo "  npm test -- src/tests/integration/phase2.test.ts"
   echo ""
   echo "To teardown when done:"
-  echo "  ./scripts/manage-test-runner-instance.sh teardown"
+  echo "  ./scripts/common/manage-test-runner-instance.sh teardown"
   echo ""
   exit 0
 fi
@@ -865,7 +865,7 @@ if ! run_ssm_command "Run Phase 2 integration tests" "$ESCAPED_RUN_TESTS" 600; t
   
   if [ "$ALWAYS_TEARDOWN" = "true" ]; then
     echo "Tearing down instance (--always-teardown flag set)..."
-    FORCE_TEARDOWN=true ./scripts/manage-test-runner-instance.sh teardown
+    FORCE_TEARDOWN=true ./scripts/common/manage-test-runner-instance.sh teardown
     echo ""
     echo "✅ Instance terminated"
     exit 1
@@ -882,7 +882,7 @@ if ! run_ssm_command "Run Phase 2 integration tests" "$ESCAPED_RUN_TESTS" 600; t
     echo "  npm test -- src/tests/integration/phase2.test.ts"
     echo ""
     echo "To teardown when done:"
-    echo "  ./scripts/manage-test-runner-instance.sh teardown"
+    echo "  ./scripts/common/manage-test-runner-instance.sh teardown"
     echo ""
     echo "To always tear down on failure, use: $0 --always-teardown"
     echo ""
