@@ -68,9 +68,26 @@
 
 **Purpose:** Define canonical decision types, action types, and decision contracts
 
+**Validation Approach:**
+* **Zod schemas** for `DecisionProposalV1` and `DecisionActionProposalV1` (LLM output validation - fail-closed)
+* **TypeScript interfaces** for internal types (`DecisionContextV1`, `ActionIntentV1`, etc.)
+* Zod provides runtime validation for untrusted LLM output
+* TypeScript interfaces provide compile-time safety for internal code
+
 **Key Types:**
 
 ```typescript
+// Zod Schemas (for LLM output validation)
+export const DecisionProposalV1Schema = z.object({...});
+export const DecisionActionProposalV1Schema = z.object({...});
+export const ActionTypeV1Enum = z.enum([...]);
+export const DecisionTypeEnum = z.enum([
+  "PROPOSE_ACTIONS",
+  "NO_ACTION_RECOMMENDED", 
+  "BLOCKED_BY_UNKNOWNS"
+]);
+
+// TypeScript Interfaces (for internal use)
 // Decision Context (Input)
 export interface DecisionContextV1 {
   tenant_id: string;
@@ -262,11 +279,16 @@ export const ACTION_TYPE_RISK_TIERS: Record<ActionTypeV1, {
 ```
 
 **Acceptance Criteria:**
-* All decision types are defined with TypeScript interfaces
+* Zod schemas are defined for `DecisionProposalV1` and `DecisionActionProposalV1` (LLM output validation)
+* TypeScript interfaces are defined for internal types (`DecisionContextV1`, `ActionIntentV1`, etc.)
 * ActionTypeV1 enum is complete and locked
 * Risk tiers are assigned per action type
-* Type safety enforced throughout
+* `DecisionTypeEnum` includes all three types: `PROPOSE_ACTIONS`, `NO_ACTION_RECOMMENDED`, `BLOCKED_BY_UNKNOWNS`
+* `decision_reason_codes` is included at decision level
+* `parameters` and `target_entity` are included in action proposals
+* `proposed_rank` is optional (for UI/policy re-ranking)
 * Schema versioning (`decision_version: 'v1'`) included
+* Zod dependency added to `package.json`
 
 ---
 
@@ -740,6 +762,8 @@ interface DecisionBudget {
 **Key Methods:**
 
 ```typescript
+import { DecisionProposalV1Schema } from '../../types/DecisionTypes';
+
 export class DecisionSynthesisService {
   constructor(
     private bedrockClient: BedrockRuntimeClient,
@@ -783,14 +807,18 @@ export class DecisionSynthesisService {
       accept: 'application/json'
     }));
     
-    // Parse and validate response
+    // Parse and validate response using Zod (fail-closed)
     const responseBody = JSON.parse(new TextDecoder().decode(response.body));
-    const proposal = this.validateAndParseProposal(responseBody);
+    
+    // Validate with Zod schema (throws on invalid)
+    const proposal = DecisionProposalV1Schema.parse(responseBody);
     
     // Enrich with decision_id and trace_id
     proposal.decision_id = this.generateDecisionId(context);
     proposal.account_id = context.account_id;
     proposal.decision_version = 'v1';
+    proposal.trace_id = context.trace_id;
+    proposal.tenant_id = context.tenant_id;
     
     return proposal;
   }
@@ -896,42 +924,8 @@ You must output valid DecisionProposalV1 JSON schema.`;
     };
   }
   
-  /**
-   * Validate and parse proposal (fail-closed)
-   */
-  private validateAndParseProposal(responseBody: any): DecisionProposalV1 {
-    // Validate schema
-    if (!responseBody.decision_type) {
-      throw new Error('Decision proposal missing decision_type');
-    }
-    
-    if (!['PROPOSE_ACTIONS', 'NO_ACTION_RECOMMENDED', 'BLOCKED_BY_UNKNOWNS'].includes(responseBody.decision_type)) {
-      throw new Error(`Invalid decision_type: ${responseBody.decision_type}`);
-    }
-    
-    // Validate actions if PROPOSE_ACTIONS
-    if (responseBody.decision_type === 'PROPOSE_ACTIONS') {
-      if (!Array.isArray(responseBody.actions) || responseBody.actions.length === 0) {
-        throw new Error('PROPOSE_ACTIONS requires non-empty actions array');
-      }
-      
-      for (const action of responseBody.actions) {
-        if (!action.action_type || !Object.values(ActionTypeV1).includes(action.action_type)) {
-          throw new Error(`Invalid action_type: ${action.action_type}`);
-        }
-        
-        if (typeof action.confidence !== 'number' || action.confidence < 0 || action.confidence > 1) {
-          throw new Error(`Invalid confidence: ${action.confidence}`);
-        }
-        
-        if (!Array.isArray(action.why) || action.why.length === 0) {
-          throw new Error('Action missing why array');
-        }
-      }
-    }
-    
-    return responseBody as DecisionProposalV1;
-  }
+  // Note: Validation is handled by Zod schema (DecisionProposalV1Schema.parse)
+  // No manual validation needed - Zod provides fail-closed validation
   
   private generateDecisionId(context: DecisionContextV1): string {
     return `decision-${context.account_id}-${Date.now()}-${Math.random().toString(36).substring(7)}`;
@@ -941,7 +935,9 @@ You must output valid DecisionProposalV1 JSON schema.`;
 
 **Acceptance Criteria:**
 * LLM output always conforms to DecisionProposalV1 schema
-* Schema validation is fail-closed (throws on invalid output)
+* Zod schema validation is fail-closed (throws on invalid output)
+* Bedrock JSON mode enforces schema at LLM level
+* Zod validation provides additional runtime safety
 * No tool execution from LLM
 * Confidence + rationale always present
 * Decision types are valid (PROPOSE_ACTIONS, NO_ACTION_RECOMMENDED, BLOCKED_BY_UNKNOWNS)
