@@ -208,7 +208,10 @@ export const DEFAULT_DECISION_INFRASTRUCTURE_CONFIG: DecisionInfrastructureConfi
   },
   
   cors: {
-    allowOrigins: ['*'], // In production, specify actual origins
+    // ⚠️ SECURITY: Wildcard '*' allows any origin - RESTRICT IN PRODUCTION
+    // Override this in DecisionInfrastructureProps.config for production deployments
+    // Example: allowOrigins: ['https://app.yourdomain.com', 'https://admin.yourdomain.com']
+    allowOrigins: ['*'], // TODO: Replace with specific domains in production
     allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowHeaders: ['Content-Type', 'X-Amz-Date', 'Authorization', 'X-Api-Key', 'x-tenant-id'],
   },
