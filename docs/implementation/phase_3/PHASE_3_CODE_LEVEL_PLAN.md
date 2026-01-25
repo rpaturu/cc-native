@@ -762,7 +762,7 @@ interface DecisionBudget {
 **Key Methods:**
 
 ```typescript
-import { DecisionProposalV1Schema } from '../../types/DecisionTypes';
+import { DecisionProposalBodyV1Schema, DecisionProposalV1 } from '../../types/DecisionTypes';
 
 export class DecisionSynthesisService {
   constructor(
