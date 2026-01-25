@@ -30,22 +30,89 @@ if [ -z "$DECISION_API_URL" ]; then
   exit 1
 fi
 
-if [ -z "$DECISION_API_KEY" ]; then
-  echo -e "${RED}❌ Error: DECISION_API_KEY not found in .env${NC}"
-  echo "   Please run ./deploy to generate .env file with stack outputs"
-  echo "   The deploy script retrieves and stores the API key value automatically"
-  exit 1
-fi
-
 if [ -z "$AWS_REGION" ]; then
   echo -e "${RED}❌ Error: AWS_REGION not found in .env${NC}"
   echo "   Please run ./deploy to generate .env file with stack outputs"
   exit 1
 fi
 
+if [ -z "$USER_POOL_ID" ] || [ -z "$USER_POOL_CLIENT_ID" ]; then
+  echo -e "${RED}❌ Error: USER_POOL_ID or USER_POOL_CLIENT_ID not found in .env${NC}"
+  echo "   Cognito authentication is required for API Gateway"
+  exit 1
+fi
+
 API_URL="$DECISION_API_URL"
-API_KEY="$DECISION_API_KEY"
 REGION="$AWS_REGION"
+
+# API Gateway authentication
+# When Cognito authorizer is configured, API Gateway REQUIRES Cognito JWT token
+# API key is also required for usage plan throttling/quotas
+# Both headers are needed: Authorization (Cognito JWT) and x-api-key
+
+if [ -z "$DECISION_API_KEY" ]; then
+  echo -e "${RED}❌ Error: DECISION_API_KEY not found in .env${NC}"
+  echo "   Please run ./deploy to generate .env file with API key"
+  exit 1
+fi
+
+# Try to get Cognito JWT token
+TEST_USERNAME="${TEST_USERNAME:-}"
+TEST_PASSWORD="${TEST_PASSWORD:-}"
+
+if [ -z "$TEST_USERNAME" ] || [ -z "$TEST_PASSWORD" ]; then
+  echo -e "${YELLOW}⚠️  TEST_USERNAME and TEST_PASSWORD not set${NC}"
+  echo "   API Gateway requires Cognito JWT token when Cognito authorizer is configured"
+  echo ""
+  echo "   To run tests, create a test user and set credentials:"
+  echo "   export TEST_USERNAME='test-user'"
+  echo "   export TEST_PASSWORD='YourPassword123!'"
+  echo "   ./scripts/phase_3/test-phase3-api.sh"
+  echo ""
+  echo "   Create test user:"
+  echo "   aws cognito-idp admin-create-user \\"
+  echo "     --user-pool-id ${USER_POOL_ID} \\"
+  echo "     --username test-user \\"
+  echo "     --user-attributes Name=email,Value=test@example.com \\"
+  echo "     --temporary-password TempPass123! \\"
+  echo "     --message-action SUPPRESS \\"
+  echo "     --region ${REGION}"
+  echo ""
+  echo "   Then set permanent password:"
+  echo "   aws cognito-idp admin-set-user-password \\"
+  echo "     --user-pool-id ${USER_POOL_ID} \\"
+  echo "     --username test-user \\"
+  echo "     --password YourPassword123! \\"
+  echo "     --permanent \\"
+  echo "     --region ${REGION}"
+  echo ""
+  exit 1
+fi
+
+echo "🔐 Authenticating with Cognito..."
+COGNITO_TOKEN=$(aws cognito-idp initiate-auth \
+  --auth-flow USER_PASSWORD_AUTH \
+  --client-id "$USER_POOL_CLIENT_ID" \
+  --auth-parameters "USERNAME=${TEST_USERNAME},PASSWORD=${TEST_PASSWORD}" \
+  --region "$REGION" \
+  --query 'AuthenticationResult.IdToken' \
+  --output text \
+  --no-cli-pager 2>/dev/null || echo "")
+
+if [ -z "$COGNITO_TOKEN" ] || [ "$COGNITO_TOKEN" = "None" ]; then
+  echo -e "${RED}❌ Failed to authenticate with Cognito${NC}"
+  echo "   Please check:"
+  echo "   - TEST_USERNAME and TEST_PASSWORD are correct"
+  echo "   - User exists in Cognito User Pool: ${USER_POOL_ID}"
+  echo "   - User password is set (not temporary)"
+  echo "   - Cognito client allows USER_PASSWORD_AUTH flow"
+  exit 1
+fi
+
+echo -e "${GREEN}✅ Cognito authentication successful${NC}"
+echo "   Using Cognito JWT token + API key"
+AUTH_HEADER="Authorization: Bearer ${COGNITO_TOKEN}"
+API_KEY_HEADER="x-api-key: ${DECISION_API_KEY}"
 
 # Test configuration
 TENANT_ID="${TEST_TENANT_ID:-test-tenant-1}"
@@ -61,7 +128,8 @@ echo ""
 echo -e "${YELLOW}Test 1: GET /accounts/${ACCOUNT_ID}/decisions${NC}"
 RESPONSE=$(curl -s -w "\n%{http_code}" -X GET \
   "${API_URL}/accounts/${ACCOUNT_ID}/decisions" \
-  -H "x-api-key: ${API_KEY}" \
+  -H "${AUTH_HEADER}" \
+  -H "${API_KEY_HEADER}" \
   -H "x-tenant-id: ${TENANT_ID}")
 
 HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
@@ -81,7 +149,8 @@ echo -e "${YELLOW}Test 2: POST /decisions/evaluate${NC}"
 RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
   "${API_URL}/decisions/evaluate" \
   -H "Content-Type: application/json" \
-  -H "x-api-key: ${API_KEY}" \
+  -H "${AUTH_HEADER}" \
+  -H "${API_KEY_HEADER}" \
   -H "x-tenant-id: ${TENANT_ID}" \
   -d "{
     \"account_id\": \"${ACCOUNT_ID}\",

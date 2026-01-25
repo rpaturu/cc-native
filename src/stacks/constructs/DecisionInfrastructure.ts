@@ -327,14 +327,16 @@ export class DecisionInfrastructure extends Construct {
 
     usagePlan.addApiKey(this.decisionApiKey);
 
-    // Common method options: Use Cognito authorizer if available, otherwise require API key
+    // Common method options: Use Cognito authorizer if available, but also allow API key for service-to-service calls
+    // API key is always required as it provides throttling/quotas via usage plan
     const methodOptions: apigateway.MethodOptions = cognitoAuthorizer
       ? {
           authorizer: cognitoAuthorizer,
           authorizationType: apigateway.AuthorizationType.COGNITO,
+          apiKeyRequired: true, // Also require API key for usage plan throttling/quotas
         }
       : {
-          apiKeyRequired: true, // Fallback to API key if Cognito not provided
+          apiKeyRequired: true, // Require API key if Cognito not provided
         };
 
     // POST /decisions/evaluate
