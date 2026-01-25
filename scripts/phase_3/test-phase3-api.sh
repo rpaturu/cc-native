@@ -4,6 +4,33 @@
 
 set -e
 
+# Initialize variables for cleanup (will be set later)
+TEST_USERNAME=""
+USER_POOL_ID=""
+REGION=""
+
+# Cleanup function to remove test user
+cleanup_test_user() {
+  if [ -n "$TEST_USERNAME" ] && [ -n "$USER_POOL_ID" ] && [ -n "$REGION" ]; then
+    echo ""
+    echo "🧹 Cleaning up test user..."
+    aws cognito-idp admin-delete-user \
+      --user-pool-id "$USER_POOL_ID" \
+      --username "$TEST_USERNAME" \
+      --region "$REGION" \
+      --no-cli-pager > /dev/null 2>&1
+    
+    if [ $? -eq 0 ]; then
+      echo -e "${GREEN}✅ Test user removed${NC}"
+    else
+      echo -e "${YELLOW}⚠️  Could not remove test user (may not exist or already deleted)${NC}"
+    fi
+  fi
+}
+
+# Register cleanup function to run on exit (even if script fails)
+trap cleanup_test_user EXIT
+
 # Colors for output
 GREEN='\033[0;32m'
 RED='\033[0;31m'
@@ -262,22 +289,6 @@ echo ""
 
 echo -e "${GREEN}✅ Testing complete!${NC}"
 echo ""
-
-# Cleanup: Remove test user
-echo "🧹 Cleaning up test user..."
-aws cognito-idp admin-delete-user \
-  --user-pool-id "$USER_POOL_ID" \
-  --username "$TEST_USERNAME" \
-  --region "$REGION" \
-  --no-cli-pager > /dev/null 2>&1
-
-if [ $? -eq 0 ]; then
-  echo -e "${GREEN}✅ Test user removed${NC}"
-else
-  echo -e "${YELLOW}⚠️  Could not remove test user (may not exist or already deleted)${NC}"
-fi
-echo ""
-
 echo "📊 Next Steps:"
 echo "   1. Check CloudWatch Logs for decision evaluation handler"
 echo "   2. Verify decision proposal in DynamoDB table"
