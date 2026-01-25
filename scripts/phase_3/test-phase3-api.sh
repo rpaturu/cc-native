@@ -14,10 +14,37 @@ echo -e "${YELLOW}🧪 Phase 3 Decision API Testing${NC}"
 echo "=========================================="
 echo ""
 
-# Get API URL and Key ID from stack outputs or environment
-API_URL="${DECISION_API_URL:-https://m50nppoghk.execute-api.us-west-2.amazonaws.com/prod}"
-API_KEY_ID="${DECISION_API_KEY_ID:-afzdktebhk}"
-REGION="${AWS_REGION:-us-west-2}"
+# Load environment variables from .env file
+if [ -f .env ]; then
+  source .env
+else
+  echo -e "${RED}❌ Error: .env file not found${NC}"
+  echo "   Please run ./deploy first to generate .env file"
+  exit 1
+fi
+
+# Get API URL and Key ID from .env (required, no fallbacks)
+if [ -z "$DECISION_API_URL" ]; then
+  echo -e "${RED}❌ Error: DECISION_API_URL not found in .env${NC}"
+  echo "   Please run ./deploy to generate .env file with stack outputs"
+  exit 1
+fi
+
+if [ -z "$DECISION_API_KEY_ID" ]; then
+  echo -e "${RED}❌ Error: DECISION_API_KEY_ID not found in .env${NC}"
+  echo "   Please run ./deploy to generate .env file with stack outputs"
+  exit 1
+fi
+
+if [ -z "$AWS_REGION" ]; then
+  echo -e "${RED}❌ Error: AWS_REGION not found in .env${NC}"
+  echo "   Please run ./deploy to generate .env file with stack outputs"
+  exit 1
+fi
+
+API_URL="$DECISION_API_URL"
+API_KEY_ID="$DECISION_API_KEY_ID"
+REGION="$AWS_REGION"
 
 # Get API key value
 echo "📋 Retrieving API key value..."

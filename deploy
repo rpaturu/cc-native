@@ -159,6 +159,8 @@ NEPTUNE_SUBNET_ID_OUTPUT=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.OutputKe
 AGENT_ROLE_ARN_OUTPUT=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="AgentRoleArn") | .OutputValue')
 USER_POOL_ID_OUTPUT=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="UserPoolId") | .OutputValue')
 USER_POOL_CLIENT_ID_OUTPUT=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="UserPoolClientId") | .OutputValue')
+DECISION_API_URL_OUTPUT=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="DecisionApiUrl") | .OutputValue')
+DECISION_API_KEY_ID_OUTPUT=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="DecisionApiKeyId") | .OutputValue')
 
 # Use stack outputs (preferred) or fall back to .env.local values
 EVIDENCE_LEDGER_BUCKET=${EVIDENCE_LEDGER_BUCKET_OUTPUT:-$EVIDENCE_LEDGER_BUCKET}
@@ -229,6 +231,10 @@ AGENT_ROLE_ARN=$AGENT_ROLE_ARN_OUTPUT
 # Cognito
 USER_POOL_ID=$USER_POOL_ID_OUTPUT
 USER_POOL_CLIENT_ID=$USER_POOL_CLIENT_ID_OUTPUT
+
+# Phase 3: Decision API
+DECISION_API_URL=$DECISION_API_URL_OUTPUT
+DECISION_API_KEY_ID=$DECISION_API_KEY_ID_OUTPUT
 
 # Logging
 LOG_LEVEL=$LOG_LEVEL
