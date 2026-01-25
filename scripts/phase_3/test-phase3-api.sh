@@ -56,40 +56,60 @@ if [ -z "$DECISION_API_KEY" ]; then
   exit 1
 fi
 
-# Try to get Cognito JWT token
-TEST_USERNAME="${TEST_USERNAME:-}"
-TEST_PASSWORD="${TEST_PASSWORD:-}"
+# Automatically create test user if needed
+TEST_USERNAME="${TEST_USERNAME:-test-user}"
+TEST_PASSWORD="${TEST_PASSWORD:-TestPassword123!}"
+TEST_USER_EMAIL="${TEST_USER_EMAIL:-test-user@cc-native.local}"
 
-if [ -z "$TEST_USERNAME" ] || [ -z "$TEST_PASSWORD" ]; then
-  echo -e "${YELLOW}⚠️  TEST_USERNAME and TEST_PASSWORD not set${NC}"
-  echo "   API Gateway requires Cognito JWT token when Cognito authorizer is configured"
-  echo ""
-  echo "   To run tests, create a test user and set credentials:"
-  echo "   export TEST_USERNAME='test-user'"
-  echo "   export TEST_PASSWORD='YourPassword123!'"
-  echo "   ./scripts/phase_3/test-phase3-api.sh"
-  echo ""
-  echo "   Create test user:"
-  echo "   aws cognito-idp admin-create-user \\"
-  echo "     --user-pool-id ${USER_POOL_ID} \\"
-  echo "     --username test-user \\"
-  echo "     --user-attributes Name=email,Value=test@example.com \\"
-  echo "     --temporary-password TempPass123! \\"
-  echo "     --message-action SUPPRESS \\"
-  echo "     --region ${REGION}"
-  echo ""
-  echo "   Then set permanent password:"
-  echo "   aws cognito-idp admin-set-user-password \\"
-  echo "     --user-pool-id ${USER_POOL_ID} \\"
-  echo "     --username test-user \\"
-  echo "     --password YourPassword123! \\"
-  echo "     --permanent \\"
-  echo "     --region ${REGION}"
-  echo ""
-  exit 1
+echo "🔐 Setting up Cognito authentication..."
+
+# Check if user exists
+USER_EXISTS=$(aws cognito-idp admin-get-user \
+  --user-pool-id "$USER_POOL_ID" \
+  --username "$TEST_USERNAME" \
+  --region "$REGION" \
+  --query 'Username' \
+  --output text \
+  --no-cli-pager 2>/dev/null || echo "None")
+
+if [ "$USER_EXISTS" = "None" ] || [ -z "$USER_EXISTS" ]; then
+  echo "   Creating test user: ${TEST_USERNAME}..."
+  
+  # Create user
+  aws cognito-idp admin-create-user \
+    --user-pool-id "$USER_POOL_ID" \
+    --username "$TEST_USERNAME" \
+    --user-attributes "Name=email,Value=${TEST_USER_EMAIL}" \
+    --temporary-password "$TEST_PASSWORD" \
+    --message-action SUPPRESS \
+    --region "$REGION" \
+    --no-cli-pager > /dev/null 2>&1
+  
+  # Set permanent password
+  aws cognito-idp admin-set-user-password \
+    --user-pool-id "$USER_POOL_ID" \
+    --username "$TEST_USERNAME" \
+    --password "$TEST_PASSWORD" \
+    --permanent \
+    --region "$REGION" \
+    --no-cli-pager > /dev/null 2>&1
+  
+  echo -e "${GREEN}✅ Test user created${NC}"
+  sleep 1  # Brief delay to ensure user is fully created
+else
+  echo "   Test user already exists: ${TEST_USERNAME}"
+  
+  # Ensure password is set (try to set it, ignore if already set)
+  aws cognito-idp admin-set-user-password \
+    --user-pool-id "$USER_POOL_ID" \
+    --username "$TEST_USERNAME" \
+    --password "$TEST_PASSWORD" \
+    --permanent \
+    --region "$REGION" \
+    --no-cli-pager > /dev/null 2>&1 || true
 fi
 
-echo "🔐 Authenticating with Cognito..."
+echo "   Authenticating with Cognito..."
 COGNITO_TOKEN=$(aws cognito-idp initiate-auth \
   --auth-flow USER_PASSWORD_AUTH \
   --client-id "$USER_POOL_CLIENT_ID" \
@@ -101,11 +121,25 @@ COGNITO_TOKEN=$(aws cognito-idp initiate-auth \
 
 if [ -z "$COGNITO_TOKEN" ] || [ "$COGNITO_TOKEN" = "None" ]; then
   echo -e "${RED}❌ Failed to authenticate with Cognito${NC}"
-  echo "   Please check:"
-  echo "   - TEST_USERNAME and TEST_PASSWORD are correct"
-  echo "   - User exists in Cognito User Pool: ${USER_POOL_ID}"
-  echo "   - User password is set (not temporary)"
-  echo "   - Cognito client allows USER_PASSWORD_AUTH flow"
+  echo "   This may be due to:"
+  echo "   - Cognito client not allowing USER_PASSWORD_AUTH flow"
+  echo "   - User password not set correctly"
+  echo ""
+  echo "   You can manually create the user:"
+  echo "   aws cognito-idp admin-create-user \\"
+  echo "     --user-pool-id ${USER_POOL_ID} \\"
+  echo "     --username ${TEST_USERNAME} \\"
+  echo "     --user-attributes Name=email,Value=${TEST_USER_EMAIL} \\"
+  echo "     --temporary-password ${TEST_PASSWORD} \\"
+  echo "     --message-action SUPPRESS \\"
+  echo "     --region ${REGION}"
+  echo ""
+  echo "   aws cognito-idp admin-set-user-password \\"
+  echo "     --user-pool-id ${USER_POOL_ID} \\"
+  echo "     --username ${TEST_USERNAME} \\"
+  echo "     --password ${TEST_PASSWORD} \\"
+  echo "     --permanent \\"
+  echo "     --region ${REGION}"
   exit 1
 fi
 
