@@ -62,6 +62,45 @@ LLMs never bypass policy, humans, or audit.
 
 ---
 
+## Decision Triggering Model
+
+**Critical:** Decisions are **not** continuously evaluated. They are triggered by specific events to prevent "decision storms" and unbounded cost.
+
+### Trigger Types
+
+1. **Lifecycle Transition Events**
+   * `PROSPECT → SUSPECT` transition
+   * `SUSPECT → CUSTOMER` transition
+   * `CUSTOMER` risk state changes (OK → AT_RISK)
+
+2. **High-Signal Arrival**
+   * `RENEWAL_WINDOW_ENTERED` signal
+   * `SUPPORT_RISK_EMERGING` signal
+   * `USAGE_TREND_CHANGE` with severity > threshold
+
+3. **Explicit Seller Request**
+   * User-initiated via UI: "What should I do next?"
+   * Manual decision evaluation request
+
+4. **Cooldown-Gated Periodic Evaluation**
+   * Maximum once per account per 24 hours
+   * Only if no recent high-signal events
+   * Cooldown tracked in `AccountPostureState.last_decision_evaluated_at`
+
+### Trigger Semantics
+
+* **Event-Driven (Primary):** Lifecycle transitions and high-signal events trigger immediate evaluation
+* **Pull-Based (Secondary):** Seller-initiated requests trigger on-demand evaluation
+* **Cooldown Enforcement:** Prevents redundant evaluations within 24-hour window
+* **Cost Budgeting:** Each trigger consumes budget; budget exhaustion blocks evaluation
+
+**Acceptance Criteria:**
+* No decision evaluation without explicit trigger
+* Cooldown prevents decision storms
+* Budget limits prevent unbounded LLM usage
+
+---
+
 ## Canonical Data Contracts (Versioned)
 
 ### 3.1 `DecisionContextV1`
@@ -116,13 +155,151 @@ LLMs never bypass policy, humans, or audit.
 
 **What survives policy + human approval**
 
-* `action_type`
-* `target_entity`
-* `parameters`
-* `approved_by`
-* `approval_timestamp`
-* `execution_policy`
-* `expires_at`
+```json
+{
+  "action_intent_id": "...",
+  "action_type": "REQUEST_RENEWAL_MEETING",
+  "target_entity": "account:acme_corp",
+  "parameters": {
+    "meeting_type": "renewal",
+    "priority": "high"
+  },
+  "approved_by": "user:john_doe",
+  "approval_timestamp": "2026-01-25T07:00:00Z",
+  "execution_policy": {
+    "retry_count": 3,
+    "timeout_seconds": 300
+  },
+  "expires_at": "2026-01-30T00:00:00Z",
+  "original_proposal_id": "...",
+  "original_decision_id": "...",
+  "edited_fields": [],
+  "edited_by": null,
+  "edited_at": null
+}
+```
+
+**Fields:**
+* `action_type` - From ActionTypeV1 enum
+* `target_entity` - Entity ID (account, contact, opportunity)
+* `parameters` - Action-specific parameters (mutable)
+* `approved_by` - User ID who approved
+* `approval_timestamp` - When approved
+* `execution_policy` - Retry/timeout configuration
+* `expires_at` - Action expiration (mutable)
+* `original_proposal_id` - Links to DecisionProposalV1 (provenance)
+* `original_decision_id` - Links to DecisionContextV1 (provenance)
+* `edited_fields[]` - List of field names that were edited (if any)
+* `edited_by` - User ID who edited (if edited)
+* `edited_at` - Timestamp of edit (if edited)
+
+---
+
+## Confidence Semantics Contract
+
+**Definition:**
+Confidence is the **LLM's self-assessed certainty** that a proposed action is appropriate, expressed as a value in `[0.0, 1.0]`.
+
+### Confidence Properties
+
+* **Source:** LLM self-assessment (not post-processed or calibrated)
+* **Range:** `[0.0, 1.0]` (inclusive)
+* **Interpretation:** Higher values indicate stronger LLM belief in action appropriateness
+* **Non-Comparable:** Confidence values are **not** comparable across different action types or decision contexts
+
+### Policy Gate Consumption
+
+The Policy Gate interprets confidence **deterministically**:
+
+* `confidence < min_confidence_threshold` → **BLOCKED**
+* `confidence >= min_confidence_threshold && requires_human === true` → **APPROVAL_REQUIRED**
+* `confidence >= min_confidence_threshold && requires_human === false` → **ALLOWED** (if action type permits)
+
+### Confidence Limitations
+
+* **Not calibrated:** Confidence is raw LLM output, not calibrated against historical outcomes
+* **Not validated:** Confidence does not guarantee action success or appropriateness
+* **Not authoritative:** Policy gate and human approval are authoritative, not confidence alone
+
+### Future Calibration (Explicitly Deferred)
+
+Confidence calibration (mapping LLM confidence to actual outcomes) is **explicitly deferred** to a later phase. Phase 3 treats confidence as advisory input to policy, not as a validated metric.
+
+**Acceptance Criteria:**
+* Confidence is always present in `DecisionProposalV1`
+* Confidence is bounded `[0.0, 1.0]`
+* Policy gate uses confidence deterministically
+* Confidence calibration is explicitly deferred
+
+---
+
+## ActionType Registry v1
+
+**Purpose:** Canonical enumeration of action types with risk classification and default policy rules.
+
+### ActionType Enumeration
+
+```typescript
+enum ActionTypeV1 {
+  // Outreach Actions (Always require human approval)
+  REQUEST_RENEWAL_MEETING = 'REQUEST_RENEWAL_MEETING',
+  REQUEST_DISCOVERY_CALL = 'REQUEST_DISCOVERY_CALL',
+  REQUEST_STAKEHOLDER_INTRO = 'REQUEST_STAKEHOLDER_INTRO',
+  
+  // CRM Write Actions (Approval required unless low risk)
+  UPDATE_OPPORTUNITY_STAGE = 'UPDATE_OPPORTUNITY_STAGE',
+  CREATE_OPPORTUNITY = 'CREATE_OPPORTUNITY',
+  UPDATE_ACCOUNT_FIELDS = 'UPDATE_ACCOUNT_FIELDS',
+  
+  // Internal Actions (Auto-allowed if confidence threshold met)
+  CREATE_INTERNAL_NOTE = 'CREATE_INTERNAL_NOTE',
+  CREATE_INTERNAL_TASK = 'CREATE_INTERNAL_TASK',
+  FLAG_FOR_REVIEW = 'FLAG_FOR_REVIEW',
+  
+  // Research Actions (Auto-allowed)
+  FETCH_ACCOUNT_NEWS = 'FETCH_ACCOUNT_NEWS',
+  ANALYZE_USAGE_PATTERNS = 'ANALYZE_USAGE_PATTERNS',
+}
+```
+
+### Risk Classification
+
+| Action Type | Risk Tier | Default Approval Required | Min Confidence |
+|------------|-----------|--------------------------|----------------|
+| Outreach Actions | HIGH | ✅ Always | 0.75 |
+| CRM Write Actions | MEDIUM | ✅ Unless low risk | 0.70 |
+| Internal Actions | LOW | ❌ If confidence >= threshold | 0.65 |
+| Research Actions | MINIMAL | ❌ Auto-allowed | 0.60 |
+
+### Policy Rules by Action Type
+
+**Outreach Actions:**
+* Always require human approval
+* Cannot be auto-approved regardless of confidence
+* Must include explicit rationale
+
+**CRM Write Actions:**
+* Require approval unless:
+  * `confidence >= 0.85`
+  * `risk_level === 'LOW'`
+  * Action type is non-destructive (e.g., adding tags)
+
+**Internal Actions:**
+* Auto-allowed if:
+  * `confidence >= min_confidence_threshold`
+  * `risk_level === 'LOW'`
+* Otherwise require approval
+
+**Research Actions:**
+* Auto-allowed if:
+  * `confidence >= 0.60`
+  * No external side effects
+
+**Acceptance Criteria:**
+* All action types are enumerated
+* Risk tier is assigned per action type
+* Default approval rules are deterministic
+* Policy rules are code + config (no prompts)
 
 ---
 
@@ -235,13 +412,46 @@ LLMs never bypass policy, humans, or audit.
 **Capabilities**
 
 * Approve
-* Edit parameters
+* Edit parameters (with constraints)
 * Reject with reason
+
+**Human Edit Constraints**
+
+**Editable Fields:**
+* `parameters` (action-specific parameters)
+* `target_entity` (e.g., different contact, different opportunity)
+* `expires_at` (execution deadline)
+
+**Locked Fields (Immutable):**
+* `action_type` (cannot change action type)
+* `original_proposal_id` (provenance preserved)
+* `decision_id` (original decision context)
+
+**Edit Semantics:**
+* Edited actions generate a **new** `ActionIntentV1` with:
+  * `original_proposal_id` pointing to original proposal
+  * `edited_fields[]` listing what was changed
+  * `edited_by` (user ID)
+  * `edited_at` (timestamp)
+* Original proposal remains **immutable** in ledger
+* Edited action is treated as a new intent (not a mutation)
+
+**Approval Record:**
+* Every action (approved or rejected) has an approval record
+* Approval record includes:
+  * Original proposal ID
+  * Edited fields (if any)
+  * Approver/rejector ID
+  * Timestamp
+  * Reason (if rejected)
 
 **Acceptance Criteria**
 
 * Every action has an approval record
+* Original proposals are immutable
+* Edited actions create new intents with provenance
 * Rejections are fed back as outcome signals (later phases)
+* Edit constraints are enforced (locked fields cannot be changed)
 
 ---
 
@@ -351,6 +561,55 @@ Phase 4 introduces:
 * Partial autonomy under policy
 
 Phase 3 ensures Phase 4 is **safe**.
+
+---
+
+## Decision Flow Sequence
+
+```
+1. Trigger Event (lifecycle transition, high-signal, user request)
+   ↓
+2. Decision Context Assembler
+   - Fetch AccountPostureState (DDB)
+   - Fetch active signals + evidence refs (bounded)
+   - Fetch graph neighborhood (Neptune, depth <= 2)
+   - Fetch tenant policy config
+   - Assemble DecisionContextV1
+   ↓
+3. Decision Synthesis Service
+   - Call Bedrock with DecisionContextV1
+   - Enforce DecisionProposalV1 schema (fail-closed)
+   - Generate action proposals
+   ↓
+4. Policy Evaluation Engine
+   - Evaluate each proposed action
+   - Classify: allowed / blocked / approval_required
+   - Annotate with reason codes
+   ↓
+5. Human Decision Surface (if approval required)
+   - Display ranked proposals
+   - Show "why" (signals, evidence, confidence)
+   - Allow approve / edit / reject
+   ↓
+6. Action Intent Creation
+   - Create ActionIntentV1 (approved or edited)
+   - Preserve original proposal ID (provenance)
+   - Record edited fields (if any)
+   ↓
+7. Ledger Events
+   - DECISION_PROPOSED
+   - POLICY_EVALUATED
+   - ACTION_APPROVED / ACTION_REJECTED
+   ↓
+8. (Phase 4) Execution
+   - Approved ActionIntentV1 → Execution Layer
+```
+
+**Key Points:**
+* Each step is bounded and deterministic (except LLM synthesis)
+* Policy gate is code-only (no LLM influence)
+* Human edits create new intents (original preserved)
+* Full traceability via ledger events
 
 ---
 
