@@ -1168,10 +1168,12 @@ export class ActionIntentService {
    */
   async editIntent(
     originalIntentId: string,
+    tenantId: string,
+    accountId: string,
     edits: Partial<ActionIntentV1>,
     editedBy: string
   ): Promise<ActionIntentV1> {
-    const original = await this.getIntent(originalIntentId);
+    const original = await this.getIntent(originalIntentId, tenantId, accountId);
     
     if (!original) {
       throw new Error(`Action intent not found: ${originalIntentId}`);
