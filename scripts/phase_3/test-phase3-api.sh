@@ -17,7 +17,13 @@ cleanup_test_user() {
     echo "🧹 Cleaning up test user and temporary files..."
     
     # Remove test user (zero trust: no persistent test identities)
+    # Use AWS_PROFILE if available (from .env)
+    AWS_PROFILE_ARG=""
+    if [ -n "$AWS_PROFILE" ]; then
+      AWS_PROFILE_ARG="--profile $AWS_PROFILE"
+    fi
     aws cognito-idp admin-delete-user \
+      $AWS_PROFILE_ARG \
       --user-pool-id "$USER_POOL_ID" \
       --username "$TEST_USERNAME" \
       --region "$REGION" \
@@ -115,6 +121,7 @@ echo "🔐 Setting up Cognito authentication..."
 
 # Check if user exists
 USER_EXISTS=$(aws cognito-idp admin-get-user \
+  $AWS_PROFILE_ARG \
   --user-pool-id "$USER_POOL_ID" \
   --username "$TEST_USERNAME" \
   --region "$REGION" \
@@ -126,12 +133,13 @@ if [ "$USER_EXISTS" = "None" ] || [ -z "$USER_EXISTS" ]; then
   echo "   Creating test user: ${TEST_USERNAME}..."
   
   # Create user - show command for debugging
-  CREATE_USER_CMD="aws cognito-idp admin-create-user --user-pool-id \"$USER_POOL_ID\" --username \"$TEST_USERNAME\" --user-attributes \"Name=email,Value=${TEST_USER_EMAIL}\" --temporary-password \"$TEST_PASSWORD\" --message-action SUPPRESS --region \"$REGION\" --no-cli-pager"
+  CREATE_USER_CMD="aws cognito-idp admin-create-user $AWS_PROFILE_ARG --user-pool-id \"$USER_POOL_ID\" --username \"$TEST_USERNAME\" --user-attributes \"Name=email,Value=${TEST_USER_EMAIL}\" --temporary-password \"$TEST_PASSWORD\" --message-action SUPPRESS --region \"$REGION\" --no-cli-pager"
   echo "   Command: $CREATE_USER_CMD"
   
   # Temporarily disable set -e to capture error output
   set +e
   CREATE_USER_OUTPUT=$(aws cognito-idp admin-create-user \
+    $AWS_PROFILE_ARG \
     --user-pool-id "$USER_POOL_ID" \
     --username "$TEST_USERNAME" \
     --user-attributes "Name=email,Value=${TEST_USER_EMAIL}" \
@@ -148,19 +156,39 @@ if [ "$USER_EXISTS" = "None" ] || [ -z "$USER_EXISTS" ]; then
     echo "   Error output:"
     echo "$CREATE_USER_OUTPUT" | jq '.' 2>/dev/null || echo "$CREATE_USER_OUTPUT"
     echo ""
+    
+    # Check if it's a permissions error
+    if echo "$CREATE_USER_OUTPUT" | grep -q "AccessDeniedException\|not authorized"; then
+      echo -e "${YELLOW}⚠️  IAM Permissions Issue${NC}"
+      echo "   Your AWS credentials need Cognito admin permissions:"
+      echo "   Required IAM permissions:"
+      echo "   - cognito-idp:AdminCreateUser"
+      echo "   - cognito-idp:AdminSetUserPassword"
+      echo "   - cognito-idp:AdminDeleteUser"
+      echo "   - cognito-idp:AdminGetUser"
+      echo "   - cognito-idp:AdminInitiateAuth (for ADMIN_USER_PASSWORD_AUTH)"
+      echo ""
+      echo "   Resource: arn:aws:cognito-idp:${REGION}:*:userpool/${USER_POOL_ID}"
+      echo ""
+      echo "   Current AWS identity:"
+      aws sts get-caller-identity $AWS_PROFILE_ARG --no-cli-pager 2>/dev/null || echo "   (Could not determine identity)"
+    fi
+    
+    echo ""
     echo "   You can run this command manually to debug:"
     echo "   $CREATE_USER_CMD"
     exit 1
   fi
   
   # Set permanent password - show command for debugging
-  SET_PASSWORD_CMD="aws cognito-idp admin-set-user-password --user-pool-id \"$USER_POOL_ID\" --username \"$TEST_USERNAME\" --password \"$TEST_PASSWORD\" --permanent --region \"$REGION\" --no-cli-pager"
+  SET_PASSWORD_CMD="aws cognito-idp admin-set-user-password $AWS_PROFILE_ARG --user-pool-id \"$USER_POOL_ID\" --username \"$TEST_USERNAME\" --password \"$TEST_PASSWORD\" --permanent --region \"$REGION\" --no-cli-pager"
   echo "   Setting permanent password..."
   echo "   Command: $SET_PASSWORD_CMD"
   
   # Temporarily disable set -e to capture error output
   set +e
   SET_PASSWORD_OUTPUT=$(aws cognito-idp admin-set-user-password \
+    $AWS_PROFILE_ARG \
     --user-pool-id "$USER_POOL_ID" \
     --username "$TEST_USERNAME" \
     --password "$TEST_PASSWORD" \
@@ -188,6 +216,7 @@ else
   
   # Ensure password is set (try to set it, ignore if already set)
   aws cognito-idp admin-set-user-password \
+    $AWS_PROFILE_ARG \
     --user-pool-id "$USER_POOL_ID" \
     --username "$TEST_USERNAME" \
     --password "$TEST_PASSWORD" \
@@ -213,13 +242,14 @@ RETRY_DELAY=2
 
 for i in $(seq 1 $MAX_RETRIES); do
   # Try USER_PASSWORD_AUTH first (standard flow)
-  AUTH_CMD="aws cognito-idp initiate-auth --auth-flow USER_PASSWORD_AUTH --client-id \"$USER_POOL_CLIENT_ID\" --auth-parameters file://\"$AUTH_PARAMS_FILE\" --region \"$REGION\" --no-cli-pager"
+  AUTH_CMD="aws cognito-idp initiate-auth $AWS_PROFILE_ARG --auth-flow USER_PASSWORD_AUTH --client-id \"$USER_POOL_CLIENT_ID\" --auth-parameters file://\"$AUTH_PARAMS_FILE\" --region \"$REGION\" --no-cli-pager"
   if [ $i -eq 1 ]; then
     echo "   Attempting USER_PASSWORD_AUTH..."
     echo "   Command: $AUTH_CMD"
   fi
   
   AUTH_OUTPUT=$(aws cognito-idp initiate-auth \
+    $AWS_PROFILE_ARG \
     --auth-flow USER_PASSWORD_AUTH \
     --client-id "$USER_POOL_CLIENT_ID" \
     --auth-parameters file://"$AUTH_PARAMS_FILE" \
@@ -233,12 +263,13 @@ for i in $(seq 1 $MAX_RETRIES); do
     if [ $i -eq 1 ]; then
       echo "   USER_PASSWORD_AUTH not available, trying ADMIN_USER_PASSWORD_AUTH..."
     fi
-    ADMIN_AUTH_CMD="aws cognito-idp admin-initiate-auth --user-pool-id \"$USER_POOL_ID\" --client-id \"$USER_POOL_CLIENT_ID\" --auth-flow ADMIN_USER_PASSWORD_AUTH --auth-parameters file://\"$AUTH_PARAMS_FILE\" --region \"$REGION\" --no-cli-pager"
+    ADMIN_AUTH_CMD="aws cognito-idp admin-initiate-auth $AWS_PROFILE_ARG --user-pool-id \"$USER_POOL_ID\" --client-id \"$USER_POOL_CLIENT_ID\" --auth-flow ADMIN_USER_PASSWORD_AUTH --auth-parameters file://\"$AUTH_PARAMS_FILE\" --region \"$REGION\" --no-cli-pager"
     if [ $i -eq 1 ]; then
       echo "   Command: $ADMIN_AUTH_CMD"
     fi
     
     AUTH_OUTPUT=$(aws cognito-idp admin-initiate-auth \
+      $AWS_PROFILE_ARG \
       --user-pool-id "$USER_POOL_ID" \
       --client-id "$USER_POOL_CLIENT_ID" \
       --auth-flow ADMIN_USER_PASSWORD_AUTH \
