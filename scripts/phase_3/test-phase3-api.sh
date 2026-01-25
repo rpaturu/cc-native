@@ -30,9 +30,10 @@ if [ -z "$DECISION_API_URL" ]; then
   exit 1
 fi
 
-if [ -z "$DECISION_API_KEY_ID" ]; then
-  echo -e "${RED}❌ Error: DECISION_API_KEY_ID not found in .env${NC}"
+if [ -z "$DECISION_API_KEY" ]; then
+  echo -e "${RED}❌ Error: DECISION_API_KEY not found in .env${NC}"
   echo "   Please run ./deploy to generate .env file with stack outputs"
+  echo "   The deploy script retrieves and stores the API key value automatically"
   exit 1
 fi
 
@@ -43,29 +44,8 @@ if [ -z "$AWS_REGION" ]; then
 fi
 
 API_URL="$DECISION_API_URL"
-API_KEY_ID="$DECISION_API_KEY_ID"
+API_KEY="$DECISION_API_KEY"
 REGION="$AWS_REGION"
-
-# Get API key value
-echo "📋 Retrieving API key value..."
-API_KEY=$(aws apigateway get-api-key \
-  --api-key "${API_KEY_ID}" \
-  --include-value \
-  --region "${REGION}" \
-  --query 'value' \
-  --output text \
-  --no-cli-pager 2>/dev/null)
-
-if [ -z "$API_KEY" ]; then
-  echo -e "${RED}❌ Failed to retrieve API key. Please check:${NC}"
-  echo "   - AWS credentials are configured"
-  echo "   - API key ID is correct: ${API_KEY_ID}"
-  echo "   - Region is correct: ${REGION}"
-  exit 1
-fi
-
-echo -e "${GREEN}✅ API key retrieved${NC}"
-echo ""
 
 # Test configuration
 TENANT_ID="${TEST_TENANT_ID:-test-tenant-1}"

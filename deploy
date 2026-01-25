@@ -162,6 +162,25 @@ USER_POOL_CLIENT_ID_OUTPUT=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.Output
 DECISION_API_URL_OUTPUT=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="DecisionApiUrl") | .OutputValue')
 DECISION_API_KEY_ID_OUTPUT=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="DecisionApiKeyId") | .OutputValue')
 
+# Retrieve API key value (required for API calls - API Gateway needs the actual key value, not just ID)
+if [ -n "$DECISION_API_KEY_ID_OUTPUT" ] && [ "$DECISION_API_KEY_ID_OUTPUT" != "null" ]; then
+  echo "Retrieving API key value..."
+  DECISION_API_KEY_VALUE=$(aws apigateway get-api-key \
+    --api-key "$DECISION_API_KEY_ID_OUTPUT" \
+    --include-value \
+    --region "$AWS_REGION" \
+    --query 'value' \
+    --output text \
+    --profile $CDK_PROFILE \
+    --no-cli-pager 2>/dev/null || echo "")
+  
+  if [ -z "$DECISION_API_KEY_VALUE" ]; then
+    echo "⚠️  Warning: Could not retrieve API key value. You may need to retrieve it manually."
+  fi
+else
+  DECISION_API_KEY_VALUE=""
+fi
+
 # Use stack outputs (preferred) or fall back to .env.local values
 EVIDENCE_LEDGER_BUCKET=${EVIDENCE_LEDGER_BUCKET_OUTPUT:-$EVIDENCE_LEDGER_BUCKET}
 WORLD_STATE_SNAPSHOTS_BUCKET=${WORLD_STATE_SNAPSHOTS_BUCKET_OUTPUT:-$WORLD_STATE_SNAPSHOTS_BUCKET}
@@ -235,6 +254,7 @@ USER_POOL_CLIENT_ID=$USER_POOL_CLIENT_ID_OUTPUT
 # Phase 3: Decision API
 DECISION_API_URL=$DECISION_API_URL_OUTPUT
 DECISION_API_KEY_ID=$DECISION_API_KEY_ID_OUTPUT
+DECISION_API_KEY=$DECISION_API_KEY_VALUE
 
 # Logging
 LOG_LEVEL=$LOG_LEVEL
