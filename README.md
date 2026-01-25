@@ -43,12 +43,16 @@ cc-native/
 
 See `docs/strategy/IMPLEMENTATION_APPROACH.md` for detailed phased implementation plan:
 
-- **Phase 0**: Foundations (identity, event spine, storage, audit)
-- **Phase 1**: Perception V1 (signals without data-lake pain)
-- **Phase 2**: World Model (Situation Graph + retrieval plane)
-- **Phase 3**: Tool Plane (AgentCore Gateway)
-- **Phase 4**: Decision Agent (AgentCore Runtime)
-- **Phase 5**: Action Execution + Human Touch UX
+- **Phase 0**: Foundations (identity, event spine, storage, audit) ✅ **Complete**
+- **Phase 1**: Perception V1 (signals without data-lake pain) ✅ **Complete**
+- **Phase 2**: World Model (Situation Graph + retrieval plane) ✅ **Complete**
+- **Phase 3**: Autonomous Decision + Action Proposal (Human-in-the-Loop) ✅ **Complete**
+  - Decision synthesis with LLM (Bedrock)
+  - Policy gate for deterministic action evaluation
+  - Human approval routing
+  - Decision audit and explainability
+- **Phase 4**: Action Execution (bounded execution, connector write-backs)
+- **Phase 5**: Enhanced Tool Plane (AgentCore Gateway)
 - **Phase 6**: Trust, Quality, and Cost Controls
 
 ## Getting Started
