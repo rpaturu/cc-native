@@ -1023,7 +1023,9 @@ export class PolicyGateService {
         approval_required: false,
         needs_human_input: false,
         blocked_reason: 'UNKNOWN_ACTION_TYPE',
-        llm_requires_human: proposal.llm_suggests_human_review
+        llm_requires_human: proposal.llm_suggests_human_review,
+        llm_risk_level: proposal.risk_level,
+        policy_risk_tier: 'HIGH'
       };
     }
     
@@ -1039,7 +1041,9 @@ export class PolicyGateService {
         approval_required: false,
         needs_human_input: true, // Blocking unknowns require human question/input
         blocked_reason: 'BLOCKING_UNKNOWNS_PRESENT',
-        llm_requires_human: proposal.llm_suggests_human_review
+        llm_requires_human: proposal.llm_suggests_human_review,
+        llm_risk_level: proposal.risk_level,
+        policy_risk_tier: actionPermission.risk_tier
       };
     }
     
@@ -1098,7 +1102,9 @@ export class PolicyGateService {
       approval_required: approvalRequired, // Authoritative: policy requires approval
       needs_human_input: false, // No blocking unknowns at this point
       blocked_reason: evaluation === 'BLOCKED' ? reasonCodes[0] : undefined,
-      llm_requires_human: proposal.requires_human // LLM's advisory field (for reference)
+      llm_requires_human: proposal.llm_suggests_human_review, // LLM's advisory field (for reference)
+      llm_risk_level: proposal.risk_level, // LLM's risk estimate (for reference)
+      policy_risk_tier: riskTier // Authoritative policy risk tier
     };
   }
   
@@ -1192,7 +1198,7 @@ export class ActionIntentService {
       },
       expires_at: this.calculateExpiration(proposal.action_type),
       original_decision_id: decisionId, // Links to DecisionProposalV1.decision_id
-      original_proposal_id: decisionId, // Same as decision_id (proposal_id == decision_id in our model)
+      original_proposal_id: decisionId, // Same as decision_id (INVARIANT: proposal_id == decision_id in v1)
       edited_fields: editedFields || [],
       edited_by: editedFields && editedFields.length > 0 ? approvedBy : undefined,
       edited_at: editedFields && editedFields.length > 0 ? new Date().toISOString() : undefined,
@@ -1200,6 +1206,9 @@ export class ActionIntentService {
       account_id: accountId,
       trace_id: traceId
     };
+    
+    // Validate provenance invariant (original_proposal_id == original_decision_id)
+    validateProvenanceInvariant(intent);
     
     // Store in DynamoDB with PK/SK pattern
     await this.storeIntent(intent);
@@ -1255,6 +1264,9 @@ export class ActionIntentService {
       edited_by: editedBy,
       edited_at: new Date().toISOString()
     };
+    
+    // Validate provenance invariant (original_proposal_id == original_decision_id)
+    validateProvenanceInvariant(editedIntent);
     
     // Store as new intent (original preserved) with PK/SK pattern
     await this.storeIntent(editedIntent);

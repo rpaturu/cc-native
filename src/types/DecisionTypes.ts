@@ -10,6 +10,7 @@
  */
 
 import { z } from "zod";
+import { createHash } from "crypto";
 
 /**
  * ActionTypeV1
@@ -180,11 +181,14 @@ const DecisionProposalBodyV1BaseSchema = z
 
     // Normalized reason codes at decision level (for analytics)
     // Examples: ["RENEWAL_WINDOW_ENTERED", "USAGE_TREND_DOWN", "SUPPORT_RISK_EMERGING"]
-    decision_reason_codes: z.array(ReasonCodeSchema).min(0).max(50).default([]),
+    decision_reason_codes: z.array(ReasonCodeSchema).max(50).default([]),
 
     // Versioning: keep as literal "v1" to fail closed on incompatible changes.
+    // decision_version: semantic behavior version (what the decision means)
+    // schema_version: wire format version (how it's serialized)
+    // In v1, both are "v1" and move together. Future versions may diverge.
     decision_version: z.literal("v1"),
-    schema_version: z.literal("v1"), // Explicit schema version for compatibility tracking
+    schema_version: z.literal("v1"), // Wire format version (for schema evolution tracking)
 
     // Summary is human-readable and should be short.
     summary: z.string().min(1).max(280),
@@ -320,39 +324,83 @@ export function safeParseDecisionProposalV1(input: unknown): {
 }
 
 /**
+ * Canonicalize an object by deep-sorting all keys recursively.
+ * Ensures stable JSON serialization for fingerprinting.
+ */
+function canonicalizeObject(obj: any): any {
+  if (obj === null || obj === undefined) {
+    return obj;
+  }
+  if (Array.isArray(obj)) {
+    return obj.map(canonicalizeObject).sort((a, b) => {
+      const aStr = JSON.stringify(a);
+      const bStr = JSON.stringify(b);
+      return aStr < bStr ? -1 : aStr > bStr ? 1 : 0;
+    });
+  }
+  if (typeof obj === 'object') {
+    const sorted: Record<string, any> = {};
+    const keys = Object.keys(obj).sort();
+    for (const key of keys) {
+      sorted[key] = canonicalizeObject(obj[key]);
+    }
+    return sorted;
+  }
+  return obj;
+}
+
+/**
  * Generate proposal fingerprint for determinism testing and duplicate detection.
  * Hash excludes IDs, timestamps, and other non-deterministic fields.
  * 
+ * Normalization ensures:
+ * - Actions are sorted by stable key (action_type + target)
+ * - Parameters are canonicalized (deep-sorted keys)
+ * - Arrays are sorted
+ * - Same logical proposal → same fingerprint
+ * 
  * @param proposalBody - The LLM output (DecisionProposalBodyV1) before enrichment
- * @returns SHA256 hash of normalized proposal core
+ * @returns SHA256 hash of normalized proposal core (hex string)
  */
 export function generateProposalFingerprint(proposalBody: DecisionProposalBodyV1): string {
-  // Normalize: remove non-deterministic fields, sort arrays, stringify
-  const normalized = {
-    decision_type: proposalBody.decision_type,
-    decision_reason_codes: [...proposalBody.decision_reason_codes].sort(),
-    decision_version: proposalBody.decision_version,
-    schema_version: proposalBody.schema_version,
-    summary: proposalBody.summary,
-    actions: proposalBody.actions.map((action: ActionProposalV1) => ({
+  // Normalize actions: sort by stable key (action_type + target.entity_type + target.entity_id)
+  const normalizedActions = proposalBody.actions
+    .map((action: ActionProposalV1) => ({
       action_type: action.action_type,
       why: [...action.why].sort(),
       confidence: action.confidence,
       risk_level: action.risk_level,
       llm_suggests_human_review: action.llm_suggests_human_review,
       blocking_unknowns: [...action.blocking_unknowns].sort(),
-      parameters: action.parameters,
+      // Canonicalize parameters (deep-sort keys for stable ordering)
+      parameters: canonicalizeObject(action.parameters),
       parameters_schema_version: action.parameters_schema_version,
-      target: action.target,
+      target: action.target, // Already structured, no normalization needed
       // Exclude: action_intent_id, proposed_rank (non-deterministic)
-    })),
+    }))
+    .sort((a, b) => {
+      // Stable sort key: action_type + target.entity_type + target.entity_id
+      const aKey = `${a.action_type}:${a.target.entity_type}:${a.target.entity_id}`;
+      const bKey = `${b.action_type}:${b.target.entity_type}:${b.target.entity_id}`;
+      return aKey < bKey ? -1 : aKey > bKey ? 1 : 0;
+    });
+
+  // Normalize proposal body
+  const normalized = {
+    decision_type: proposalBody.decision_type,
+    decision_reason_codes: [...proposalBody.decision_reason_codes].sort(),
+    decision_version: proposalBody.decision_version,
+    schema_version: proposalBody.schema_version,
+    summary: proposalBody.summary,
+    actions: normalizedActions,
     confidence: proposalBody.confidence,
     blocking_unknowns: proposalBody.blocking_unknowns ? [...proposalBody.blocking_unknowns].sort() : undefined,
   };
   
-  // In production, use crypto.createHash('sha256').update(JSON.stringify(normalized)).digest('hex')
-  // For now, return placeholder (implementation will use actual crypto)
-  return `fingerprint_${JSON.stringify(normalized).length}`;
+  // Generate SHA-256 hash of canonical JSON
+  const jsonString = JSON.stringify(normalized);
+  const hash = createHash('sha256').update(jsonString, 'utf8').digest('hex');
+  return hash;
 }
 
 /**
@@ -472,9 +520,10 @@ export interface ActionIntentV1 {
   execution_policy: ExecutionPolicy;
   expires_at: string; // ISO timestamp
   original_decision_id: string; // Links to DecisionProposalV1.decision_id (the decision that created this proposal)
-  original_proposal_id: string; // Same as original_decision_id
-  // INVARIANT: proposal_id == decision_id in v1 (there is no separate proposal_id field)
+  original_proposal_id: string; // Same as original_decision_id (INVARIANT: proposal_id == decision_id in v1)
+  // INVARIANT: original_proposal_id MUST equal original_decision_id in v1
   // The decision_id is the identifier for the proposal artifact.
+  // Use validateProvenanceInvariant() to enforce this at runtime.
   supersedes_action_intent_id?: string; // If this intent was created by editing another, link to parent intent
   edited_fields: string[]; // Field names that were edited (if any)
   edited_by?: string; // User ID who edited (if edited)
@@ -482,6 +531,22 @@ export interface ActionIntentV1 {
   tenant_id: string;
   account_id: string;
   trace_id: string;
+}
+
+/**
+ * Validate provenance invariant: original_proposal_id == original_decision_id in v1
+ * Throws if invariant is violated (prevents data corruption).
+ * 
+ * @param intent - ActionIntentV1 to validate
+ * @throws Error if invariant is violated
+ */
+export function validateProvenanceInvariant(intent: ActionIntentV1): void {
+  if (intent.original_proposal_id !== intent.original_decision_id) {
+    throw new Error(
+      `Provenance invariant violated: original_proposal_id (${intent.original_proposal_id}) ` +
+      `must equal original_decision_id (${intent.original_decision_id}) in v1`
+    );
+  }
 }
 
 /**
@@ -498,17 +563,20 @@ export interface ExecutionPolicy {
  * PolicyEvaluationResult
  * Result of policy gate evaluation.
  * Separates approval requirements from blocking reasons for clarity.
+ * Captures both LLM estimates and authoritative policy decisions for debugging.
  */
 export interface PolicyEvaluationResult {
   action_intent_id: string;
   evaluation: 'ALLOWED' | 'BLOCKED' | 'APPROVAL_REQUIRED';
   reason_codes: string[];
   confidence_threshold_met: boolean;
-  risk_tier: 'HIGH' | 'MEDIUM' | 'LOW' | 'MINIMAL';
+  risk_tier: 'HIGH' | 'MEDIUM' | 'LOW' | 'MINIMAL'; // Authoritative policy risk tier
   approval_required: boolean; // True if human approval is required (authoritative, from policy)
   needs_human_input: boolean; // True if blocking unknowns require human question/input
   blocked_reason?: string; // If BLOCKED, the reason (e.g., "CONFIDENCE_BELOW_THRESHOLD", "BLOCKING_UNKNOWNS_PRESENT")
   llm_requires_human?: boolean; // LLM's advisory field (for reference, not authoritative)
+  llm_risk_level?: RiskLevel; // LLM's risk estimate (for reference, not authoritative)
+  policy_risk_tier: 'HIGH' | 'MEDIUM' | 'LOW' | 'MINIMAL'; // Authoritative policy risk tier (same as risk_tier, explicit for clarity)
 }
 
 /**
