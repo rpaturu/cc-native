@@ -10,15 +10,20 @@ import * as sqs from 'aws-cdk-lib/aws-sqs';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as neptune from 'aws-cdk-lib/aws-neptune';
 import { Construct } from 'constructs';
-// ✅ REFACTORED: Import new constructs
+// Import constructs
 import { NeptuneInfrastructure } from './constructs/NeptuneInfrastructure';
 import { SecurityMonitoring } from './constructs/SecurityMonitoring';
 import { PerceptionHandlers } from './constructs/PerceptionHandlers';
 import { GraphIntelligenceHandlers } from './constructs/GraphIntelligenceHandlers';
+import { DecisionInfrastructure } from './constructs/DecisionInfrastructure';
+import { DEFAULT_DECISION_INFRASTRUCTURE_CONFIG } from './constructs/DecisionInfrastructureConfig';
 
 export interface CCNativeStackProps extends cdk.StackProps {
   // Add any custom props here
 }
+
+// Neptune default port (standard AWS Neptune port)
+const NEPTUNE_DEFAULT_PORT = 8182;
 
 export class CCNativeStack extends cdk.Stack {
   // S3 Buckets (World Model Architecture: S3 as Truth)
@@ -54,6 +59,11 @@ export class CCNativeStack extends cdk.Stack {
   // Identity Tables
   public readonly identitiesTable: dynamodb.Table;
 
+  // Phase 3: Decision Infrastructure Tables
+  public readonly decisionBudgetTable: dynamodb.Table;
+  public readonly actionIntentTable: dynamodb.Table;
+  public readonly decisionProposalTable: dynamodb.Table;
+
   // EventBridge
   public readonly eventBus: events.EventBus;
 
@@ -78,10 +88,11 @@ export class CCNativeStack extends cdk.Stack {
   public readonly lifecycleInferenceDlq: sqs.Queue;
 
   // Phase 2: Neptune Graph Infrastructure
-  public readonly vpc: ec2.Vpc;
-  public readonly neptuneCluster: neptune.CfnDBCluster;
-  public readonly neptuneSecurityGroup: ec2.SecurityGroup;
-  public readonly neptuneAccessRole: iam.Role;
+  // Note: Not readonly because they are assigned after NeptuneInfrastructure construct is created
+  public vpc: ec2.Vpc;
+  public neptuneCluster: neptune.CfnDBCluster;
+  public neptuneSecurityGroup: ec2.SecurityGroup;
+  public neptuneAccessRole: iam.Role;
 
   // Graph Intelligence: DynamoDB Tables (graph materialization and synthesis)
   public readonly accountPostureStateTable: dynamodb.Table;
@@ -375,6 +386,67 @@ export class CCNativeStack extends cdk.Stack {
       sortKey: { name: 'gsi1sk', type: dynamodb.AttributeType.STRING },
     });
 
+    // ✅ Phase 3: Decision Infrastructure Tables
+    // NOTE: Phase 3 table definitions are located here in CCNativeStack (not in DecisionInfrastructure construct).
+    // This allows the tables to be shared across phases and provides a single source of truth for table definitions.
+    // The DecisionInfrastructure construct receives these tables as props.
+    const decisionConfig = DEFAULT_DECISION_INFRASTRUCTURE_CONFIG;
+    
+    // Decision Budget Table
+    this.decisionBudgetTable = new dynamodb.Table(this, 'DecisionBudgetTable', {
+      tableName: decisionConfig.tableNames.decisionBudget,
+      partitionKey: { name: 'pk', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'sk', type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      pointInTimeRecoverySpecification: {
+        pointInTimeRecoveryEnabled: true,
+      },
+    });
+
+    // Action Intent Table
+    // Uses consistent PK/SK pattern for multi-tenant isolation
+    this.actionIntentTable = new dynamodb.Table(this, 'ActionIntentTable', {
+      tableName: decisionConfig.tableNames.actionIntent,
+      partitionKey: { name: 'pk', type: dynamodb.AttributeType.STRING }, // TENANT#{tenantId}#ACCOUNT#{accountId}
+      sortKey: { name: 'sk', type: dynamodb.AttributeType.STRING }, // ACTION_INTENT#{action_intent_id}
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      pointInTimeRecoverySpecification: {
+        pointInTimeRecoveryEnabled: true,
+      },
+      timeToLiveAttribute: 'expires_at_epoch', // TTL requires epoch seconds (number), not ISO string
+    });
+
+    // GSI: By action_intent_id (for direct lookups)
+    this.actionIntentTable.addGlobalSecondaryIndex({
+      indexName: 'action-intent-id-index',
+      partitionKey: { name: 'action_intent_id', type: dynamodb.AttributeType.STRING },
+    });
+
+    // GSI: By account (for listing intents by account)
+    this.actionIntentTable.addGlobalSecondaryIndex({
+      indexName: 'account-index',
+      partitionKey: { name: 'account_id', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'approval_timestamp', type: dynamodb.AttributeType.STRING },
+    });
+
+    // Decision Proposal Table (for authoritative proposal storage)
+    // Stores enriched DecisionProposalV1 for approval/rejection flow
+    this.decisionProposalTable = new dynamodb.Table(this, 'DecisionProposalTable', {
+      tableName: decisionConfig.tableNames.decisionProposal,
+      partitionKey: { name: 'pk', type: dynamodb.AttributeType.STRING }, // TENANT#{tenantId}#ACCOUNT#{accountId}
+      sortKey: { name: 'sk', type: dynamodb.AttributeType.STRING }, // DECISION#{decision_id}
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      pointInTimeRecoverySpecification: {
+        pointInTimeRecoveryEnabled: true,
+      },
+    });
+
+    // GSI: By decision_id (for direct lookups)
+    this.decisionProposalTable.addGlobalSecondaryIndex({
+      indexName: 'decision-id-index',
+      partitionKey: { name: 'decision_id', type: dynamodb.AttributeType.STRING },
+    });
+
     // EventBridge Custom Bus
     this.eventBus = new events.EventBus(this, 'CCNativeEventBus', {
       eventBusName: 'cc-native-events',
@@ -473,17 +545,17 @@ export class CCNativeStack extends cdk.Stack {
       preventUserExistenceErrors: true,
     });
 
-    // ✅ REFACTORED: Use NeptuneInfrastructure construct
+    // Neptune Infrastructure (VPC, Neptune cluster, security groups)
     const neptuneInfra = new NeptuneInfrastructure(this, 'NeptuneInfrastructure', {
       region: this.region,
     });
-    // Assign to readonly properties
-    (this as CCNativeStack & { vpc: ec2.Vpc }).vpc = neptuneInfra.vpc;
-    (this as CCNativeStack & { neptuneCluster: neptune.CfnDBCluster }).neptuneCluster = neptuneInfra.neptuneCluster;
-    (this as CCNativeStack & { neptuneSecurityGroup: ec2.SecurityGroup }).neptuneSecurityGroup = neptuneInfra.neptuneSecurityGroup;
-    (this as CCNativeStack & { neptuneAccessRole: iam.Role }).neptuneAccessRole = neptuneInfra.neptuneAccessRole;
+    // Assign Neptune infrastructure properties (assigned after construct creation)
+    this.vpc = neptuneInfra.vpc;
+    this.neptuneCluster = neptuneInfra.neptuneCluster;
+    this.neptuneSecurityGroup = neptuneInfra.neptuneSecurityGroup;
+    this.neptuneAccessRole = neptuneInfra.neptuneAccessRole;
 
-    // ✅ REFACTORED: Use GraphIntelligenceHandlers construct (graph materialization and synthesis)
+    // Graph Intelligence Handlers (graph materialization and synthesis)
     const graphIntelligenceHandlers = new GraphIntelligenceHandlers(this, 'GraphIntelligenceHandlers', {
       eventBus: this.eventBus,
       accountsTable: this.accountsTable,
@@ -504,13 +576,33 @@ export class CCNativeStack extends cdk.Stack {
     (this as CCNativeStack & { graphMaterializerDlq: sqs.Queue }).graphMaterializerDlq = graphIntelligenceHandlers.graphMaterializerDlq;
     (this as CCNativeStack & { synthesisEngineDlq: sqs.Queue }).synthesisEngineDlq = graphIntelligenceHandlers.synthesisEngineDlq;
 
-    // ✅ REFACTORED: Use SecurityMonitoring construct (must be after GraphIntelligenceHandlers)
+    // Security Monitoring (must be after GraphIntelligenceHandlers)
     const securityMonitoring = new SecurityMonitoring(this, 'SecurityMonitoring', {
       neptuneCluster: neptuneInfra.neptuneCluster,
       graphMaterializerHandler: graphIntelligenceHandlers.graphMaterializerHandler,
       synthesisEngineHandler: graphIntelligenceHandlers.synthesisEngineHandler,
       region: this.region,
       neptuneAuditLogGroup: neptuneInfra.neptuneAuditLogGroup,
+    });
+
+    // ✅ Phase 3: Decision Infrastructure (decision evaluation, approval, and action intents)
+    const decisionInfrastructure = new DecisionInfrastructure(this, 'DecisionInfrastructure', {
+      eventBus: this.eventBus,
+      ledgerTable: this.ledgerTable,
+      accountPostureStateTable: graphIntelligenceHandlers.accountPostureStateTable,
+      signalsTable: this.signalsTable,
+      accountsTable: this.accountsTable,
+      tenantsTable: this.tenantsTable,
+      // Phase 3 Decision tables
+      decisionBudgetTable: this.decisionBudgetTable,
+      actionIntentTable: this.actionIntentTable,
+      decisionProposalTable: this.decisionProposalTable,
+      neptuneEndpoint: neptuneInfra.neptuneCluster.attrEndpoint,
+      neptunePort: NEPTUNE_DEFAULT_PORT,
+      vpc: neptuneInfra.vpc,
+      neptuneSecurityGroup: neptuneInfra.neptuneSecurityGroup,
+      region: this.region,
+      userPool: this.userPool,
     });
 
     // Stack Outputs
@@ -671,7 +763,7 @@ export class CCNativeStack extends cdk.Stack {
       description: 'First Neptune subnet ID (for test runner setup)',
     });
 
-    // ✅ REFACTORED: Use PerceptionHandlers construct
+    // Perception Handlers (signal detection and lifecycle inference)
     const perceptionHandlers = new PerceptionHandlers(this, 'PerceptionHandlers', {
       eventBus: this.eventBus,
       evidenceLedgerBucket: this.evidenceLedgerBucket,
@@ -723,6 +815,47 @@ export class CCNativeStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'GraphMaterializationStatusTableName', {
       value: graphIntelligenceHandlers.graphMaterializationStatusTable.tableName,
       description: 'DynamoDB table for graph materialization status (synthesis gating)',
+    });
+
+    // Phase 3: Decision Infrastructure Outputs
+    new cdk.CfnOutput(this, 'DecisionBudgetTableName', {
+      value: decisionInfrastructure.decisionBudgetTable.tableName,
+      description: 'DynamoDB table for decision cost budgets',
+    });
+
+    new cdk.CfnOutput(this, 'ActionIntentTableName', {
+      value: decisionInfrastructure.actionIntentTable.tableName,
+      description: 'DynamoDB table for action intents (approved actions)',
+    });
+
+    new cdk.CfnOutput(this, 'DecisionProposalTableName', {
+      value: decisionInfrastructure.decisionProposalTable.tableName,
+      description: 'DynamoDB table for decision proposals (authoritative storage)',
+    });
+
+    new cdk.CfnOutput(this, 'DecisionEvaluationHandlerArn', {
+      value: decisionInfrastructure.decisionEvaluationHandler.functionArn,
+      description: 'ARN of decision evaluation handler Lambda function',
+    });
+
+    new cdk.CfnOutput(this, 'DecisionTriggerHandlerArn', {
+      value: decisionInfrastructure.decisionTriggerHandler.functionArn,
+      description: 'ARN of decision trigger handler Lambda function',
+    });
+
+    new cdk.CfnOutput(this, 'DecisionApiUrl', {
+      value: decisionInfrastructure.decisionApi.url,
+      description: 'API Gateway URL for decision API',
+    });
+
+    new cdk.CfnOutput(this, 'DecisionApiKeyId', {
+      value: decisionInfrastructure.decisionApiKey.keyId,
+      description: 'API Key ID for Decision API (use AWS CLI to retrieve key value)',
+    });
+
+    new cdk.CfnOutput(this, 'BudgetResetHandlerArn', {
+      value: decisionInfrastructure.budgetResetHandler.functionArn,
+      description: 'ARN of budget reset handler Lambda function (scheduled daily at midnight UTC)',
     });
   }
 

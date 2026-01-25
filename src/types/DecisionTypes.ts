@@ -115,13 +115,13 @@ export const TargetEntitySchema = z.object({
 export type TargetEntity = z.infer<typeof TargetEntitySchema>;
 
 /**
- * ActionProposalV1
- * One proposed action intent, prior to policy + human approval.
- * (Consolidated naming: previously "DecisionActionProposalV1")
+ * ActionProposalBodyV1
+ * LLM output schema for a single action (no IDs).
+ * Server enriches with action_ref post-parse.
  */
-export const ActionProposalV1Schema = z
+export const ActionProposalBodyV1Schema = z
   .object({
-    action_intent_id: NonEmptyString, // UUID recommended
+    // Note: action_intent_id is NOT in LLM output - server generates action_ref post-parse
     action_type: ActionTypeV1Enum,
 
     // "why" must be structured (array of reason strings), not a blob of prose.
@@ -155,6 +155,17 @@ export const ActionProposalV1Schema = z
     proposed_rank: z.number().int().min(1).max(50).optional(),
   })
   .strict();
+
+export type ActionProposalBodyV1 = z.infer<typeof ActionProposalBodyV1Schema>;
+
+/**
+ * ActionProposalV1
+ * Enriched action proposal with server-generated action_ref.
+ * This is the complete action proposal after server enrichment.
+ */
+export const ActionProposalV1Schema = ActionProposalBodyV1Schema.extend({
+  action_ref: NonEmptyString, // Server-generated stable reference (for UI approval flow)
+});
 
 export type ActionProposalV1 = z.infer<typeof ActionProposalV1Schema>;
 
@@ -196,7 +207,8 @@ const DecisionProposalBodyV1BaseSchema = z
     summary: z.string().min(1).max(280),
 
     // Actions array (bounded, with invariants enforced below)
-    actions: z.array(ActionProposalV1Schema).min(0).max(25),
+    // Note: LLM outputs ActionProposalBodyV1 (no action_ref). Server enriches with action_ref post-parse.
+    actions: z.array(ActionProposalBodyV1Schema).min(0).max(25),
 
     // Optional overall decision confidence (if LLM provides it)
     confidence: z.number().min(0).max(1).optional(),
@@ -290,6 +302,8 @@ export const DecisionProposalV1Schema = DecisionProposalBodyV1BaseSchema.extend(
   trace_id: NonEmptyString,
   created_at: z.string().datetime(),
   proposal_fingerprint: NonEmptyString, // SHA256 hash for determinism testing
+  // Override actions to use enriched ActionProposalV1 (with action_ref)
+  actions: z.array(ActionProposalV1Schema).min(0).max(25),
 }).superRefine(validateDecisionInvariants);
 
 /**
@@ -357,8 +371,9 @@ function canonicalizeObject(obj: any): any {
  */
 export function generateProposalFingerprint(proposalBody: DecisionProposalBodyV1): string {
   // Normalize actions: sort by stable key (action_type + target.entity_type + target.entity_id)
+  // Note: proposalBody.actions are ActionProposalBodyV1 (no action_ref yet)
   const normalizedActions = proposalBody.actions
-    .map((action: ActionProposalV1) => ({
+    .map((action: ActionProposalBodyV1) => ({
       action_type: action.action_type,
       why: [...action.why].sort(),
       confidence: action.confidence,
@@ -369,7 +384,7 @@ export function generateProposalFingerprint(proposalBody: DecisionProposalBodyV1
       parameters: canonicalizeObject(action.parameters),
       parameters_schema_version: action.parameters_schema_version,
       target: action.target, // Already structured, no normalization needed
-      // Exclude: action_intent_id, proposed_rank (non-deterministic)
+      // Exclude: action_ref (server-generated), proposed_rank (non-deterministic)
     }))
     .sort((a, b) => {
       // Stable sort key: action_type + target.entity_type + target.entity_id
@@ -398,8 +413,9 @@ export function generateProposalFingerprint(proposalBody: DecisionProposalBodyV1
 
 /**
  * Example: minimal valid payload (for tests)
+ * Note: This is an enriched proposal (after server enrichment with action_ref)
  */
-export const ExampleDecisionProposalV1: DecisionProposalV1 = {
+export const ExampleDecisionProposalV1 = {
   decision_id: "dec_123",
   account_id: "acct_acme",
   tenant_id: "tenant_123",
@@ -415,7 +431,7 @@ export const ExampleDecisionProposalV1: DecisionProposalV1 = {
   summary: "Renewal risk detected; proactive engagement recommended.",
   actions: [
     {
-      action_intent_id: "ai_456",
+      action_ref: "action_ref_abc123", // Server-generated (enriched after LLM output)
       action_type: "REQUEST_RENEWAL_MEETING",
       why: [
         "RENEWAL_WINDOW_ENTERED < 90d",
@@ -509,6 +525,7 @@ export interface ActionIntentV1 {
   approval_timestamp: string; // ISO timestamp
   execution_policy: ExecutionPolicy;
   expires_at: string; // ISO timestamp
+  expires_at_epoch: number; // Epoch seconds (required for DynamoDB TTL)
   original_decision_id: string; // Links to DecisionProposalV1.decision_id (the decision that created this proposal)
   original_proposal_id: string; // Same as original_decision_id (INVARIANT: proposal_id == decision_id in v1)
   // INVARIANT: original_proposal_id MUST equal original_decision_id in v1
@@ -554,18 +571,20 @@ export interface ExecutionPolicy {
  * Result of policy gate evaluation.
  * Separates approval requirements from blocking reasons for clarity.
  * Captures both LLM estimates and authoritative policy decisions for debugging.
+ * 
+ * Note: During proposal evaluation, this uses action_ref (not action_intent_id, which doesn't exist until approval)
  */
 export interface PolicyEvaluationResult {
-  action_intent_id: string;
+  action_ref: string; // action_ref from proposal (before approval, no action_intent_id exists yet)
   evaluation: 'ALLOWED' | 'BLOCKED' | 'APPROVAL_REQUIRED';
   reason_codes: string[];
   confidence_threshold_met: boolean;
-  policy_risk_tier: 'HIGH' | 'MEDIUM' | 'LOW' | 'MINIMAL'; // Authoritative policy risk tier
-  approval_required: boolean; // True if human approval is required (authoritative, from policy)
+  policy_risk_tier: 'HIGH' | 'MEDIUM' | 'LOW' | 'MINIMAL'; // Authoritative policy risk tier (single source of truth)
+  approval_required: boolean; // Authoritative: policy requires approval
   needs_human_input: boolean; // True if blocking unknowns require human question/input
-  blocked_reason?: string; // If BLOCKED, the reason (e.g., "CONFIDENCE_BELOW_THRESHOLD", "BLOCKING_UNKNOWNS_PRESENT")
-  llm_suggests_human_review?: boolean; // LLM's advisory field (for reference, not authoritative)
-  llm_risk_level?: RiskLevel; // LLM's risk estimate (for reference, not authoritative)
+  blocked_reason?: string; // Reason code if evaluation === 'BLOCKED'
+  llm_suggests_human_review: boolean; // LLM's advisory field (for reference only)
+  llm_risk_level: 'MINIMAL' | 'LOW' | 'MEDIUM' | 'HIGH'; // LLM's risk estimate (for reference only)
 }
 
 /**

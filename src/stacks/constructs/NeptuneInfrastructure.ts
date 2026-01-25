@@ -348,5 +348,17 @@ export class NeptuneInfrastructure extends Construct {
         subnetType: ec2.SubnetType.PRIVATE_ISOLATED,  // ✅ Specify subnet type explicitly
       },
     });
+
+    // ✅ Zero Trust: Add Bedrock Runtime VPC endpoint (AWS PrivateLink)
+    // This allows Lambda functions in isolated subnets to access Bedrock without internet access
+    // Service name: bedrock-runtime (for InvokeModel API calls)
+    new ec2.InterfaceVpcEndpoint(this, 'BedrockRuntimeEndpoint', {
+      vpc: this.vpc,
+      service: new ec2.InterfaceVpcEndpointService(`com.amazonaws.${props.region}.bedrock-runtime`, 443),
+      privateDnsEnabled: true,
+      subnets: {
+        subnetType: ec2.SubnetType.PRIVATE_ISOLATED,  // ✅ Specify subnet type explicitly
+      },
+    });
   }
 }

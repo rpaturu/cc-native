@@ -361,4 +361,86 @@ export class GraphService implements IGraphService {
       throw error;
     }
   }
+
+  /**
+   * Get neighbors of a vertex (bounded, with depth tracking)
+   * 
+   * Returns vertices reachable from the source vertex up to maxDepth.
+   * Each vertex includes depth information (1 = immediate neighbors, 2 = neighbors of neighbors, etc.)
+   * Bounded: maximum limit results total.
+   */
+  async getNeighbors(
+    vertexId: string,
+    options?: { maxDepth?: number; limit?: number }
+  ): Promise<Vertex[]> {
+    try {
+      const g = await this.getG();
+      const maxDepth = options?.maxDepth || 2;
+      const limit = options?.limit || 100;
+
+      // Use repeat() to traverse up to maxDepth, then collect all vertices with their depth
+      // Pattern: g.V(vertexId).repeat(__.out()).times(maxDepth).emit().dedup().limit(limit)
+      const results: Array<{ vertex: any; depth: number }> = [];
+      const visited = new Set<string>();
+      
+      // Start from source vertex
+      const sourceVertex = await g.V(vertexId).next();
+      if (!sourceVertex.value) {
+        return [];
+      }
+
+      // Traverse neighbors at each depth level
+      for (let depth = 1; depth <= maxDepth && results.length < limit; depth++) {
+        let traversal;
+        if (depth === 1) {
+          // Depth 1: immediate neighbors
+          traversal = g.V(vertexId).out();
+        } else {
+          // Depth 2+: neighbors of neighbors (using repeat)
+          traversal = g.V(vertexId).repeat(__.out()).times(depth).dedup();
+        }
+
+        const depthResults = await traversal.limit(limit - results.length).toList();
+        
+        for (const vertexResult of depthResults) {
+          // Gremlin toList() returns vertices directly (not wrapped in .value)
+          const vertex: any = vertexResult;
+          const vertexIdStr = String(vertex.id);
+          if (!visited.has(vertexIdStr)) {
+            visited.add(vertexIdStr);
+            
+            const properties: Record<string, any> = {};
+            if (vertex.properties) {
+              for (const [key, value] of Object.entries(vertex.properties)) {
+                if (Array.isArray(value) && value.length > 0) {
+                  properties[key] = value[0].value;
+                } else {
+                  properties[key] = value;
+                }
+              }
+            }
+
+            results.push({
+              vertex: {
+                id: vertexIdStr,
+                label: vertex.label,
+                properties,
+                depth,
+              },
+              depth,
+            });
+
+            if (results.length >= limit) {
+              break;
+            }
+          }
+        }
+      }
+
+      return results.map(r => r.vertex);
+    } catch (error) {
+      logger.error('Failed to get neighbors', { vertexId, error });
+      throw error;
+    }
+  }
 }

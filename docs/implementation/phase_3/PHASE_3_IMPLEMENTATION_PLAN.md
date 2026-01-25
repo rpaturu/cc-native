@@ -1,10 +1,11 @@
 # Phase 3 — Autonomous Decision + Action Proposal (Human-in-the-Loop)
 
-**Status:** 📋 **PLANNING** (Not Started)  
+**Status:** ✅ **COMPLETE** (Implementation Finished)  
 **Prerequisites:** Phase 0 ✅ Complete | Phase 1 ✅ Complete | Phase 2 ✅ Complete  
 **Dependencies:** Phase 0 + Phase 1 + Phase 2 are implemented and certified (event envelope, immutable evidence, append-only ledger, canonical signals + lifecycle inference, situation graph + deterministic synthesis).
 
-**Last Updated:** 2026-01-25
+**Last Updated:** 2026-01-25 (Architecture improvements: tables moved to main stack, centralized configuration system)  
+**Implementation Completed:** 2026-01-25
 
 ---
 
@@ -136,7 +137,7 @@ LLMs never bypass policy, humans, or audit.
   ],
   "actions": [
     {
-      "action_intent_id": "...",
+      "action_ref": "...",  // Server-generated stable reference (for UI approval flow)
       "action_type": "REQUEST_RENEWAL_MEETING",
       "why": [
         "RENEWAL_WINDOW_ENTERED < 90d",
@@ -145,14 +146,27 @@ LLMs never bypass policy, humans, or audit.
       ],
       "confidence": 0.84,
       "risk_level": "MEDIUM",
-      "requires_human": true,
-      "blocking_unknowns": []
+      "llm_suggests_human_review": true,  // LLM's advisory field
+      "blocking_unknowns": [],
+      "target": {
+        "entity_type": "ACCOUNT",
+        "entity_id": "acme_corp"
+      },
+      "parameters": {
+        "meeting_type": "renewal",
+        "priority": "high"
+      }
     }
   ],
   "summary": "Renewal risk detected; proactive engagement recommended.",
-  "decision_version": "v1"
+  "decision_version": "v1",
+  "schema_version": "v1",
+  "proposal_fingerprint": "...",  // SHA256 hash for determinism testing
+  "created_at": "2026-01-25T07:00:00Z"
 }
 ```
+
+**Note:** `action_ref` is server-generated (not from LLM). `action_intent_id` is only created on approval.
 
 **Note:** `decision_type` can be:
 * `PROPOSE_ACTIONS` - One or more actions recommended
@@ -176,9 +190,12 @@ LLMs never bypass policy, humans, or audit.
 
 ```json
 {
-  "action_intent_id": "...",
+  "action_intent_id": "...",  // Generated on approval (not from proposal.action_ref)
   "action_type": "REQUEST_RENEWAL_MEETING",
-  "target_entity": "account:acme_corp",
+  "target": {
+    "entity_type": "ACCOUNT",
+    "entity_id": "acme_corp"
+  },
   "parameters": {
     "meeting_type": "renewal",
     "priority": "high"
@@ -187,27 +204,35 @@ LLMs never bypass policy, humans, or audit.
   "approval_timestamp": "2026-01-25T07:00:00Z",
   "execution_policy": {
     "retry_count": 3,
-    "timeout_seconds": 300
+    "timeout_seconds": 300,
+    "max_attempts": 1
   },
   "expires_at": "2026-01-30T00:00:00Z",
-  "original_proposal_id": "...",
-  "original_decision_id": "...",
+  "expires_at_epoch": 1706659200,  // Epoch seconds (for DynamoDB TTL)
+  "original_proposal_id": "...",  // Links to DecisionProposalV1.decision_id
+  "original_decision_id": "...",  // Same as original_proposal_id (INVARIANT: proposal_id == decision_id in v1)
+  "supersedes_action_intent_id": null,  // If edited, links to parent intent
   "edited_fields": [],
   "edited_by": null,
-  "edited_at": null
+  "edited_at": null,
+  "tenant_id": "...",
+  "account_id": "...",
+  "trace_id": "..."
 }
 ```
 
 **Fields:**
-* `action_type` - From ActionTypeV1 enum
-* `target_entity` - Entity ID (account, contact, opportunity)
+* `action_type` - From ActionTypeV1 enum (Zod enum)
+* `target` - Structured target entity (entity_type + entity_id)
 * `parameters` - Action-specific parameters (mutable)
 * `approved_by` - User ID who approved
-* `approval_timestamp` - When approved
+* `approval_timestamp` - When approved (ISO timestamp)
 * `execution_policy` - Retry/timeout configuration
-* `expires_at` - Action expiration (mutable)
-* `original_proposal_id` - Links to DecisionProposalV1 (provenance)
-* `original_decision_id` - Links to DecisionContextV1 (provenance)
+* `expires_at` - Action expiration (ISO timestamp, mutable)
+* `expires_at_epoch` - Epoch seconds (for DynamoDB TTL, required)
+* `original_proposal_id` - Links to DecisionProposalV1.decision_id (INVARIANT: proposal_id == decision_id in v1)
+* `original_decision_id` - Links to DecisionProposalV1.decision_id
+* `supersedes_action_intent_id` - If edited, links to parent intent (provenance)
 * `edited_fields[]` - List of field names that were edited (if any)
 * `edited_by` - User ID who edited (if edited)
 * `edited_at` - Timestamp of edit (if edited)
@@ -231,8 +256,12 @@ Confidence is the **LLM's self-assessed certainty** that a proposed action is ap
 The Policy Gate interprets confidence **deterministically**:
 
 * `confidence < min_confidence_threshold` → **BLOCKED**
-* `confidence >= min_confidence_threshold && requires_human === true` → **APPROVAL_REQUIRED**
-* `confidence >= min_confidence_threshold && requires_human === false` → **ALLOWED** (if action type permits)
+* `confidence >= min_confidence_threshold && risk_tier === 'HIGH'` → **APPROVAL_REQUIRED** (always)
+* `confidence >= min_confidence_threshold && risk_tier === 'MEDIUM'` → **APPROVAL_REQUIRED** (always, policy tier is authoritative)
+* `confidence >= min_confidence_threshold && risk_tier === 'LOW'` → **ALLOWED** (if confidence threshold met)
+* `confidence >= 0.60 && risk_tier === 'MINIMAL'` → **ALLOWED**
+
+**Note:** Policy tier is authoritative. LLM `risk_level` and `llm_suggests_human_review` are advisory only.
 
 ### Confidence Limitations
 
@@ -258,28 +287,35 @@ Confidence calibration (mapping LLM confidence to actual outcomes) is **explicit
 
 ### ActionType Enumeration
 
+**Status:** ✅ **IMPLEMENTED** - Zod enum with 11 action types
+
 ```typescript
-enum ActionTypeV1 {
-  // Outreach Actions (Always require human approval)
-  REQUEST_RENEWAL_MEETING = 'REQUEST_RENEWAL_MEETING',
-  REQUEST_DISCOVERY_CALL = 'REQUEST_DISCOVERY_CALL',
-  REQUEST_STAKEHOLDER_INTRO = 'REQUEST_STAKEHOLDER_INTRO',
+// Zod enum (source of truth for LLM output validation)
+export const ActionTypeV1Enum = z.enum([
+  // Outreach Actions (HIGH risk, always require approval)
+  'REQUEST_RENEWAL_MEETING',
+  'REQUEST_DISCOVERY_CALL',
+  'REQUEST_STAKEHOLDER_INTRO',
   
-  // CRM Write Actions (Approval required unless low risk)
-  UPDATE_OPPORTUNITY_STAGE = 'UPDATE_OPPORTUNITY_STAGE',
-  CREATE_OPPORTUNITY = 'CREATE_OPPORTUNITY',
-  UPDATE_ACCOUNT_FIELDS = 'UPDATE_ACCOUNT_FIELDS',
+  // CRM Write Actions (MEDIUM risk, always require approval)
+  'UPDATE_OPPORTUNITY_STAGE',
+  'CREATE_OPPORTUNITY',
+  'UPDATE_ACCOUNT_FIELDS',
   
-  // Internal Actions (Auto-allowed if confidence threshold met)
-  CREATE_INTERNAL_NOTE = 'CREATE_INTERNAL_NOTE',
-  CREATE_INTERNAL_TASK = 'CREATE_INTERNAL_TASK',
-  FLAG_FOR_REVIEW = 'FLAG_FOR_REVIEW',
+  // Internal Actions (LOW risk, auto-allowed if confidence threshold met)
+  'CREATE_INTERNAL_NOTE',
+  'CREATE_INTERNAL_TASK',
+  'FLAG_FOR_REVIEW',
   
-  // Research Actions (Auto-allowed)
-  FETCH_ACCOUNT_NEWS = 'FETCH_ACCOUNT_NEWS',
-  ANALYZE_USAGE_PATTERNS = 'ANALYZE_USAGE_PATTERNS',
-}
+  // Research Actions (MINIMAL risk, auto-allowed)
+  'FETCH_ACCOUNT_NEWS',
+  'ANALYZE_USAGE_PATTERNS',
+]);
+
+export type ActionTypeV1 = z.infer<typeof ActionTypeV1Enum>;
 ```
+
+**Note:** ActionTypeV1 is a Zod enum (not TypeScript enum) to serve as source of truth for LLM output validation.
 
 ### Risk Classification
 
@@ -298,10 +334,9 @@ enum ActionTypeV1 {
 * Must include explicit rationale
 
 **CRM Write Actions:**
-* Require approval unless:
-  * `confidence >= 0.85`
-  * `risk_level === 'LOW'`
-  * Action type is non-destructive (e.g., adding tags)
+* **Always require approval** (MEDIUM risk tier is authoritative)
+* Policy tier (MEDIUM) is authoritative; LLM `risk_level` is advisory only
+* Cannot be auto-approved based on LLM risk assessment
 
 **Internal Actions:**
 * Auto-allowed if:
@@ -446,22 +481,28 @@ enum ActionTypeV1 {
 
 **Editable Fields:**
 * `parameters` (action-specific parameters)
-* `target_entity` (e.g., different contact, different opportunity)
+* `target` (e.g., different contact, different opportunity)
 * `expires_at` (execution deadline)
 
 **Locked Fields (Immutable):**
 * `action_type` (cannot change action type)
 * `original_proposal_id` (provenance preserved)
-* `decision_id` (original decision context)
+* `original_decision_id` (original decision context)
+* `action_intent_id` (cannot change intent ID)
 
 **Edit Semantics:**
 * Edited actions generate a **new** `ActionIntentV1` with:
-  * `original_proposal_id` pointing to original proposal
+  * New `action_intent_id` (not the original)
+  * `supersedes_action_intent_id` pointing to original intent (provenance link)
+  * `original_proposal_id` pointing to original proposal (preserved)
+  * `original_decision_id` pointing to original decision (preserved)
   * `edited_fields[]` listing what was changed
   * `edited_by` (user ID)
   * `edited_at` (timestamp)
-* Original proposal remains **immutable** in ledger
+  * `expires_at_epoch` recalculated if `expires_at` was edited
+* Original proposal and original intent remain **immutable**
 * Edited action is treated as a new intent (not a mutation)
+* Provenance invariant: `original_proposal_id == original_decision_id` in v1
 
 **Approval Record:**
 * Every action (approved or rejected) has an approval record
@@ -488,10 +529,11 @@ enum ActionTypeV1 {
 
 **New Ledger Events**
 
-* `DECISION_PROPOSED`
-* `POLICY_EVALUATED`
-* `ACTION_APPROVED`
-* `ACTION_REJECTED`
+* `DECISION_PROPOSED` - Decision proposal created by synthesis service
+* `POLICY_EVALUATED` - Policy gate evaluation result for each action
+* `ACTION_APPROVED` - Action proposal approved by human
+* `ACTION_REJECTED` - Action proposal rejected by human
+* `ACTION_EDITED` - Action intent edited (new intent created with provenance)
 
 **Acceptance Criteria**
 
@@ -526,10 +568,20 @@ enum ActionTypeV1 {
 * Max deep-context fetches
 * Confidence gating for expensive context
 
+**Implementation**
+
+* ✅ **Budget Reset Scheduler** (2026-01-25)
+  * Lambda handler: `budget-reset-handler.ts`
+  * EventBridge scheduled rule: Daily at midnight UTC
+  * Supports both scheduled batch reset and account-specific reset
+  * Zero Trust aligned: Minimal permissions (only budget table access), no external network access
+
 **Acceptance Criteria**
 
 * Budget breaches block decisions
 * Budget usage visible in metrics
+* ✅ Budget resets are scheduled (EventBridge rule at midnight UTC)
+* ✅ Budget reset handler has minimal permissions (Zero Trust)
 
 ---
 
@@ -561,20 +613,43 @@ All APIs are:
 * Trace-aware
 * Ledger-backed
 
+### API Authorization (Zero Trust)
+
+**Implementation:** ✅ **COMPLETE** (2026-01-25)
+
+* **Primary Authorization:** Cognito User Pool authorizer (identity-based, Zero Trust)
+  * Uses `Authorization` header with Cognito JWT token
+  * Preferred method for user-facing API calls
+* **Fallback Authorization:** API Key with usage plan (for service-to-service calls)
+  * Rate limiting: 100 requests/second, burst 200
+  * Daily quota: 10,000 requests/day
+  * Acceptable for service-to-service authentication
+* **Zero Trust Compliance:**
+  * ✅ Identity-based authentication (Cognito) - preferred
+  * ✅ Explicit authorization (no anonymous access)
+  * ✅ Rate limiting and quotas (prevent abuse)
+  * ✅ API key as fallback for service-to-service (acceptable with usage plans)
+
 ---
 
 ## Phase 3 Definition of Done
 
-Phase 3 is complete when:
+**Status:** ✅ **COMPLETE**
 
-* The system can propose next actions for any account
-* Every proposal is:
+Phase 3 is complete. All criteria met:
+
+* ✅ The system can propose next actions for any account
+* ✅ Every proposal is:
   * Evidence-backed
   * Confidence-scored
   * Policy-gated
-* Humans intervene **only** at approval points
-* All decisions are auditable and replayable
-* No actions execute without explicit approval
+* ✅ Humans intervene **only** at approval points
+* ✅ All decisions are auditable and replayable
+* ✅ No actions execute without explicit approval
+* ✅ Budget enforcement prevents unbounded LLM usage
+* ✅ Cooldown prevents decision storms
+* ✅ Deterministic policy evaluation (code-only)
+* ✅ Full provenance tracking (immutable proposals, edit links)
 
 ---
 
@@ -646,20 +721,100 @@ Phase 3 ensures Phase 4 is **safe**.
 
 ---
 
+## Implementation Status
+
+**Phase 3 Implementation: ✅ COMPLETE**
+
+All core components have been implemented and tested:
+
+### ✅ Completed Components
+
+1. **Decision Types & Interfaces** - All schemas defined with Zod as source of truth
+   - `DecisionTypes.ts` - Complete with `action_ref`, `expires_at_epoch`, `PolicyEvaluationResult` fixes
+   - `DecisionTriggerTypes.ts` - Trigger types and evaluation logic
+   - `LedgerTypes.ts` - Phase 3 events added
+
+2. **Decision Engine (LLM-Assisted, Bounded)**
+   - ✅ Decision Context Assembler - Bounded context assembly (max 10 graph refs, max 50 signals, depth 2)
+   - ✅ Decision Synthesis Service - Bedrock JSON mode with strict schema enforcement
+
+3. **Policy Gate (Deterministic Control Plane)**
+   - ✅ Action Classification Rules - Risk tiers and default approval rules
+   - ✅ Policy Evaluation Engine - Deterministic policy evaluation (code-only)
+
+4. **Human Decision Surface (API)**
+   - ✅ Decision API Handler - POST /decisions/evaluate, GET /accounts/{id}/decisions
+   - ✅ Approval & Edit Flow - POST /actions/{id}/approve, POST /actions/{id}/reject
+   - ✅ Edit Semantics - New intents created with provenance tracking
+
+5. **Ledger, Audit, Explainability**
+   - ✅ Decision Ledger Events - DECISION_PROPOSED, POLICY_EVALUATED, ACTION_APPROVED, ACTION_REJECTED, ACTION_EDITED
+   - ✅ Explainability - Full traceability via trace_id and evidence pointers
+
+6. **Guardrails & Cost Control**
+   - ✅ Decision Cost Budgeting - Daily/monthly limits with atomic consumption
+   - ✅ Uncertainty Handling - Blocking unknowns require human input
+
+7. **Decision Triggering**
+   - ✅ Decision Trigger Service - Cooldown enforcement, event-driven triggers
+   - ✅ Event Handlers - Trigger and evaluation handlers with EventBridge routing
+
+8. **Infrastructure**
+   - ✅ CDK Infrastructure - DynamoDB tables (created in main stack for cross-phase sharing), Lambda functions, EventBridge rules, API Gateway
+   - ✅ **Centralized Configuration** - All hardcoded values moved to `DecisionInfrastructureConfig.ts` for scalability and maintainability
+   - ✅ Graph Service Enhancement - Added `getNeighbors` method for bounded queries
+   - ✅ **Budget Reset Scheduler** - EventBridge scheduled rule with Lambda handler (daily at midnight UTC)
+   - ✅ **API Gateway Authorization** - Cognito authorizer (primary) + API key (fallback) with usage plans
+   - ✅ **VPC Configuration** - Per-function security groups, restricted egress, Neptune IAM conditions (Zero Trust)
+   - ✅ **Bedrock VPC Interface Endpoint** - AWS PrivateLink for Bedrock access (full Zero Trust compliance)
+
+9. **Testing**
+   - ✅ Unit Tests - Comprehensive tests for all services
+   - ✅ Contract Tests - Schema validation, policy determinism, invariants
+
+### Implementation Statistics
+
+- **Total Files Created:** 21 TypeScript files (added budget-reset-handler.ts)
+- **Services:** 7 core services
+- **Handlers:** 4 Lambda handlers (API, trigger, evaluation, budget reset)
+- **Infrastructure:** 1 CDK construct + main stack integration (3 DynamoDB tables in main stack, 4 Lambda functions, EventBridge rules, API Gateway with authorization, centralized configuration)
+- **Tests:** 5 test files (4 unit tests, 1 contract test)
+
+### Key Architectural Decisions Implemented
+
+- ✅ **Bounded Operations:** Max 10 graph refs, max 50 signals, max depth 2
+- ✅ **Deterministic Policy:** Policy evaluation is code-only, no LLM influence
+- ✅ **Fail-Closed Validation:** Zod schemas enforce strict validation
+- ✅ **Multi-Tenant Security:** Tenant/account verification in all lookup operations
+- ✅ **Server-Generated IDs:** No LLM-generated IDs, all IDs server-assigned
+- ✅ **Provenance Tracking:** Immutable proposals, edit links preserve history
+- ✅ **Budget Enforcement:** Daily/monthly limits with atomic consumption
+- ✅ **Zero Trust Security:** Per-function security groups, Cognito API authorization, restricted network access
+- ✅ **Budget Reset Automation:** Scheduled daily reset at midnight UTC with minimal permissions
+- ✅ **Bedrock VPC Interface Endpoint:** Full Zero Trust compliance - All Bedrock traffic via AWS PrivateLink within VPC
+- ✅ **Table Ownership:** Decision tables created in main stack (`CCNativeStack.ts`) for cross-phase sharing, passed as props to `DecisionInfrastructure`
+- ✅ **Centralized Configuration:** All hardcoded values (table names, function names, EventBridge sources, Bedrock models, API Gateway settings, etc.) moved to `DecisionInfrastructureConfig.ts` for scalability
+
+---
+
 ## Next Steps
 
-1. **Design DecisionProposal Schema** - Define TypeScript types and validation
-2. **Design Decision Context Assembler** - Bounded context fetching service
-3. **Design Policy Gate** - Deterministic action classification rules
-4. **Design Human Approval UI** - Seller-facing decision surface
-5. **Design Ledger Events** - Decision audit trail
-6. **Design Cost Budgeting** - Guardrails for LLM usage
+Phase 3 is complete. Next steps:
+
+1. **Deployment** - Deploy Phase 3 infrastructure to AWS
+2. **Integration Testing** - Test with real Bedrock models and production data
+3. **UI Development** - Build seller-facing approval/rejection interface
+4. **Phase 4 Planning** - Design execution layer for approved action intents
 
 ---
 
 ## Related Documents
 
+* `PHASE_3_CODE_LEVEL_PLAN.md` - Detailed code-level implementation plan (✅ Complete)
+* `PHASE_3_CODE_LEVEL_PLAN.md` - Detailed code-level implementation plan (✅ Complete)
 * `WORLD_MODEL_CONTRACT.md` - Truth layer foundation
 * `AGENT_READ_POLICY.md` - Confidence gating and autonomy tiers
 * `PHASE_2_IMPLEMENTATION_PLAN.md` - Situation graph and synthesis (prerequisite)
 * `GRAPH_CONVENTIONS.md` - Graph query patterns and conventions
+
+---

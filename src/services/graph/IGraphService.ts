@@ -12,6 +12,7 @@ export interface Vertex {
   id: string;
   label: string;
   properties: Record<string, any>;
+  depth?: number; // Depth from source vertex (for neighbor queries)
 }
 
 /**
@@ -100,5 +101,17 @@ export interface IGraphService {
   queryVertices(
     query: (g: any) => any,
     options?: QueryOptions
+  ): Promise<Vertex[]>;
+
+  /**
+   * Get neighbors of a vertex (bounded, with depth tracking)
+   * 
+   * Returns vertices reachable from the source vertex up to maxDepth.
+   * Each vertex includes depth information (1 = immediate neighbors, 2 = neighbors of neighbors, etc.)
+   * Bounded: maximum limit results total.
+   */
+  getNeighbors(
+    vertexId: string,
+    options?: { maxDepth?: number; limit?: number }
   ): Promise<Vertex[]>;
 }
