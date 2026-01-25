@@ -129,6 +129,8 @@ if [ "$USER_EXISTS" = "None" ] || [ -z "$USER_EXISTS" ]; then
   CREATE_USER_CMD="aws cognito-idp admin-create-user --user-pool-id \"$USER_POOL_ID\" --username \"$TEST_USERNAME\" --user-attributes \"Name=email,Value=${TEST_USER_EMAIL}\" --temporary-password \"$TEST_PASSWORD\" --message-action SUPPRESS --region \"$REGION\" --no-cli-pager"
   echo "   Command: $CREATE_USER_CMD"
   
+  # Temporarily disable set -e to capture error output
+  set +e
   CREATE_USER_OUTPUT=$(aws cognito-idp admin-create-user \
     --user-pool-id "$USER_POOL_ID" \
     --username "$TEST_USERNAME" \
@@ -138,6 +140,7 @@ if [ "$USER_EXISTS" = "None" ] || [ -z "$USER_EXISTS" ]; then
     --region "$REGION" \
     --no-cli-pager 2>&1)
   CREATE_USER_EXIT=$?
+  set -e
   
   if [ $CREATE_USER_EXIT -ne 0 ]; then
     echo -e "${RED}❌ Failed to create test user${NC}"
@@ -155,6 +158,8 @@ if [ "$USER_EXISTS" = "None" ] || [ -z "$USER_EXISTS" ]; then
   echo "   Setting permanent password..."
   echo "   Command: $SET_PASSWORD_CMD"
   
+  # Temporarily disable set -e to capture error output
+  set +e
   SET_PASSWORD_OUTPUT=$(aws cognito-idp admin-set-user-password \
     --user-pool-id "$USER_POOL_ID" \
     --username "$TEST_USERNAME" \
@@ -163,6 +168,7 @@ if [ "$USER_EXISTS" = "None" ] || [ -z "$USER_EXISTS" ]; then
     --region "$REGION" \
     --no-cli-pager 2>&1)
   SET_PASSWORD_EXIT=$?
+  set -e
   
   if [ $SET_PASSWORD_EXIT -ne 0 ]; then
     echo -e "${YELLOW}⚠️  Failed to set user password${NC}"
