@@ -2,6 +2,7 @@
 # Test Phase 3 Decision API Endpoints
 # Usage: ./scripts/phase_3/test-phase3-api.sh
 
+# Use set -e but allow controlled error handling
 set -e
 
 # Initialize variables for cleanup (will be set later)
@@ -117,27 +118,34 @@ USER_EXISTS=$(aws cognito-idp admin-get-user \
 if [ "$USER_EXISTS" = "None" ] || [ -z "$USER_EXISTS" ]; then
   echo "   Creating test user: ${TEST_USERNAME}..."
   
-  # Create user
-  aws cognito-idp admin-create-user \
+  # Create user (suppress output but check for errors)
+  if ! aws cognito-idp admin-create-user \
     --user-pool-id "$USER_POOL_ID" \
     --username "$TEST_USERNAME" \
     --user-attributes "Name=email,Value=${TEST_USER_EMAIL}" \
     --temporary-password "$TEST_PASSWORD" \
     --message-action SUPPRESS \
     --region "$REGION" \
-    --no-cli-pager > /dev/null 2>&1
+    --no-cli-pager > /dev/null 2>&1; then
+    echo -e "${RED}❌ Failed to create test user${NC}"
+    echo "   Check AWS credentials and Cognito permissions"
+    exit 1
+  fi
   
-  # Set permanent password
-  aws cognito-idp admin-set-user-password \
+  # Set permanent password (suppress output but check for errors)
+  if ! aws cognito-idp admin-set-user-password \
     --user-pool-id "$USER_POOL_ID" \
     --username "$TEST_USERNAME" \
     --password "$TEST_PASSWORD" \
     --permanent \
     --region "$REGION" \
-    --no-cli-pager > /dev/null 2>&1
+    --no-cli-pager > /dev/null 2>&1; then
+    echo -e "${RED}❌ Failed to set user password${NC}"
+    echo "   Attempting to continue anyway..."
+  fi
   
   echo -e "${GREEN}✅ Test user created${NC}"
-  sleep 1  # Brief delay to ensure user is fully created
+  sleep 2  # Delay to ensure user is fully created and password is set
 else
   echo "   Test user already exists: ${TEST_USERNAME}"
   
@@ -149,6 +157,8 @@ else
     --permanent \
     --region "$REGION" \
     --no-cli-pager > /dev/null 2>&1 || true
+  
+  sleep 1  # Brief delay after password update
 fi
 
 echo "   Authenticating with Cognito..."
@@ -158,47 +168,50 @@ MAX_RETRIES=3
 RETRY_DELAY=2
 
 for i in $(seq 1 $MAX_RETRIES); do
-  COGNITO_TOKEN=$(aws cognito-idp initiate-auth \
+  AUTH_OUTPUT=$(aws cognito-idp initiate-auth \
     --auth-flow USER_PASSWORD_AUTH \
     --client-id "$USER_POOL_CLIENT_ID" \
     --auth-parameters "USERNAME=${TEST_USERNAME},PASSWORD=${TEST_PASSWORD}" \
     --region "$REGION" \
-    --query 'AuthenticationResult.IdToken' \
-    --output text \
-    --no-cli-pager 2>/dev/null || echo "")
+    --no-cli-pager 2>&1)
   
-  if [ -n "$COGNITO_TOKEN" ] && [ "$COGNITO_TOKEN" != "None" ]; then
+  COGNITO_TOKEN=$(echo "$AUTH_OUTPUT" | jq -r '.AuthenticationResult.IdToken // empty' 2>/dev/null || echo "")
+  
+  if [ -n "$COGNITO_TOKEN" ] && [ "$COGNITO_TOKEN" != "None" ] && [ "$COGNITO_TOKEN" != "null" ]; then
     break
   fi
   
   if [ $i -lt $MAX_RETRIES ]; then
     echo "   Authentication attempt $i failed, retrying in ${RETRY_DELAY}s..."
+    echo "   Error: $(echo "$AUTH_OUTPUT" | jq -r '.__type // .message // "Unknown error"' 2>/dev/null || echo "Check AWS credentials")"
     sleep $RETRY_DELAY
+  else
+    # Show full error on last attempt
+    echo "   Final attempt failed. Full error:"
+    echo "$AUTH_OUTPUT" | jq '.' 2>/dev/null || echo "$AUTH_OUTPUT"
   fi
 done
 
-if [ -z "$COGNITO_TOKEN" ] || [ "$COGNITO_TOKEN" = "None" ]; then
+if [ -z "$COGNITO_TOKEN" ] || [ "$COGNITO_TOKEN" = "None" ] || [ "$COGNITO_TOKEN" = "null" ]; then
   echo -e "${RED}❌ Failed to authenticate with Cognito after ${MAX_RETRIES} attempts${NC}"
-  echo "   This may be due to:"
-  echo "   - Cognito client not allowing USER_PASSWORD_AUTH flow"
-  echo "   - User password not set correctly"
-  echo "   - Network/transient AWS service issues"
   echo ""
-  echo "   You can manually create the user:"
-  echo "   aws cognito-idp admin-create-user \\"
-  echo "     --user-pool-id ${USER_POOL_ID} \\"
-  echo "     --username ${TEST_USERNAME} \\"
-  echo "     --user-attributes Name=email,Value=${TEST_USER_EMAIL} \\"
-  echo "     --temporary-password 'YourPassword123!' \\"
-  echo "     --message-action SUPPRESS \\"
+  echo "   Common causes:"
+  echo "   1. Cognito client doesn't allow USER_PASSWORD_AUTH flow"
+  echo "      Fix: Update Cognito app client to allow USER_PASSWORD_AUTH"
+  echo ""
+  echo "   2. User password not set correctly"
+  echo "      The script sets the password, but there may be a delay"
+  echo ""
+  echo "   3. AWS credentials/permissions issue"
+  echo "      Check: aws sts get-caller-identity"
+  echo ""
+  echo "   To debug, try manual authentication:"
+  echo "   aws cognito-idp initiate-auth \\"
+  echo "     --auth-flow USER_PASSWORD_AUTH \\"
+  echo "     --client-id ${USER_POOL_CLIENT_ID} \\"
+  echo "     --auth-parameters USERNAME=${TEST_USERNAME},PASSWORD='${TEST_PASSWORD}' \\"
   echo "     --region ${REGION}"
   echo ""
-  echo "   aws cognito-idp admin-set-user-password \\"
-  echo "     --user-pool-id ${USER_POOL_ID} \\"
-  echo "     --username ${TEST_USERNAME} \\"
-  echo "     --password 'YourPassword123!' \\"
-  echo "     --permanent \\"
-  echo "     --region ${REGION}"
   exit 1
 fi
 
