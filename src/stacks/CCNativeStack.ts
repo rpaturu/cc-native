@@ -535,12 +535,17 @@ export class CCNativeStack extends cdk.Stack {
     });
 
     // User Pool Client
+    // ✅ Zero Trust: Enable multiple auth flows for flexibility
+    // - userPassword: For direct username/password auth (testing, service-to-service)
+    // - userSrp: For SRP-based auth (web apps, more secure)
+    // - adminUserPassword: For admin-initiated auth (testing, automation)
     this.userPoolClient = this.userPool.addClient('WebClient', {
       userPoolClientName: 'cc-native-web-client',
       generateSecret: false, // Public client for web apps
       authFlows: {
-        userPassword: true,
-        userSrp: true,
+        userPassword: true, // Enable USER_PASSWORD_AUTH for testing and service-to-service
+        userSrp: true, // Enable SRP for web applications
+        adminUserPassword: true, // Enable ADMIN_USER_PASSWORD_AUTH for admin operations
       },
       preventUserExistenceErrors: true,
     });

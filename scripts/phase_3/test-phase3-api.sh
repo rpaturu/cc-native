@@ -10,11 +10,13 @@ TEST_USERNAME=""
 USER_POOL_ID=""
 REGION=""
 
-# Cleanup function to remove test user
+# ✅ Zero Trust: Cleanup function - always remove test user and temp files
 cleanup_test_user() {
   if [ -n "$TEST_USERNAME" ] && [ -n "$USER_POOL_ID" ] && [ -n "$REGION" ]; then
     echo ""
-    echo "🧹 Cleaning up test user..."
+    echo "🧹 Cleaning up test user and temporary files..."
+    
+    # Remove test user (zero trust: no persistent test identities)
     aws cognito-idp admin-delete-user \
       --user-pool-id "$USER_POOL_ID" \
       --username "$TEST_USERNAME" \
@@ -26,6 +28,9 @@ cleanup_test_user() {
     else
       echo -e "${YELLOW}⚠️  Could not remove test user (may not exist or already deleted)${NC}"
     fi
+    
+    # Clean up any temporary auth parameter files (zero trust: no credential leakage)
+    rm -f /tmp/auth_params_* 2>/dev/null
   fi
 }
 
@@ -87,13 +92,13 @@ if [ -z "$DECISION_API_KEY" ]; then
   exit 1
 fi
 
-# Automatically create test user if needed
-# Use secure defaults, but allow override via environment variables
-TEST_USERNAME="${TEST_USERNAME:-test-user}"
-TEST_USER_EMAIL="${TEST_USER_EMAIL:-test-user@cc-native.local}"
+# ✅ Zero Trust: Generate unique test user per run (no persistent test users)
+# This ensures no leftover test users and follows zero trust principle of minimal persistent identities
+TEST_USERNAME="${TEST_USERNAME:-test-user-$(date +%s)-$$}"
+TEST_USER_EMAIL="${TEST_USER_EMAIL:-${TEST_USERNAME}@cc-native.local}"
 
 # Password handling: prefer environment variable, fallback to secure default
-# For production use, set TEST_PASSWORD via environment variable
+# ✅ Zero Trust: Generate random password (no hardcoded credentials)
 if [ -z "$TEST_PASSWORD" ]; then
   # Generate a random password for test user (more secure than hardcoded)
   # Use date + random number for portability (works on all systems)
@@ -162,20 +167,44 @@ else
 fi
 
 echo "   Authenticating with Cognito..."
+# ✅ Zero Trust: Use secure credential handling (avoid password in process list)
+# Create temporary auth parameters file
+AUTH_PARAMS_FILE=$(mktemp /tmp/auth_params_XXXXXX)
+echo "USERNAME=${TEST_USERNAME}" > "$AUTH_PARAMS_FILE"
+echo "PASSWORD=${TEST_PASSWORD}" >> "$AUTH_PARAMS_FILE"
+chmod 600 "$AUTH_PARAMS_FILE" # Restrict file permissions
+
 # Retry logic for transient authentication failures
 COGNITO_TOKEN=""
 MAX_RETRIES=3
 RETRY_DELAY=2
 
 for i in $(seq 1 $MAX_RETRIES); do
+  # Try USER_PASSWORD_AUTH first (standard flow)
   AUTH_OUTPUT=$(aws cognito-idp initiate-auth \
     --auth-flow USER_PASSWORD_AUTH \
     --client-id "$USER_POOL_CLIENT_ID" \
-    --auth-parameters "USERNAME=${TEST_USERNAME},PASSWORD=${TEST_PASSWORD}" \
+    --auth-parameters file://"$AUTH_PARAMS_FILE" \
     --region "$REGION" \
     --no-cli-pager 2>&1)
   
   COGNITO_TOKEN=$(echo "$AUTH_OUTPUT" | jq -r '.AuthenticationResult.IdToken // empty' 2>/dev/null || echo "")
+  
+  # If USER_PASSWORD_AUTH fails, try ADMIN_USER_PASSWORD_AUTH (doesn't require client config)
+  if [ -z "$COGNITO_TOKEN" ] || [ "$COGNITO_TOKEN" = "None" ] || [ "$COGNITO_TOKEN" = "null" ]; then
+    if [ $i -eq 1 ]; then
+      echo "   USER_PASSWORD_AUTH not available, trying ADMIN_USER_PASSWORD_AUTH..."
+    fi
+    AUTH_OUTPUT=$(aws cognito-idp admin-initiate-auth \
+      --user-pool-id "$USER_POOL_ID" \
+      --client-id "$USER_POOL_CLIENT_ID" \
+      --auth-flow ADMIN_USER_PASSWORD_AUTH \
+      --auth-parameters file://"$AUTH_PARAMS_FILE" \
+      --region "$REGION" \
+      --no-cli-pager 2>&1)
+    
+    COGNITO_TOKEN=$(echo "$AUTH_OUTPUT" | jq -r '.AuthenticationResult.IdToken // empty' 2>/dev/null || echo "")
+  fi
   
   if [ -n "$COGNITO_TOKEN" ] && [ "$COGNITO_TOKEN" != "None" ] && [ "$COGNITO_TOKEN" != "null" ]; then
     break
@@ -191,6 +220,9 @@ for i in $(seq 1 $MAX_RETRIES); do
     echo "$AUTH_OUTPUT" | jq '.' 2>/dev/null || echo "$AUTH_OUTPUT"
   fi
 done
+
+# ✅ Zero Trust: Clean up temporary auth file immediately after use
+rm -f "$AUTH_PARAMS_FILE" 2>/dev/null
 
 if [ -z "$COGNITO_TOKEN" ] || [ "$COGNITO_TOKEN" = "None" ] || [ "$COGNITO_TOKEN" = "null" ]; then
   echo -e "${RED}❌ Failed to authenticate with Cognito after ${MAX_RETRIES} attempts${NC}"
