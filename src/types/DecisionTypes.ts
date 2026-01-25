@@ -65,7 +65,11 @@ export type DecisionType = z.infer<typeof DecisionTypeEnum>;
  * Common helpers
  */
 const NonEmptyString = z.string().min(1);
-const ReasonCode = z
+/**
+ * ReasonCodeSchema
+ * Normalized reason code string (bounded length for consistency).
+ */
+const ReasonCodeSchema = z
   .string()
   .min(1)
   // Encourage normalized reason codes; keep permissive to avoid over-tight coupling.
@@ -75,11 +79,19 @@ const ReasonCode = z
   //   "SUPPORT_RISK_EMERGING"
   .max(256);
 
-const UnknownItem = z
+/**
+ * UnknownItemSchema
+ * Unknown identifier string (bounded length).
+ */
+const UnknownItemSchema = z
   .string()
   .min(1)
   // Examples: "renewal_date_unknown", "primary_contact_missing"
   .max(128);
+
+// Type aliases for consistency (derive from Zod schemas)
+export type ReasonCode = z.infer<typeof ReasonCodeSchema>;
+export type UnknownItem = z.infer<typeof UnknownItemSchema>;
 
 /**
  * EntityType
@@ -110,7 +122,7 @@ export const ActionProposalV1Schema = z
     action_type: ActionTypeV1Enum,
 
     // "why" must be structured (array of reason strings), not a blob of prose.
-    why: z.array(ReasonCode).min(1).max(20),
+    why: z.array(ReasonCodeSchema).min(1).max(20),
 
     // LLM self-assessed certainty, bounded [0,1].
     confidence: z.number().min(0).max(1),
@@ -124,7 +136,7 @@ export const ActionProposalV1Schema = z
 
     // If present and non-empty, decision flow should ask one minimal human question
     // (per Phase 3 uncertainty handling) and avoid proceeding silently.
-    blocking_unknowns: z.array(UnknownItem).max(20).default([]),
+    blocking_unknowns: z.array(UnknownItemSchema).max(20).default([]),
 
     // Action-specific parameters (e.g., meeting date, opportunity stage, account fields)
     // Include schema version for forward compatibility.
@@ -157,13 +169,18 @@ export type DecisionActionProposalV1 = ActionProposalV1;
  * - If decision_type === BLOCKED_BY_UNKNOWNS, then blocking_unknowns must be non-empty and actions must be empty
  * - If decision_type === PROPOSE_ACTIONS, then actions.length >= 1
  */
-export const DecisionProposalBodyV1Schema = z
+/**
+ * DecisionProposalBodyV1BaseSchema
+ * Base schema for decision proposal body (before invariants).
+ * This is the base object schema that can be extended.
+ */
+const DecisionProposalBodyV1BaseSchema = z
   .object({
     decision_type: DecisionTypeEnum,
 
     // Normalized reason codes at decision level (for analytics)
     // Examples: ["RENEWAL_WINDOW_ENTERED", "USAGE_TREND_DOWN", "SUPPORT_RISK_EMERGING"]
-    decision_reason_codes: z.array(ReasonCode).min(0).max(50).default([]),
+    decision_reason_codes: z.array(ReasonCodeSchema).min(0).max(50).default([]),
 
     // Versioning: keep as literal "v1" to fail closed on incompatible changes.
     decision_version: z.literal("v1"),
@@ -179,48 +196,66 @@ export const DecisionProposalBodyV1Schema = z
     confidence: z.number().min(0).max(1).optional(),
 
     // Optional blocking unknowns at decision level (if BLOCKED_BY_UNKNOWNS)
-    blocking_unknowns: z.array(UnknownItem).max(20).optional(),
+    blocking_unknowns: z.array(UnknownItemSchema).max(20).optional(),
   })
-  .strict()
-  .superRefine((data: any, ctx: z.RefinementCtx) => {
-    // Note: 'data' is typed as 'any' because superRefine runs before full type inference
-    // The schema structure ensures type safety at runtime
-    // Invariant 1: NO_ACTION_RECOMMENDED must have empty actions
-    if (data.decision_type === 'NO_ACTION_RECOMMENDED' && data.actions.length > 0) {
+  .strict();
+
+/**
+ * Invariant validation function (shared between body and enriched schemas)
+ * Enforces decision_type constraints:
+ * - NO_ACTION_RECOMMENDED → actions must be empty
+ * - BLOCKED_BY_UNKNOWNS → blocking_unknowns non-empty, actions empty
+ * - PROPOSE_ACTIONS → actions.length >= 1
+ */
+const validateDecisionInvariants = (data: any, ctx: z.RefinementCtx) => {
+  // Invariant 1: NO_ACTION_RECOMMENDED must have empty actions
+  if (data.decision_type === 'NO_ACTION_RECOMMENDED' && data.actions.length > 0) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'NO_ACTION_RECOMMENDED must have empty actions array',
+      path: ['actions'],
+    });
+  }
+
+  // Invariant 2: BLOCKED_BY_UNKNOWNS must have non-empty blocking_unknowns and empty actions
+  if (data.decision_type === 'BLOCKED_BY_UNKNOWNS') {
+    if (!data.blocking_unknowns || data.blocking_unknowns.length === 0) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: 'NO_ACTION_RECOMMENDED must have empty actions array',
+        message: 'BLOCKED_BY_UNKNOWNS must have non-empty blocking_unknowns',
+        path: ['blocking_unknowns'],
+      });
+    }
+    if (data.actions.length > 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'BLOCKED_BY_UNKNOWNS must have empty actions array',
         path: ['actions'],
       });
     }
+  }
 
-    // Invariant 2: BLOCKED_BY_UNKNOWNS must have non-empty blocking_unknowns and empty actions
-    if (data.decision_type === 'BLOCKED_BY_UNKNOWNS') {
-      if (!data.blocking_unknowns || data.blocking_unknowns.length === 0) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: 'BLOCKED_BY_UNKNOWNS must have non-empty blocking_unknowns',
-          path: ['blocking_unknowns'],
-        });
-      }
-      if (data.actions.length > 0) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: 'BLOCKED_BY_UNKNOWNS must have empty actions array',
-          path: ['actions'],
-        });
-      }
-    }
+  // Invariant 3: PROPOSE_ACTIONS must have at least one action
+  if (data.decision_type === 'PROPOSE_ACTIONS' && data.actions.length === 0) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'PROPOSE_ACTIONS must have at least one action',
+      path: ['actions'],
+    });
+  }
+};
 
-    // Invariant 3: PROPOSE_ACTIONS must have at least one action
-    if (data.decision_type === 'PROPOSE_ACTIONS' && data.actions.length === 0) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'PROPOSE_ACTIONS must have at least one action',
-        path: ['actions'],
-      });
-    }
-  });
+/**
+ * DecisionProposalBodyV1
+ * LLM output schema (proposal body only, no IDs).
+ * Server enriches with decision_id, account_id, tenant_id, trace_id post-parse.
+ * 
+ * Schema invariants (enforced via superRefine):
+ * - If decision_type === NO_ACTION_RECOMMENDED, then actions must be empty
+ * - If decision_type === BLOCKED_BY_UNKNOWNS, then blocking_unknowns must be non-empty and actions must be empty
+ * - If decision_type === PROPOSE_ACTIONS, then actions.length >= 1
+ */
+export const DecisionProposalBodyV1Schema = DecisionProposalBodyV1BaseSchema.superRefine(validateDecisionInvariants);
 
 // Define type before using in superRefine (needed for type inference)
 export type DecisionProposalBodyV1 = z.infer<typeof DecisionProposalBodyV1Schema>;
@@ -235,13 +270,13 @@ export type DecisionProposalBodyV1 = z.infer<typeof DecisionProposalBodyV1Schema
 export interface DecisionProposalV1 {
   // From DecisionProposalBodyV1 (LLM output)
   decision_type: DecisionType;
-  decision_reason_codes: string[];
+  decision_reason_codes: ReasonCode[]; // Use Zod-inferred type for consistency
   decision_version: 'v1';
   schema_version: 'v1';
   summary: string;
   actions: ActionProposalV1[];
   confidence?: number;
-  blocking_unknowns?: string[];
+  blocking_unknowns?: UnknownItem[]; // Use Zod-inferred type for consistency
   
   // Server-enriched fields (always present after enrichment)
   decision_id: string; // Server-assigned (not from LLM)
@@ -258,15 +293,18 @@ export interface DecisionProposalV1 {
  * DecisionProposalV1Schema (for validation of enriched proposals)
  * Used for runtime validation of complete proposals after server enrichment.
  * All fields are required (server always enriches with IDs, timestamps, fingerprint).
+ * 
+ * Note: We extend the base schema (before superRefine) to add server-enriched fields,
+ * then apply the same invariants.
  */
-export const DecisionProposalV1Schema: z.ZodType<DecisionProposalV1> = DecisionProposalBodyV1Schema.extend({
+export const DecisionProposalV1Schema = DecisionProposalBodyV1BaseSchema.extend({
   decision_id: NonEmptyString,
   account_id: NonEmptyString,
   tenant_id: NonEmptyString,
   trace_id: NonEmptyString,
   created_at: z.string().datetime(),
   proposal_fingerprint: NonEmptyString, // SHA256 hash for determinism testing
-});
+}).superRefine(validateDecisionInvariants) as z.ZodType<DecisionProposalV1>;
 
 /**
  * Safe parse helper (non-throwing)
@@ -344,7 +382,7 @@ export const ExampleDecisionProposalV1: DecisionProposalV1 = {
         "SUPPORT_RISK_EMERGING",
       ],
       confidence: 0.84,
-      risk_level: "MEDIUM",
+      risk_level: "HIGH", // Outreach actions are HIGH risk per ACTION_TYPE_RISK_TIERS
       llm_suggests_human_review: true,
       blocking_unknowns: [],
       parameters: {
@@ -367,9 +405,8 @@ export const ExampleDecisionProposalV1: DecisionProposalV1 = {
 // These are used internally and don't require runtime validation.
 // ============================================================================
 
-import { LifecycleState } from './SignalTypes';
+import { LifecycleState, Signal } from './SignalTypes';
 import { AccountPostureStateV1, RiskFactorV1, OpportunityV1, UnknownV1 } from './PostureTypes';
-import { Signal } from './SignalTypes';
 
 /**
  * GraphContextRef
