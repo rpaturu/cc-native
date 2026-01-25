@@ -69,8 +69,9 @@
 **Purpose:** Define canonical decision types, action types, and decision contracts
 
 **Validation Approach:**
-* **Zod schemas are the source of truth** for `DecisionProposalV1` and `DecisionActionProposalV1`
-* **TypeScript types derive from Zod**: `export type DecisionProposalV1 = z.infer<typeof DecisionProposalV1Schema>`
+* **Zod schemas are the source of truth** for `DecisionProposalBodyV1` (LLM output) and `ActionProposalV1`
+* **TypeScript types derive from Zod**: `export type ActionProposalV1 = z.infer<typeof ActionProposalV1Schema>`
+* **Clear split**: `DecisionProposalBodyV1` (LLM output, no IDs) vs `DecisionProposalV1` (enriched with server-assigned IDs)
 * This prevents schema/type drift and ensures validated objects are usable
 * TypeScript interfaces for internal types (`DecisionContextV1`, `ActionIntentV1`, etc.) - no runtime validation needed
 
@@ -78,8 +79,9 @@
 
 ```typescript
 // Zod Schemas (for LLM output validation)
-export const DecisionProposalV1Schema = z.object({...});
-export const DecisionActionProposalV1Schema = z.object({...});
+export const DecisionProposalBodyV1Schema = z.object({...}); // LLM output (no IDs)
+export const ActionProposalV1Schema = z.object({...}); // Action proposal (consolidated naming)
+export const DecisionProposalV1Schema = DecisionProposalBodyV1Schema.extend({...}); // Enriched (with IDs)
 export const ActionTypeV1Enum = z.enum([...]);
 export const DecisionTypeEnum = z.enum([
   "PROPOSE_ACTIONS",
@@ -141,16 +143,18 @@ export enum DecisionType {
   BLOCKED_BY_UNKNOWNS = 'BLOCKED_BY_UNKNOWNS'
 }
 
-export interface ActionProposal {
+export interface ActionProposalV1 {
   action_intent_id: string;
   action_type: ActionTypeV1;
   why: string[]; // Human-readable reasons
   confidence: number; // [0.0, 1.0]
-  risk_level: 'LOW' | 'MEDIUM' | 'HIGH';
-  requires_human: boolean;
+  risk_level: 'MINIMAL' | 'LOW' | 'MEDIUM' | 'HIGH';
+  llm_suggests_human_review: boolean; // Advisory (policy gate is authoritative)
   blocking_unknowns: string[];
   parameters: Record<string, any>; // Action-specific parameters
-  target_entity: string; // Entity ID (account, contact, opportunity)
+  parameters_schema_version?: string; // For forward compatibility
+  target: { entity_type: 'ACCOUNT' | 'CONTACT' | 'OPPORTUNITY' | 'DEAL' | 'ENGAGEMENT', entity_id: string }; // Structured target
+  proposed_rank?: number; // Optional LLM-suggested ranking
 }
 
 // Action Type Registry
@@ -179,8 +183,9 @@ export enum ActionTypeV1 {
 export interface ActionIntentV1 {
   action_intent_id: string;
   action_type: ActionTypeV1;
-  target_entity: string;
+  target: { entity_type: 'ACCOUNT' | 'CONTACT' | 'OPPORTUNITY' | 'DEAL' | 'ENGAGEMENT', entity_id: string };
   parameters: Record<string, any>;
+  parameters_schema_version?: string;
   approved_by: string; // User ID
   approval_timestamp: string; // ISO timestamp
   execution_policy: ExecutionPolicy;
@@ -279,15 +284,23 @@ export const ACTION_TYPE_RISK_TIERS: Record<ActionTypeV1, {
 ```
 
 **Acceptance Criteria:**
-* Zod schemas are defined for `DecisionProposalV1` and `DecisionActionProposalV1` (LLM output validation)
+* Zod schemas are defined for `DecisionProposalBodyV1` (LLM output) and `ActionProposalV1`
+* `DecisionProposalV1` is the enriched type (extends body + server-assigned IDs)
 * TypeScript interfaces are defined for internal types (`DecisionContextV1`, `ActionIntentV1`, etc.)
 * ActionTypeV1 enum is complete and locked
 * Risk tiers are assigned per action type
 * `DecisionTypeEnum` includes all three types: `PROPOSE_ACTIONS`, `NO_ACTION_RECOMMENDED`, `BLOCKED_BY_UNKNOWNS`
-* `decision_reason_codes` is included at decision level
-* `parameters` and `target_entity` are included in action proposals
+* Zod `.superRefine()` enforces invariants:
+  * NO_ACTION_RECOMMENDED → actions empty
+  * BLOCKED_BY_UNKNOWNS → blocking_unknowns non-empty, actions empty
+  * PROPOSE_ACTIONS → actions.length >= 1
+* `decision_reason_codes` is included at decision level (max 50)
+* `target` is structured (`{entity_type, entity_id}`) not ambiguous string
+* `parameters_schema_version` included for forward compatibility
+* `llm_suggests_human_review` is advisory (policy gate is authoritative)
 * `proposed_rank` is optional (for UI/policy re-ranking)
-* Schema versioning (`decision_version: 'v1'`) included
+* Schema versioning (`decision_version: 'v1'`, `schema_version: 'v1'`) included
+* `proposal_fingerprint` included for determinism testing and duplicate detection
 * Zod dependency added to `package.json`
 
 ---
@@ -762,7 +775,7 @@ interface DecisionBudget {
 **Key Methods:**
 
 ```typescript
-import { DecisionProposalBodyV1Schema, DecisionProposalV1 } from '../../types/DecisionTypes';
+import { DecisionProposalBodyV1Schema, DecisionProposalV1, generateProposalFingerprint } from '../../types/DecisionTypes';
 
 export class DecisionSynthesisService {
   constructor(
@@ -818,6 +831,9 @@ export class DecisionSynthesisService {
     // Validate LLM output (proposal body only, no IDs)
     const proposalBody = DecisionProposalBodyV1Schema.parse(responseBody);
     
+    // Generate proposal fingerprint for determinism testing and duplicate detection
+    const fingerprint = generateProposalFingerprint(proposalBody);
+    
     // Enrich with server-assigned IDs and metadata
     const proposal: DecisionProposalV1 = {
       ...proposalBody,
@@ -825,7 +841,8 @@ export class DecisionSynthesisService {
       account_id: context.account_id,
       tenant_id: context.tenant_id,
       trace_id: context.trace_id,
-      created_at: new Date().toISOString()
+      created_at: new Date().toISOString(),
+      proposal_fingerprint: fingerprint
     };
     
     return proposal;
@@ -872,7 +889,7 @@ Output a DecisionProposalV1 with:
 - decision_type: PROPOSE_ACTIONS, NO_ACTION_RECOMMENDED, or BLOCKED_BY_UNKNOWNS
 - decision_reason_codes: Normalized reason codes (e.g., RENEWAL_WINDOW_ENTERED, USAGE_TREND_DOWN)
 - actions: Array of action proposals (if PROPOSE_ACTIONS)
-- Each action must include: action_type, why[], confidence, risk_level, requires_human, parameters
+- Each action must include: action_type, why[], confidence, risk_level, llm_suggests_human_review, parameters, target
 
 If no action is appropriate, set decision_type to NO_ACTION_RECOMMENDED.
 If blocking unknowns prevent decision, set decision_type to BLOCKED_BY_UNKNOWNS.`;
@@ -913,17 +930,25 @@ You must output valid DecisionProposalV1 JSON schema.`;
           type: 'array',
           items: {
             type: 'object',
-            required: ['action_intent_id', 'action_type', 'why', 'confidence', 'risk_level', 'requires_human'],
+            required: ['action_intent_id', 'action_type', 'why', 'confidence', 'risk_level', 'llm_suggests_human_review', 'target'],
             properties: {
               action_intent_id: { type: 'string' },
               action_type: { type: 'string', enum: Object.values(ActionTypeV1) },
               why: { type: 'array', items: { type: 'string' } },
               confidence: { type: 'number', minimum: 0, maximum: 1 },
               risk_level: { type: 'string', enum: ['MINIMAL', 'LOW', 'MEDIUM', 'HIGH'] },
-              requires_human: { type: 'boolean' },
+              llm_suggests_human_review: { type: 'boolean' },
               blocking_unknowns: { type: 'array', items: { type: 'string' } },
               parameters: { type: 'object' },
-              target_entity: { type: 'string' }
+              parameters_schema_version: { type: 'string' },
+              target: {
+                type: 'object',
+                required: ['entity_type', 'entity_id'],
+                properties: {
+                  entity_type: { type: 'string', enum: ['ACCOUNT', 'CONTACT', 'OPPORTUNITY', 'DEAL', 'ENGAGEMENT'] },
+                  entity_id: { type: 'string' }
+                }
+              }
             }
           }
         },
@@ -983,7 +1008,7 @@ export class PolicyGateService {
    * Evaluation order: 1) Unknown action type, 2) Blocking unknowns, 3) Tier rules
    */
   async evaluateAction(
-    proposal: DecisionActionProposalV1,
+    proposal: ActionProposalV1,
     policyContext: PolicyContext
   ): Promise<PolicyEvaluationResult> {
     // Step 1: Check for unknown action type (block immediately)
@@ -998,7 +1023,7 @@ export class PolicyGateService {
         approval_required: false,
         needs_human_input: false,
         blocked_reason: 'UNKNOWN_ACTION_TYPE',
-        llm_requires_human: proposal.requires_human
+        llm_requires_human: proposal.llm_suggests_human_review
       };
     }
     
@@ -1014,7 +1039,7 @@ export class PolicyGateService {
         approval_required: false,
         needs_human_input: true, // Blocking unknowns require human question/input
         blocked_reason: 'BLOCKING_UNKNOWNS_PRESENT',
-        llm_requires_human: proposal.requires_human
+        llm_requires_human: proposal.llm_suggests_human_review
       };
     }
     
@@ -1144,7 +1169,7 @@ export class ActionIntentService {
    * Create action intent from approved proposal
    */
   async createIntent(
-    proposal: DecisionActionProposalV1,
+    proposal: ActionProposalV1,
     decisionId: string, // This is proposal.decision_id
     approvedBy: string,
     tenantId: string,
@@ -1155,8 +1180,9 @@ export class ActionIntentService {
     const intent: ActionIntentV1 = {
       action_intent_id: proposal.action_intent_id,
       action_type: proposal.action_type,
-      target_entity: proposal.target_entity,
+      target: proposal.target,
       parameters: proposal.parameters,
+      parameters_schema_version: proposal.parameters_schema_version,
       approved_by: approvedBy,
       approval_timestamp: new Date().toISOString(),
       execution_policy: {
@@ -1199,7 +1225,7 @@ export class ActionIntentService {
     }
     
     // Validate editable fields
-    const editableFields = ['parameters', 'target_entity', 'expires_at'];
+    const editableFields = ['parameters', 'target', 'expires_at'];
     const editedFields: string[] = [];
     
     for (const field of editableFields) {
