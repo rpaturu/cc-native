@@ -129,6 +129,11 @@ LLMs never bypass policy, humans, or audit.
   "decision_id": "...",
   "account_id": "...",
   "decision_type": "PROPOSE_ACTIONS",
+  "decision_reason_codes": [
+    "RENEWAL_WINDOW_ENTERED",
+    "USAGE_TREND_DOWN",
+    "SUPPORT_RISK_EMERGING"
+  ],
   "actions": [
     {
       "action_intent_id": "...",
@@ -148,6 +153,20 @@ LLMs never bypass policy, humans, or audit.
   "decision_version": "v1"
 }
 ```
+
+**Note:** `decision_type` can be:
+* `PROPOSE_ACTIONS` - One or more actions recommended
+* `NO_ACTION_RECOMMENDED` - Valid outcome when inaction is the correct judgment
+* `BLOCKED_BY_UNKNOWNS` - Cannot propose due to blocking unknowns
+
+**Fields:**
+* `decision_id` - Unique decision identifier
+* `account_id` - Target account
+* `decision_type` - Type of decision outcome
+* `decision_reason_codes[]` - Normalized reason codes at decision level (for analytics)
+* `actions[]` - Array of proposed actions (empty if `NO_ACTION_RECOMMENDED`)
+* `summary` - Human-readable summary
+* `decision_version` - Schema version
 
 ---
 
@@ -342,12 +361,20 @@ enum ActionTypeV1 {
 * Single Decision Service (Lambda/ECS)
 * Call Bedrock model with strict schema output
 * Enforce `DecisionProposalV1` schema (fail-closed)
+* Support `NO_ACTION_RECOMMENDED` as valid outcome
+
+**Decision Outcomes:**
+* `PROPOSE_ACTIONS` - One or more actions recommended
+* `NO_ACTION_RECOMMENDED` - Valid outcome when inaction is the correct judgment (e.g., account is healthy, no intervention needed)
+* `BLOCKED_BY_UNKNOWNS` - Cannot propose due to blocking unknowns (requires human clarification)
 
 **Acceptance Criteria**
 
 * Output always conforms to schema
 * No tool execution from LLM
 * Confidence + rationale always present
+* `NO_ACTION_RECOMMENDED` is a valid, logged decision outcome
+* `decision_reason_codes[]` populated for analytics
 
 ---
 
