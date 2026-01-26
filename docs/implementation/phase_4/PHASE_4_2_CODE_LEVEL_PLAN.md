@@ -275,6 +275,7 @@ const ToolInvocationRequestSchema = z.object({
   tenant_id: z.string().min(1, 'tenant_id is required'),
   account_id: z.string().min(1, 'account_id is required'),
   trace_id: z.string().min(1, 'trace_id is required'),
+  attempt_count: z.number().int().positive().optional(), // Optional for tool_run_ref generation
 }).strict();
 
 export const handler: Handler = async (event: unknown) => {
@@ -283,7 +284,7 @@ export const handler: Handler = async (event: unknown) => {
   if (!validationResult.success) {
     const error = new Error(
       `[ToolInvokerHandler] Invalid Step Functions input: ${validationResult.error.message}. ` +
-      `Expected: { gateway_url: string, tool_name: string, tool_arguments: object, idempotency_key: string, action_intent_id: string, tenant_id: string, account_id: string, trace_id: string }. ` +
+      `Expected: { gateway_url: string, tool_name: string, tool_arguments: object, idempotency_key: string, action_intent_id: string, tenant_id: string, account_id: string, trace_id: string, attempt_count?: number }. ` +
       `Received: ${JSON.stringify(event)}. ` +
       `Check Step Functions state machine definition to ensure all required fields are passed from tool-mapper-handler output.`
     );
@@ -291,14 +292,24 @@ export const handler: Handler = async (event: unknown) => {
     throw error;
   }
   
-  const { gateway_url, tool_name, tool_arguments, idempotency_key, action_intent_id, tenant_id, account_id, trace_id } = validationResult.data;
+  const { gateway_url, tool_name, tool_arguments, idempotency_key, action_intent_id, tenant_id, account_id, trace_id, attempt_count } = validationResult.data;
   
   logger.info('Tool invoker invoked', { action_intent_id, tool_name, trace_id });
   
-  // IMPORTANT: No try-catch wrapper - let ALL errors bubble up to SFN for retry/catch logic
-  // invokeWithRetry throws errors with name='TransientError' or 'PermanentError'
-  // getJwtToken errors will also bubble up (SFN will catch them)
-  // Only tool-level business failures (success:false in response) return normally
+  // IMPORTANT: Error semantics for SFN retry/catch logic
+  // 
+  // THROW (for SFN retry/catch):
+  // - Infrastructure errors: network failures, timeouts, 5xx responses
+  // - Auth errors: JWT token retrieval failures, 401/403 responses
+  // - These throw TransientError (retryable) or PermanentError (non-retryable)
+  // - SFN will retry on TransientError and catch PermanentError
+  //
+  // RETURN success:false (for business logic):
+  // - Tool ran successfully but reported a structured business failure
+  // - Gateway returned HTTP 200 with success:false in response payload
+  // - These proceed to RecordOutcome without SFN retry
+  //
+  // No try-catch wrapper - let ALL infrastructure/auth errors bubble up to SFN
   
   // 1. Get JWT token for Gateway authentication (Cognito)
   // This is done here (not in ToolMapper) to keep mapping deterministic and auth logic near HTTP caller
@@ -316,7 +327,10 @@ export const handler: Handler = async (event: unknown) => {
     },
   };
   
-  const toolRunRef = `gateway_invocation_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+  // Generate stable, traceable tool_run_ref for audit joins
+  // Format: toolrun/{execution_trace_id}/{attempt_count}/{tool_name}
+  // This allows correlating tool invocations with execution attempts and traces
+  const toolRunRef = `toolrun/${trace_id}/${attempt_count || 1}/${tool_name}`;
   
   // 3. Call Gateway with retry logic
   // invokeWithRetry throws errors with name='TransientError' or 'PermanentError' for SFN
@@ -490,6 +504,11 @@ function parseMCPResponse(response: any): any {
  * 
  * @param parsedResponse - Parsed MCP response from Gateway
  * @param toolName - Tool name from input (used for system inference, not from response)
+ * 
+ * Note: Adapter contract should return external_object_refs as an array directly.
+ * This function supports both:
+ * - Direct array: parsedResponse.external_object_refs (preferred)
+ * - Legacy single object: parsedResponse.external_object_id + object_type (for backwards compatibility)
  */
 function extractExternalObjectRefs(
   parsedResponse: any,
@@ -500,36 +519,46 @@ function extractExternalObjectRefs(
     return undefined;
   }
   
-  // If tool succeeded but no external_object_id, that's an error (tool should return it)
-  if (!parsedResponse.external_object_id) {
-    const error = new Error(
-      'Tool invocation response is missing required field: external_object_id. ' +
-      'The connector adapter must return external_object_id in the MCP response when success=true. ' +
-      `Tool: ${toolName}, Response: ${JSON.stringify(parsedResponse)}`
-    );
-    error.name = 'InvalidToolResponseError';
-    throw error;
+  // Preferred: adapter returns external_object_refs array directly
+  if (Array.isArray(parsedResponse.external_object_refs)) {
+    // Validate each ref has required fields
+    const validatedRefs = parsedResponse.external_object_refs.map((ref: any, index: number) => {
+      if (!ref.object_id || !ref.object_type) {
+        throw new Error(
+          `Tool invocation response external_object_refs[${index}] is missing required fields (object_id, object_type). ` +
+          `Tool: ${toolName}, Ref: ${JSON.stringify(ref)}`
+        );
+      }
+      // Infer system from tool_name if not provided
+      return {
+        system: ref.system || inferSystemFromTool(toolName),
+        object_type: ref.object_type,
+        object_id: ref.object_id,
+        object_url: ref.object_url,
+      };
+    });
+    return validatedRefs.length > 0 ? validatedRefs : undefined;
   }
   
-  if (!parsedResponse.object_type) {
-    const error = new Error(
-      'Tool invocation response is missing required field: object_type. ' +
-      'The connector adapter must return object_type in the MCP response when success=true. ' +
-      `Tool: ${toolName}, Response: ${JSON.stringify(parsedResponse)}`
-    );
-    error.name = 'InvalidToolResponseError';
-    throw error;
+  // Legacy: single object format (for backwards compatibility)
+  if (parsedResponse.external_object_id && parsedResponse.object_type) {
+    const system = inferSystemFromTool(toolName);
+    return [{
+      system,
+      object_type: parsedResponse.object_type,
+      object_id: parsedResponse.external_object_id,
+      object_url: parsedResponse.object_url,
+    }];
   }
   
-  // Infer system from input tool_name (not from response, which may not have it)
-  const system = inferSystemFromTool(toolName);
-  
-  return [{
-    system,
-    object_type: parsedResponse.object_type,
-    object_id: parsedResponse.external_object_id,
-    object_url: parsedResponse.object_url,
-  }];
+  // If tool succeeded but no external refs, that's an error (tool should return them)
+  const error = new Error(
+    'Tool invocation response is missing required field: external_object_refs (or legacy external_object_id + object_type). ' +
+    'The connector adapter must return external_object_refs array in the MCP response when success=true. ' +
+    `Tool: ${toolName}, Response: ${JSON.stringify(parsedResponse)}`
+  );
+  error.name = 'InvalidToolResponseError';
+  throw error;
 }
 
 /**
@@ -1406,14 +1435,8 @@ private createToolMapperHandler(
   props.actionIntentTable.grantReadData(handler);
   this.actionTypeRegistryTable.grantReadData(handler);
   
-  // Grant Cognito permissions for JWT token (if userPool provided)
-  if (props.userPool) {
-    handler.addToRolePolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: ['cognito-idp:GetUser', 'cognito-idp:InitiateAuth'],
-      resources: [props.userPool.userPoolArn],
-    }));
-  }
+  // Note: Cognito permissions are NOT granted here - JWT token retrieval is done in ToolInvoker
+  // This keeps ToolMapper "pure mapping + param shaping" and deterministic
   
   return handler;
 }
@@ -1447,6 +1470,16 @@ private createToolInvokerHandler(
   // Grant S3 permissions (for raw response artifacts)
   if (this.executionArtifactsBucket) {
     this.executionArtifactsBucket.grantWrite(handler);
+  }
+  
+  // Grant Cognito permissions for JWT token retrieval (if userPool provided)
+  // Note: JWT token retrieval is done in ToolInvoker (not ToolMapper) to keep mapping deterministic
+  if (props.userPool) {
+    handler.addToRolePolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: ['cognito-idp:GetUser', 'cognito-idp:InitiateAuth'],
+      resources: [props.userPool.userPoolArn],
+    }));
   }
   
   return handler;
@@ -1596,6 +1629,8 @@ private buildStateMachineDefinition(): stepfunctions.IChainable {
   // INVOKE_TOOL (with retry)
   // Note: resultPath wraps ToolInvoker output under tool_invocation_response key
   // This matches execution-recorder-handler input schema
+  // IMPORTANT: tool_name and tool_schema_version from ToolMapper output remain at top level
+  // (resultPath only wraps ToolInvoker output, it doesn't replace the entire state)
   const invokeTool = new stepfunctionsTasks.LambdaInvoke(this, 'InvokeTool', {
     lambdaFunction: this.toolInvokerHandler,
     payloadResponseOnly: true,
@@ -1688,14 +1723,18 @@ private createExecutionTriggerRule(
   });
   
   // Trigger Step Functions with action_intent_id, tenant_id, and account_id
-  // Note: Execution name uses action_intent_id for idempotency (Step Functions enforces uniqueness)
   // Note: tenant_id and account_id are REQUIRED - execution-starter-handler needs them for security validation
+  // Note: Execution name uses action_intent_id for idempotency (Step Functions enforces uniqueness at execution level)
+  // This provides duplicate start protection in addition to DynamoDB attempt lock
   rule.addTarget(new eventsTargets.SfnStateMachine(this.executionStateMachine, {
     input: events.RuleTargetInput.fromObject({
       action_intent_id: events.EventField.fromPath('$.detail.data.action_intent_id'),
       tenant_id: events.EventField.fromPath('$.detail.data.tenant_id'),
       account_id: events.EventField.fromPath('$.detail.data.account_id'),
     }),
+    // Set execution name to action_intent_id for idempotency (Step Functions enforces uniqueness)
+    // If duplicate ACTION_APPROVED event arrives, SFN will reject with ExecutionAlreadyExists
+    executionName: events.EventField.fromPath('$.detail.data.action_intent_id'),
   }));
   
   // Grant Step Functions permission to be invoked by EventBridge
