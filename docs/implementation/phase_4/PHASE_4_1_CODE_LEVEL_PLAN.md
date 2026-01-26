@@ -161,7 +161,10 @@ export interface ExecutionAttempt {
   trace_id: string;
   
   // TTL (for cleanup of stuck RUNNING states)
-  ttl?: number; // started_at + 1 hour (epoch seconds)
+  // Note: TTL deletion can hide forensic evidence of stuck executions.
+  // Operational sweeper/stale execution detector should be added in Phase 4.3+ to
+  // detect and alert on RUNNING items older than expected (even if TTL is set).
+  ttl?: number; // started_at + SFN timeout + buffer (epoch seconds)
 }
 
 /**
@@ -680,6 +683,8 @@ export enum LedgerEventType {
   EXECUTION_STARTED = 'EXECUTION_STARTED',
   ACTION_EXECUTED = 'ACTION_EXECUTED',
   ACTION_FAILED = 'ACTION_FAILED',
+  EXECUTION_CANCELLED = 'EXECUTION_CANCELLED', // Kill switch / manual cancel
+  EXECUTION_EXPIRED = 'EXECUTION_EXPIRED', // Intent expired before execution
   // Note: IDEMPOTENCY_COLLISION_DETECTED will be added in Phase 4.2 when IdempotencyService
   // gets LedgerService injection. For Phase 4.1, collisions are logged as critical errors.
   // IDEMPOTENCY_COLLISION_DETECTED = 'IDEMPOTENCY_COLLISION_DETECTED', // Sev-worthy incident
@@ -2636,6 +2641,8 @@ export enum LedgerEventType {
   EXECUTION_STARTED = 'EXECUTION_STARTED',
   ACTION_EXECUTED = 'ACTION_EXECUTED',
   ACTION_FAILED = 'ACTION_FAILED',
+  EXECUTION_CANCELLED = 'EXECUTION_CANCELLED', // Kill switch / manual cancel
+  EXECUTION_EXPIRED = 'EXECUTION_EXPIRED', // Intent expired before execution
 }
 ```
 
@@ -2701,7 +2708,7 @@ export enum SignalType {
 **⚠️ PREREQUISITES (Must complete before starting Phase 4.1):**
 - [ ] Update `src/types/DecisionTypes.ts` (add `registry_version: number` to ActionIntentV1 interface) - **REQUIRED**
 - [ ] Update `src/services/decision/ActionIntentService.ts` (make getIntent() public) - **REQUIRED**
-- [ ] Update `src/types/LedgerTypes.ts` (add EXECUTION_STARTED, ACTION_EXECUTED, ACTION_FAILED) - **REQUIRED**
+- [ ] Update `src/types/LedgerTypes.ts` (add EXECUTION_STARTED, ACTION_EXECUTED, ACTION_FAILED, EXECUTION_CANCELLED, EXECUTION_EXPIRED) - **REQUIRED**
 - [ ] Update `src/types/SignalTypes.ts` (add ACTION_EXECUTED, ACTION_FAILED + window key + TTL config) - **REQUIRED for Phase 4.4**
 - [ ] Note: `IDEMPOTENCY_COLLISION_DETECTED` ledger event type will be added in Phase 4.2 when IdempotencyService gets LedgerService injection
 
@@ -2786,7 +2793,7 @@ All core components have been implemented:
 2. **Prerequisites Updated**
    - ✅ `ActionIntentV1` - Added `registry_version` field
    - ✅ `ActionIntentService.getIntent()` - Made public
-   - ✅ `LedgerTypes` - Added `EXECUTION_STARTED`, `ACTION_EXECUTED`, `ACTION_FAILED`
+   - ✅ `LedgerTypes` - Added `EXECUTION_STARTED`, `ACTION_EXECUTED`, `ACTION_FAILED`, `EXECUTION_CANCELLED`, `EXECUTION_EXPIRED`
    - ✅ `SignalTypes` - Added `ACTION_EXECUTED`, `ACTION_FAILED` with window key derivation
 
 3. **Execution Services**
