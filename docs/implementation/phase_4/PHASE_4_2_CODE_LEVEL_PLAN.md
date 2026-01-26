@@ -133,7 +133,7 @@ const actionTypeRegistryService = new ActionTypeRegistryService(
  * Step Functions input: { action_intent_id, tenant_id, account_id, idempotency_key, trace_id, registry_version, attempt_count, started_at }
  * (trace_id, registry_version, attempt_count, started_at come from execution-starter-handler output)
  * 
- * Step Functions output: { gateway_url, tool_name, tool_arguments, tool_schema_version, registry_version, idempotency_key, action_intent_id, tenant_id, account_id, trace_id, attempt_count, started_at }
+ * Step Functions output: { gateway_url, tool_name, tool_arguments, tool_schema_version, registry_version, compensation_strategy, idempotency_key, action_intent_id, tenant_id, account_id, trace_id, attempt_count, started_at }
  * 
  * Note: jwt_token is retrieved in ToolInvoker handler (not in ToolMapper) to keep mapping deterministic.
  * 
@@ -207,12 +207,14 @@ export const handler: Handler = async (event: unknown) => {
     // 5. Return for Step Functions (JWT token retrieval moved to ToolInvoker)
     // Note: trace_id is execution_trace_id (from starter handler), not decision_trace_id
     // Note: registry_version, attempt_count, started_at are passed through for execution recorder
+    // Note: compensation_strategy is included for SFN Choice state to determine if compensation is needed
     return {
       gateway_url: gatewayUrl,
       tool_name: toolMapping.tool_name,
       tool_arguments: toolArguments,
       tool_schema_version: toolMapping.tool_schema_version,
       registry_version: registry_version, // Pass through for execution recorder
+      compensation_strategy: toolMapping.compensation_strategy, // For SFN compensation decision
       idempotency_key: idempotency_key,
       action_intent_id,
       tenant_id,
@@ -259,12 +261,42 @@ const traceService = new TraceService(logger);
  * - Only returns ToolInvocationResponse (with success:false) for tool-level business failures
  *   where tool ran but reported an error (proceed to RecordOutcome without SFN retry)
  */
-export const handler: Handler<ToolInvocationRequest, ToolInvocationResponse> = async (event) => {
-  const { gateway_url, tool_name, tool_arguments, idempotency_key, action_intent_id, tenant_id, account_id, trace_id } = event;
+/**
+ * Zod schema for SFN input validation (fail fast with precise errors)
+ */
+import { z } from 'zod';
+
+const ToolInvocationRequestSchema = z.object({
+  gateway_url: z.string().url('gateway_url must be a valid URL'),
+  tool_name: z.string().min(1, 'tool_name is required'),
+  tool_arguments: z.record(z.any(), 'tool_arguments must be an object'),
+  idempotency_key: z.string().min(1, 'idempotency_key is required'),
+  action_intent_id: z.string().min(1, 'action_intent_id is required'),
+  tenant_id: z.string().min(1, 'tenant_id is required'),
+  account_id: z.string().min(1, 'account_id is required'),
+  trace_id: z.string().min(1, 'trace_id is required'),
+}).strict();
+
+export const handler: Handler = async (event: unknown) => {
+  // Validate SFN input with Zod (fail fast with precise errors)
+  const validationResult = ToolInvocationRequestSchema.safeParse(event);
+  if (!validationResult.success) {
+    const error = new Error(
+      `[ToolInvokerHandler] Invalid Step Functions input: ${validationResult.error.message}. ` +
+      `Expected: { gateway_url: string, tool_name: string, tool_arguments: object, idempotency_key: string, action_intent_id: string, tenant_id: string, account_id: string, trace_id: string }. ` +
+      `Received: ${JSON.stringify(event)}. ` +
+      `Check Step Functions state machine definition to ensure all required fields are passed from tool-mapper-handler output.`
+    );
+    error.name = 'ValidationError';
+    throw error;
+  }
+  
+  const { gateway_url, tool_name, tool_arguments, idempotency_key, action_intent_id, tenant_id, account_id, trace_id } = validationResult.data;
   
   logger.info('Tool invoker invoked', { action_intent_id, tool_name, trace_id });
   
-  try {
+  // No try-catch wrapper - let invokeWithRetry errors bubble up to SFN for retry/catch logic
+  // Only tool-level business failures (success:false in response) return normally
     // 1. Get JWT token for Gateway authentication (Cognito)
     // This is done here (not in ToolMapper) to keep mapping deterministic and auth logic near HTTP caller
     const jwtToken = await getJwtToken(tenant_id);
@@ -294,8 +326,8 @@ export const handler: Handler<ToolInvocationRequest, ToolInvocationResponse> = a
     // 3. Parse MCP response
     const parsedResponse = parseMCPResponse(response);
     
-    // 4. Extract external object refs
-    const externalObjectRefs = extractExternalObjectRefs(parsedResponse);
+    // 4. Extract external object refs (use input tool_name for system inference)
+    const externalObjectRefs = extractExternalObjectRefs(parsedResponse, tool_name);
     
     // 5. Check if tool reported a structured failure (tool ran but returned error)
     // In this case, we return success:false but don't throw (proceed to RecordOutcome)
@@ -466,20 +498,25 @@ function parseMCPResponse(response: any): any {
 
 /**
  * Extract external object refs from parsed response
+ * 
+ * @param parsedResponse - Parsed MCP response from Gateway
+ * @param toolName - Tool name from input (used for system inference, not from response)
  */
-function extractExternalObjectRefs(parsedResponse: any): ToolInvocationResponse['external_object_refs'] {
-  if (!parsedResponse.success || !parsedResponse.external_object_id) {
+function extractExternalObjectRefs(
+  parsedResponse: any,
+  toolName: string
+): ToolInvocationResponse['external_object_refs'] {
+  // If tool failed, external refs may not exist (that's fine)
+  if (!parsedResponse.success) {
     return undefined;
   }
   
-  // Infer system from tool name or response
-  const system = inferSystemFromTool(parsedResponse.tool_name);
-  
+  // If tool succeeded but no external_object_id, that's an error (tool should return it)
   if (!parsedResponse.external_object_id) {
     const error = new Error(
       'Tool invocation response is missing required field: external_object_id. ' +
-      'The connector adapter must return external_object_id in the MCP response. ' +
-      `Tool: ${parsedResponse.tool_name || 'unknown'}, Response: ${JSON.stringify(parsedResponse)}`
+      'The connector adapter must return external_object_id in the MCP response when success=true. ' +
+      `Tool: ${toolName}, Response: ${JSON.stringify(parsedResponse)}`
     );
     error.name = 'InvalidToolResponseError';
     throw error;
@@ -488,12 +525,15 @@ function extractExternalObjectRefs(parsedResponse: any): ToolInvocationResponse[
   if (!parsedResponse.object_type) {
     const error = new Error(
       'Tool invocation response is missing required field: object_type. ' +
-      'The connector adapter must return object_type in the MCP response. ' +
-      `Tool: ${parsedResponse.tool_name || 'unknown'}, Response: ${JSON.stringify(parsedResponse)}`
+      'The connector adapter must return object_type in the MCP response when success=true. ' +
+      `Tool: ${toolName}, Response: ${JSON.stringify(parsedResponse)}`
     );
     error.name = 'InvalidToolResponseError';
     throw error;
   }
+  
+  // Infer system from input tool_name (not from response, which may not have it)
+  const system = inferSystemFromTool(toolName);
   
   return [{
     system,
@@ -1629,7 +1669,8 @@ private buildStateMachineDefinition(): stepfunctions.IChainable {
     .when(
       stepfunctions.Condition.and(
         stepfunctions.Condition.booleanEquals('$.tool_invocation_response.success', false),
-        stepfunctions.Condition.isPresent('$.tool_invocation_response.external_object_refs[0]')
+        stepfunctions.Condition.isPresent('$.tool_invocation_response.external_object_refs[0]'),
+        stepfunctions.Condition.stringEquals('$.compensation_strategy', 'AUTOMATIC')
       ),
       compensateAction.next(recordOutcome)
     )
@@ -1797,6 +1838,10 @@ private createExecutionTriggerRule(
               {
                 "Variable": "$.tool_invocation_response.external_object_refs[0]",
                 "IsPresent": true
+              },
+              {
+                "Variable": "$.compensation_strategy",
+                "StringEquals": "AUTOMATIC"
               }
             ],
             "Next": "CompensateAction"
@@ -1834,6 +1879,7 @@ private createExecutionTriggerRule(
           "tool_name": "$.tool_name",
           "tool_schema_version": "$.tool_schema_version",
           "registry_version": "$.registry_version",
+          "compensation_strategy": "$.compensation_strategy",
           "attempt_count": "$.attempt_count",
           "started_at": "$.started_at",
           "action_intent_id": "$.action_intent_id",
