@@ -20,13 +20,18 @@ export class ExecutionAttemptService {
    * 
    * Model A: ExecutionLock - one item per intent
    * - Creates lock if not exists (first attempt)
-   * - Allows re-run if status is terminal (SUCCEEDED, FAILED, CANCELLED)
+   * - Allows re-run if status is terminal (SUCCEEDED, FAILED, CANCELLED) AND allow_rerun=true
    * - Throws if status is RUNNING (already executing)
    * 
    * IMPORTANT: Reruns (terminal → RUNNING) are admin-only / explicitly initiated,
    * NOT automatic SFN retries. Step Functions retries only occur for RUNNING → RUNNING
    * transitions (not terminal → RUNNING). This prevents accidental double-writes from
    * treating reruns as normal retry semantics.
+   * 
+   * The `allow_rerun` flag provides explicit gating:
+   * - Normal execution path (from EventBridge) always calls with allow_rerun=false
+   * - Admin/manual rerun path explicitly sets allow_rerun=true
+   * - This prevents accidental reruns from duplicate events or conditional logic changes
    * 
    * Uses conditional write to prevent race conditions.
    */
@@ -36,7 +41,8 @@ export class ExecutionAttemptService {
     accountId: string,
     traceId: string,
     idempotencyKey: string,
-    stateMachineTimeoutSeconds?: number // Optional: SFN timeout in seconds (from config)
+    stateMachineTimeoutSeconds?: number, // Optional: SFN timeout in seconds (from config)
+    allowRerun: boolean = false // Explicit rerun flag (default false - normal execution path)
   ): Promise<ExecutionAttempt> {
     const attemptId = `attempt_${Date.now()}_${Math.random().toString(36).substring(7)}`;
     const now = new Date().toISOString();
@@ -52,15 +58,19 @@ export class ExecutionAttemptService {
     const sk = `EXECUTION#${actionIntentId}`;
     
     // Try to create new lock (if doesn't exist)
-    // Populate GSI attributes for querying by action_intent_id
+    // Populate GSI attributes for querying by action_intent_id and tenant
     const gsi1pk = `ACTION_INTENT#${actionIntentId}`;
     const gsi1sk = `UPDATED_AT#${now}`;
+    const gsi2pk = `TENANT#${tenantId}`;
+    const gsi2sk = `UPDATED_AT#${now}`;
     
     const attempt: ExecutionAttempt = {
       pk,
       sk,
       gsi1pk,
       gsi1sk,
+      gsi2pk,
+      gsi2sk,
       action_intent_id: actionIntentId,
       attempt_count: 1,
       last_attempt_id: attemptId,
@@ -96,12 +106,24 @@ export class ExecutionAttemptService {
           throw new Error(`Execution already in progress for action_intent_id: ${actionIntentId}`);
         }
         
-        // Status is terminal - allow re-run by updating lock (admin-only, not automatic SFN retry)
+        // Status is terminal - check if rerun is explicitly allowed
+        if (!allowRerun) {
+          throw new Error(
+            `Execution already completed for action_intent_id: ${actionIntentId} (status: ${existing.status}). ` +
+            `Reruns are not allowed without explicit allow_rerun=true flag. ` +
+            `This prevents accidental reruns from duplicate events. ` +
+            `If this is an intentional rerun, use the admin rerun path with allow_rerun=true.`
+          );
+        }
+        
+        // Status is terminal AND allow_rerun=true - allow re-run by updating lock (admin-only, not automatic SFN retry)
         // Use UpdateCommand (not PutCommand) for safe partial updates
         // This prevents unintentionally wiping fields if schema evolves
-        // Update GSI attributes for querying by action_intent_id
+        // Update GSI attributes for querying by action_intent_id and tenant
         const gsi1pk = `ACTION_INTENT#${actionIntentId}`;
         const gsi1sk = `UPDATED_AT#${now}`;
+        const gsi2pk = `TENANT#${tenantId}`;
+        const gsi2sk = `UPDATED_AT#${now}`;
         
         await this.dynamoClient.send(new UpdateCommand({
           TableName: this.tableName,
@@ -120,6 +142,8 @@ export class ExecutionAttemptService {
             '#ttl = :ttl',
             '#gsi1pk = :gsi1pk',
             '#gsi1sk = :gsi1sk',
+            '#gsi2pk = :gsi2pk',
+            '#gsi2sk = :gsi2sk',
             'REMOVE #last_error_class', // Clear error from previous attempt
           ].join(', '),
           ConditionExpression: '#status IN (:succeeded, :failed, :cancelled)',
@@ -180,21 +204,27 @@ export class ExecutionAttemptService {
   ): Promise<void> {
     const now = new Date().toISOString();
     
-    // Update GSI attributes for querying by action_intent_id
+    // Update GSI attributes for querying by action_intent_id and tenant
     const gsi1pk = `ACTION_INTENT#${actionIntentId}`;
     const gsi1sk = `UPDATED_AT#${now}`;
+    const gsi2pk = `TENANT#${tenantId}`;
+    const gsi2sk = `UPDATED_AT#${now}`;
     
     const updateExpression: string[] = [
       'SET #status = :status',
       '#updated_at = :updated_at',
       '#gsi1pk = :gsi1pk',
       '#gsi1sk = :gsi1sk',
+      '#gsi2pk = :gsi2pk',
+      '#gsi2sk = :gsi2sk',
     ];
     const expressionAttributeValues: Record<string, any> = {
       ':status': status,
       ':updated_at': now,
       ':gsi1pk': gsi1pk,
       ':gsi1sk': gsi1sk,
+      ':gsi2pk': gsi2pk,
+      ':gsi2sk': gsi2sk,
       ':running': 'RUNNING',
     };
     
@@ -217,6 +247,8 @@ export class ExecutionAttemptService {
           '#updated_at': 'updated_at',
           '#gsi1pk': 'gsi1pk',
           '#gsi1sk': 'gsi1sk',
+          '#gsi2pk': 'gsi2pk',
+          '#gsi2sk': 'gsi2sk',
           ...(errorClass ? { '#last_error_class': 'last_error_class' } : {}),
         },
         ExpressionAttributeValues: expressionAttributeValues,

@@ -89,6 +89,13 @@ export class ExecutionInfrastructure extends Construct {
       sortKey: { name: 'gsi1sk', type: dynamodb.AttributeType.STRING },
     });
     
+    // Add GSI for tenant-level operational queries (all executions for tenant, recent failures, etc.)
+    table.addGlobalSecondaryIndex({
+      indexName: 'gsi2-index',
+      partitionKey: { name: 'gsi2pk', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'gsi2sk', type: dynamodb.AttributeType.STRING },
+    });
+    
     return table;
   }
 
@@ -109,6 +116,14 @@ export class ExecutionInfrastructure extends Construct {
       indexName: 'gsi1-index',
       partitionKey: { name: 'gsi1pk', type: dynamodb.AttributeType.STRING },
       sortKey: { name: 'gsi1sk', type: dynamodb.AttributeType.STRING },
+    });
+    
+    // Add GSI for tenant-level operational queries (all outcomes for tenant, recent failures, etc.)
+    // Enables queries like: "all outcomes for tenant X", "recent failures across tenant", etc.
+    table.addGlobalSecondaryIndex({
+      indexName: 'gsi2-index',
+      partitionKey: { name: 'gsi2pk', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'gsi2sk', type: dynamodb.AttributeType.STRING },
     });
     
     return table;

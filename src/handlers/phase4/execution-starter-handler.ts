@@ -21,6 +21,12 @@ import { IdempotencyService } from '../../services/execution/IdempotencyService'
 import { ActionTypeRegistryService } from '../../services/execution/ActionTypeRegistryService';
 import { LedgerService } from '../../services/ledger/LedgerService';
 import { LedgerEventType } from '../../types/LedgerTypes';
+import {
+  IntentNotFoundError,
+  ValidationError,
+  ExecutionAlreadyInProgressError,
+  UnknownExecutionError,
+} from '../../types/ExecutionErrors';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
 import { getAWSClientConfig } from '../../utils/aws-client-config';
@@ -125,17 +131,18 @@ export const handler: Handler = async (event: unknown) => {
     );
     
     if (!intent) {
-      throw new Error(`ActionIntent not found: ${action_intent_id}`);
+      throw new IntentNotFoundError(action_intent_id);
     }
     
     // 2. Get tool mapping (for idempotency key generation)
     // Use registry_version from intent (REQUIRED - must be stored in ActionIntentV1 at Phase 3)
     if (intent.registry_version === undefined || intent.registry_version === null) {
-      throw new Error(
-        `[ExecutionStarterHandler] ActionIntent missing required field: registry_version. ` +
+      throw new ValidationError(
+        `ActionIntent missing required field: registry_version. ` +
         `ActionIntentV1 must store registry_version at creation time (Phase 3). ` +
         `This ensures deterministic execution and prevents silent behavioral drift from registry changes. ` +
-        `action_intent_id: ${action_intent_id}`
+        `action_intent_id: ${action_intent_id}`,
+        'MISSING_REGISTRY_VERSION'
       );
     }
     
@@ -146,11 +153,12 @@ export const handler: Handler = async (event: unknown) => {
     );
     
     if (!toolMapping) {
-      throw new Error(
+      throw new ValidationError(
         `Tool mapping not found for action_type: ${intent.action_type}, ` +
         `registry_version: ${registryVersion}. ` +
         `This may indicate the action type was removed or the registry version is invalid. ` +
-        `Check ActionTypeRegistry table for ACTION_TYPE#${intent.action_type}, REGISTRY_VERSION#${registryVersion}.`
+        `Check ActionTypeRegistry table for ACTION_TYPE#${intent.action_type}, REGISTRY_VERSION#${registryVersion}.`,
+        'TOOL_MAPPING_NOT_FOUND'
       );
     }
     
@@ -180,7 +188,8 @@ export const handler: Handler = async (event: unknown) => {
       intent.account_id,
       executionTraceId, // Use execution trace, not decision trace
       idempotencyKey,
-      stateMachineTimeoutSeconds // Pass SFN timeout for TTL calculation
+      stateMachineTimeoutSeconds, // Pass SFN timeout for TTL calculation
+      false // allow_rerun=false for normal execution path (prevents accidental reruns from duplicate events)
     );
     
     // 5. Emit ledger event (use execution trace for execution lifecycle events)
@@ -216,15 +225,14 @@ export const handler: Handler = async (event: unknown) => {
       stack: error.stack,
     });
     
-    // If already executing, provide clear error for Step Functions
+    // Re-throw typed errors as-is (they're already ExecutionError subclasses)
+    if (error instanceof ExecutionError || error.error_class) {
+      throw error;
+    }
+    
+    // If already executing, provide clear typed error for Step Functions
     if (error.message.includes('already in progress')) {
-      const duplicateError = new Error(
-        `[ExecutionStarterHandler] Execution already in progress for action_intent_id: ${action_intent_id}. ` +
-        `This may indicate a duplicate Step Functions execution or a stuck execution attempt. ` +
-        `Check ExecutionAttempts table for RUNNING status with this action_intent_id.`
-      );
-      duplicateError.name = 'ExecutionAlreadyInProgressError';
-      throw duplicateError;
+      throw new ExecutionAlreadyInProgressError(action_intent_id);
     }
     
     // Re-throw configuration errors as-is (they already have good messages)
@@ -232,14 +240,12 @@ export const handler: Handler = async (event: unknown) => {
       throw error;
     }
     
-    // Wrap other errors with context
-    const wrappedError = new Error(
-      `[ExecutionStarterHandler] Failed to start execution for action_intent_id: ${action_intent_id}. ` +
+    // Wrap unknown errors as UnknownExecutionError (fail safe)
+    throw new UnknownExecutionError(
+      `Failed to start execution for action_intent_id: ${action_intent_id}. ` +
       `Original error: ${error.message || 'Unknown error'}. ` +
-      `Check logs for detailed error information.`
+      `Check logs for detailed error information.`,
+      error
     );
-    wrappedError.name = error.name || 'ExecutionStarterError';
-    wrappedError.cause = error;
-    throw wrappedError;
   }
 };

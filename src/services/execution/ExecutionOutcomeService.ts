@@ -28,9 +28,11 @@ export class ExecutionOutcomeService {
   ): Promise<ActionOutcomeV1> {
     const ttl = Math.floor(new Date(outcome.completed_at).getTime() / 1000) + 7776000; // 90 days
     
-    // GSI attributes for querying by action_intent_id
+    // GSI attributes for querying by action_intent_id and tenant
     const gsi1pk = `ACTION_INTENT#${outcome.action_intent_id}`;
     const gsi1sk = `COMPLETED_AT#${outcome.completed_at}`;
+    const gsi2pk = `TENANT#${outcome.tenant_id}`;
+    const gsi2sk = `COMPLETED_AT#${outcome.completed_at}`;
     
     const fullOutcome: ActionOutcomeV1 = {
       ...outcome,
@@ -38,6 +40,8 @@ export class ExecutionOutcomeService {
       sk: `OUTCOME#${outcome.action_intent_id}`,
       gsi1pk,
       gsi1sk,
+      gsi2pk,
+      gsi2sk,
       ttl,
     };
     

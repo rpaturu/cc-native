@@ -56,6 +56,22 @@ export class ValidationError extends ExecutionError {
 }
 
 /**
+ * Execution already in progress error (terminal, no retry)
+ */
+export class ExecutionAlreadyInProgressError extends ExecutionError {
+  constructor(actionIntentId: string) {
+    super(
+      `Execution already in progress for action_intent_id: ${actionIntentId}. ` +
+      `This may indicate a duplicate Step Functions execution or a stuck execution attempt. ` +
+      `Check ExecutionAttempts table for RUNNING status with this action_intent_id.`,
+      'VALIDATION',
+      'EXECUTION_ALREADY_IN_PROGRESS',
+      false
+    );
+  }
+}
+
+/**
  * Auth errors (terminal, no retry unless token refresh exists)
  */
 export class AuthError extends ExecutionError {

@@ -61,8 +61,33 @@ export class ActionTypeRegistryService {
       
       // Sort by registry_version descending (highest = latest)
       // This is deterministic and safe (registry_version is monotonic)
-      const sorted = (result.Items as ActionTypeRegistry[])
-        .sort((a, b) => (b.registry_version || 0) - (a.registry_version || 0));
+      // Validate that registry_version is numeric and present (fail fast on bad data)
+      const validItems = (result.Items as ActionTypeRegistry[]).filter(item => {
+        if (item.registry_version === undefined || item.registry_version === null) {
+          this.logger.warn('ActionTypeRegistry item missing registry_version', {
+            action_type: item.action_type,
+            pk: item.pk,
+            sk: item.sk,
+          });
+          return false;
+        }
+        if (typeof item.registry_version !== 'number' || !Number.isInteger(item.registry_version) || item.registry_version < 1) {
+          this.logger.warn('ActionTypeRegistry item has invalid registry_version', {
+            action_type: item.action_type,
+            pk: item.pk,
+            sk: item.sk,
+            registry_version: item.registry_version,
+          });
+          return false;
+        }
+        return true;
+      });
+      
+      if (validItems.length === 0) {
+        return null;
+      }
+      
+      const sorted = validItems.sort((a, b) => b.registry_version! - a.registry_version!);
       
       return sorted[0] || null;
     }
@@ -81,7 +106,10 @@ export class ActionTypeRegistryService {
       const value = actionParameters[actionParam];
       
       if (mapping.required && value === undefined) {
-        throw new Error(`Required parameter missing: ${actionParam}`);
+        throw new ValidationError(
+          `Required parameter missing: ${actionParam}`,
+          'MISSING_REQUIRED_PARAMETER'
+        );
       }
       
       if (value !== undefined) {

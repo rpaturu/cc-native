@@ -384,9 +384,11 @@ import { z } from 'zod';
 export const ExecutionAttemptSchema = z.object({
   pk: z.string(),
   sk: z.string(),
-  // GSI attributes (for querying by action_intent_id)
-  gsi1pk: z.string().optional(), // ACTION_INTENT#<action_intent_id>
+  // GSI attributes
+  gsi1pk: z.string().optional(), // ACTION_INTENT#<action_intent_id> (for querying by action_intent_id)
   gsi1sk: z.string().optional(), // UPDATED_AT#<timestamp>
+  gsi2pk: z.string().optional(), // TENANT#<tenant_id> (for tenant-level operational queries)
+  gsi2sk: z.string().optional(), // UPDATED_AT#<timestamp> (for sorting by recency)
   action_intent_id: z.string(),
   attempt_count: z.number(), // Number of attempts (incremented on retries)
   last_attempt_id: z.string(), // Most recent attempt_id (for logging/tracing)
@@ -404,9 +406,11 @@ export const ExecutionAttemptSchema = z.object({
 export const ActionOutcomeV1Schema = z.object({
   pk: z.string(),
   sk: z.string(),
-  // GSI attributes (for querying by action_intent_id)
-  gsi1pk: z.string().optional(), // ACTION_INTENT#<action_intent_id>
+  // GSI attributes
+  gsi1pk: z.string().optional(), // ACTION_INTENT#<action_intent_id> (for querying by action_intent_id)
   gsi1sk: z.string().optional(), // COMPLETED_AT#<timestamp>
+  gsi2pk: z.string().optional(), // TENANT#<tenant_id> (for tenant-level operational queries)
+  gsi2sk: z.string().optional(), // COMPLETED_AT#<timestamp> (for sorting by recency)
   action_intent_id: z.string(),
   status: z.enum(['SUCCEEDED', 'FAILED', 'RETRYING', 'CANCELLED']),
   external_object_refs: z.array(z.object({
@@ -719,6 +723,11 @@ export class ExecutionAttemptService {
    * transitions (not terminal → RUNNING). This prevents accidental double-writes from
    * treating reruns as normal retry semantics.
    * 
+   * The `allow_rerun` flag provides explicit gating:
+   * - Normal execution path (from EventBridge) always calls with allow_rerun=false
+   * - Admin/manual rerun path explicitly sets allow_rerun=true
+   * - This prevents accidental reruns from duplicate events or conditional logic changes
+   * 
    * Uses conditional write to prevent race conditions.
    */
   async startAttempt(
@@ -727,7 +736,8 @@ export class ExecutionAttemptService {
     accountId: string,
     traceId: string,
     idempotencyKey: string,
-    stateMachineTimeoutSeconds?: number // Optional: SFN timeout in seconds (from config)
+    stateMachineTimeoutSeconds?: number, // Optional: SFN timeout in seconds (from config)
+    allowRerun: boolean = false // Explicit rerun flag (default false - normal execution path)
   ): Promise<ExecutionAttempt> {
     const attemptId = `attempt_${Date.now()}_${Math.random().toString(36).substring(7)}`;
     const now = new Date().toISOString();
@@ -743,15 +753,19 @@ export class ExecutionAttemptService {
     const sk = `EXECUTION#${actionIntentId}`;
     
     // Try to create new lock (if doesn't exist)
-    // Populate GSI attributes for querying by action_intent_id
+    // Populate GSI attributes for querying by action_intent_id and tenant
     const gsi1pk = `ACTION_INTENT#${actionIntentId}`;
     const gsi1sk = `UPDATED_AT#${now}`;
+    const gsi2pk = `TENANT#${tenantId}`;
+    const gsi2sk = `UPDATED_AT#${now}`;
     
     const attempt: ExecutionAttempt = {
       pk,
       sk,
       gsi1pk,
       gsi1sk,
+      gsi2pk,
+      gsi2sk,
       action_intent_id: actionIntentId,
       attempt_count: 1,
       last_attempt_id: attemptId,
@@ -787,12 +801,24 @@ export class ExecutionAttemptService {
           throw new Error(`Execution already in progress for action_intent_id: ${actionIntentId}`);
         }
         
-        // Status is terminal - allow re-run by updating lock (admin-only, not automatic SFN retry)
+        // Status is terminal - check if rerun is explicitly allowed
+        if (!allowRerun) {
+          throw new Error(
+            `Execution already completed for action_intent_id: ${actionIntentId} (status: ${existing.status}). ` +
+            `Reruns are not allowed without explicit allow_rerun=true flag. ` +
+            `This prevents accidental reruns from duplicate events. ` +
+            `If this is an intentional rerun, use the admin rerun path with allow_rerun=true.`
+          );
+        }
+        
+        // Status is terminal AND allow_rerun=true - allow re-run by updating lock (admin-only, not automatic SFN retry)
         // Use UpdateCommand (not PutCommand) for safe partial updates
         // This prevents unintentionally wiping fields if schema evolves
-        // Update GSI attributes for querying by action_intent_id
+        // Update GSI attributes for querying by action_intent_id and tenant
         const gsi1pk = `ACTION_INTENT#${actionIntentId}`;
         const gsi1sk = `UPDATED_AT#${now}`;
+        const gsi2pk = `TENANT#${tenantId}`;
+        const gsi2sk = `UPDATED_AT#${now}`;
         
         await this.dynamoClient.send(new UpdateCommand({
           TableName: this.tableName,
@@ -811,6 +837,8 @@ export class ExecutionAttemptService {
             '#ttl = :ttl',
             '#gsi1pk = :gsi1pk',
             '#gsi1sk = :gsi1sk',
+            '#gsi2pk = :gsi2pk',
+            '#gsi2sk = :gsi2sk',
             'REMOVE #last_error_class', // Clear error from previous attempt
           ].join(', '),
           ConditionExpression: '#status IN (:succeeded, :failed, :cancelled)',
@@ -871,21 +899,27 @@ export class ExecutionAttemptService {
   ): Promise<void> {
     const now = new Date().toISOString();
     
-    // Update GSI attributes for querying by action_intent_id
+    // Update GSI attributes for querying by action_intent_id and tenant
     const gsi1pk = `ACTION_INTENT#${actionIntentId}`;
     const gsi1sk = `UPDATED_AT#${now}`;
+    const gsi2pk = `TENANT#${tenantId}`;
+    const gsi2sk = `UPDATED_AT#${now}`;
     
     const updateExpression: string[] = [
       'SET #status = :status',
       '#updated_at = :updated_at',
       '#gsi1pk = :gsi1pk',
       '#gsi1sk = :gsi1sk',
+      '#gsi2pk = :gsi2pk',
+      '#gsi2sk = :gsi2sk',
     ];
     const expressionAttributeValues: Record<string, any> = {
       ':status': status,
       ':updated_at': now,
       ':gsi1pk': gsi1pk,
       ':gsi1sk': gsi1sk,
+      ':gsi2pk': gsi2pk,
+      ':gsi2sk': gsi2sk,
       ':running': 'RUNNING',
     };
     
@@ -908,6 +942,8 @@ export class ExecutionAttemptService {
           '#updated_at': 'updated_at',
           '#gsi1pk': 'gsi1pk',
           '#gsi1sk': 'gsi1sk',
+          '#gsi2pk': 'gsi2pk',
+          '#gsi2sk': 'gsi2sk',
           ...(errorClass ? { '#last_error_class': 'last_error_class' } : {}),
         },
         ExpressionAttributeValues: expressionAttributeValues,
@@ -955,6 +991,7 @@ export class ExecutionAttemptService {
 import { DynamoDBDocumentClient, GetCommand, QueryCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
 import { Logger } from '../core/Logger';
 import { ActionTypeRegistry } from '../../types/ExecutionTypes';
+import { ValidationError } from '../../types/ExecutionErrors';
 
 export class ActionTypeRegistryService {
   constructor(
@@ -1009,8 +1046,33 @@ export class ActionTypeRegistryService {
       
       // Sort by registry_version descending (highest = latest)
       // This is deterministic and safe (registry_version is monotonic)
-      const sorted = (result.Items as ActionTypeRegistry[])
-        .sort((a, b) => (b.registry_version || 0) - (a.registry_version || 0));
+      // Validate that registry_version is numeric and present (fail fast on bad data)
+      const validItems = (result.Items as ActionTypeRegistry[]).filter(item => {
+        if (item.registry_version === undefined || item.registry_version === null) {
+          this.logger.warn('ActionTypeRegistry item missing registry_version', {
+            action_type: item.action_type,
+            pk: item.pk,
+            sk: item.sk,
+          });
+          return false;
+        }
+        if (typeof item.registry_version !== 'number' || !Number.isInteger(item.registry_version) || item.registry_version < 1) {
+          this.logger.warn('ActionTypeRegistry item has invalid registry_version', {
+            action_type: item.action_type,
+            pk: item.pk,
+            sk: item.sk,
+            registry_version: item.registry_version,
+          });
+          return false;
+        }
+        return true;
+      });
+      
+      if (validItems.length === 0) {
+        return null;
+      }
+      
+      const sorted = validItems.sort((a, b) => b.registry_version! - a.registry_version!);
       
       return sorted[0] || null;
     }
@@ -1029,7 +1091,10 @@ export class ActionTypeRegistryService {
       const value = actionParameters[actionParam];
       
       if (mapping.required && value === undefined) {
-        throw new Error(`Required parameter missing: ${actionParam}`);
+        throw new ValidationError(
+          `Required parameter missing: ${actionParam}`,
+          'MISSING_REQUIRED_PARAMETER'
+        );
       }
       
       if (value !== undefined) {
@@ -1137,8 +1202,11 @@ export class IdempotencyService {
   }
 
   /**
-   * Generate idempotency key for execution
+   * Generate idempotency key for execution (execution-layer idempotency)
    * Format: hash(tenant_id + action_intent_id + tool_name + canonical_params + registry_version)
+   * 
+   * This key is per-intent: two ActionIntents with identical params will have different keys.
+   * Use this for execution-layer dedupe (preventing duplicate Step Functions executions).
    * 
    * Uses deep canonical JSON to ensure consistent keys for semantically identical params.
    */
@@ -1155,6 +1223,32 @@ export class IdempotencyService {
     const canonicalParams = JSON.stringify(canonicalized);
     
     const input = `${tenantId}:${actionIntentId}:${toolName}:${canonicalParams}:${registryVersion}`;
+    return createHash('sha256').update(input, 'utf8').digest('hex');
+  }
+
+  /**
+   * Generate semantic idempotency key (adapter-level idempotency)
+   * Format: hash(tenant_id + tool_name + canonical_params + registry_version)
+   * 
+   * This key omits action_intent_id, enabling "never double-write externally" even across
+   * duplicate ActionIntents with identical params. Use this for ExternalWriteDedupe if
+   * your product goal is to prevent duplicate external writes regardless of intent source.
+   * 
+   * Note: This is optional - current design uses execution-layer key (includes intent_id)
+   * for ExternalWriteDedupe. If you want semantic dedupe, use this method instead.
+   */
+  generateSemanticIdempotencyKey(
+    tenantId: string,
+    toolName: string,
+    normalizedParams: Record<string, any>,
+    registryVersion: number
+  ): string {
+    // Deep canonicalize: recursively sort all object keys, drop undefined
+    const canonicalized = this.deepCanonicalize(normalizedParams);
+    // Stringify once at the end
+    const canonicalParams = JSON.stringify(canonicalized);
+    
+    const input = `${tenantId}:${toolName}:${canonicalParams}:${registryVersion}`;
     return createHash('sha256').update(input, 'utf8').digest('hex');
   }
 
@@ -1201,7 +1295,22 @@ export class IdempotencyService {
     
     // LATEST pointer missing - query history items directly (source of truth)
     // This is slower but ensures correctness even if LATEST pointer write failed
-    // TODO: Implement history query fallback if needed (for Phase 4.1, LATEST should always exist)
+    // Query all history items for this idempotency_key and return the most recent one
+    const historyResult = await dynamoClient.send(new QueryCommand({
+      TableName: tableName,
+      KeyConditionExpression: 'pk = :pk AND begins_with(sk, :skPrefix)',
+      ExpressionAttributeValues: {
+        ':pk': `IDEMPOTENCY_KEY#${idempotencyKey}`,
+        ':skPrefix': 'CREATED_AT#',
+      },
+      ScanIndexForward: false, // Sort descending (newest first)
+      Limit: 1, // Only need the most recent
+    }));
+    
+    if (historyResult.Items && historyResult.Items.length > 0) {
+      const historyItem = historyResult.Items[0] as ExternalWriteDedupe;
+      return historyItem.external_object_id;
+    }
     
     return null;
   }
@@ -1333,9 +1442,11 @@ export class ExecutionOutcomeService {
   ): Promise<ActionOutcomeV1> {
     const ttl = Math.floor(new Date(outcome.completed_at).getTime() / 1000) + 7776000; // 90 days
     
-    // GSI attributes for querying by action_intent_id
+    // GSI attributes for querying by action_intent_id and tenant
     const gsi1pk = `ACTION_INTENT#${outcome.action_intent_id}`;
     const gsi1sk = `COMPLETED_AT#${outcome.completed_at}`;
+    const gsi2pk = `TENANT#${outcome.tenant_id}`;
+    const gsi2sk = `COMPLETED_AT#${outcome.completed_at}`;
     
     const fullOutcome: ActionOutcomeV1 = {
       ...outcome,
@@ -1343,6 +1454,8 @@ export class ExecutionOutcomeService {
       sk: `OUTCOME#${outcome.action_intent_id}`,
       gsi1pk,
       gsi1sk,
+      gsi2pk,
+      gsi2sk,
       ttl,
     };
     
@@ -1559,6 +1672,12 @@ import { IdempotencyService } from '../../services/execution/IdempotencyService'
 import { ActionTypeRegistryService } from '../../services/execution/ActionTypeRegistryService';
 import { LedgerService } from '../../services/ledger/LedgerService';
 import { LedgerEventType } from '../../types/LedgerTypes';
+import {
+  IntentNotFoundError,
+  ValidationError,
+  ExecutionAlreadyInProgressError,
+  UnknownExecutionError,
+} from '../../types/ExecutionErrors';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
 import { getAWSClientConfig } from '../../utils/aws-client-config';
@@ -1690,17 +1809,18 @@ export const handler: Handler = async (event: unknown) => {
     );
     
     if (!intent) {
-      throw new Error(`ActionIntent not found: ${action_intent_id}`);
+      throw new IntentNotFoundError(action_intent_id);
     }
     
     // 2. Get tool mapping (for idempotency key generation)
     // Use registry_version from intent (REQUIRED - must be stored in ActionIntentV1 at Phase 3)
     if (intent.registry_version === undefined || intent.registry_version === null) {
-      throw new Error(
-        `[ExecutionStarterHandler] ActionIntent missing required field: registry_version. ` +
+      throw new ValidationError(
+        `ActionIntent missing required field: registry_version. ` +
         `ActionIntentV1 must store registry_version at creation time (Phase 3). ` +
         `This ensures deterministic execution and prevents silent behavioral drift from registry changes. ` +
-        `action_intent_id: ${action_intent_id}`
+        `action_intent_id: ${action_intent_id}`,
+        'MISSING_REGISTRY_VERSION'
       );
     }
     
@@ -1711,11 +1831,12 @@ export const handler: Handler = async (event: unknown) => {
     );
     
     if (!toolMapping) {
-      throw new Error(
+      throw new ValidationError(
         `Tool mapping not found for action_type: ${intent.action_type}, ` +
         `registry_version: ${registryVersion}. ` +
         `This may indicate the action type was removed or the registry version is invalid. ` +
-        `Check ActionTypeRegistry table for ACTION_TYPE#${intent.action_type}, REGISTRY_VERSION#${registryVersion}.`
+        `Check ActionTypeRegistry table for ACTION_TYPE#${intent.action_type}, REGISTRY_VERSION#${registryVersion}.`,
+        'TOOL_MAPPING_NOT_FOUND'
       );
     }
     
@@ -1745,7 +1866,8 @@ export const handler: Handler = async (event: unknown) => {
       intent.account_id,
       executionTraceId, // Use execution trace, not decision trace
       idempotencyKey,
-      stateMachineTimeoutSeconds // Pass SFN timeout for TTL calculation
+      stateMachineTimeoutSeconds, // Pass SFN timeout for TTL calculation
+      false // allow_rerun=false for normal execution path (prevents accidental reruns from duplicate events)
     );
     
     // 5. Emit ledger event (use execution trace for execution lifecycle events)
@@ -1781,15 +1903,14 @@ export const handler: Handler = async (event: unknown) => {
       stack: error.stack,
     });
     
-    // If already executing, provide clear error for Step Functions
+    // Re-throw typed errors as-is (they're already ExecutionError subclasses)
+    if (error instanceof ExecutionError || error.error_class) {
+      throw error;
+    }
+    
+    // If already executing, provide clear typed error for Step Functions
     if (error.message.includes('already in progress')) {
-      const duplicateError = new Error(
-        `[ExecutionStarterHandler] Execution already in progress for action_intent_id: ${action_intent_id}. ` +
-        `This may indicate a duplicate Step Functions execution or a stuck execution attempt. ` +
-        `Check ExecutionAttempts table for RUNNING status with this action_intent_id.`
-      );
-      duplicateError.name = 'ExecutionAlreadyInProgressError';
-      throw duplicateError;
+      throw new ExecutionAlreadyInProgressError(action_intent_id);
     }
     
     // Re-throw configuration errors as-is (they already have good messages)
@@ -1797,15 +1918,13 @@ export const handler: Handler = async (event: unknown) => {
       throw error;
     }
     
-    // Wrap other errors with context
-    const wrappedError = new Error(
-      `[ExecutionStarterHandler] Failed to start execution for action_intent_id: ${action_intent_id}. ` +
+    // Wrap unknown errors as UnknownExecutionError (fail safe)
+    throw new UnknownExecutionError(
+      `Failed to start execution for action_intent_id: ${action_intent_id}. ` +
       `Original error: ${error.message || 'Unknown error'}. ` +
-      `Check logs for detailed error information.`
+      `Check logs for detailed error information.`,
+      error
     );
-    wrappedError.name = error.name || 'ExecutionStarterError';
-    wrappedError.cause = error;
-    throw wrappedError;
   }
 };
 ```
@@ -2335,6 +2454,15 @@ export class ExecutionInfrastructure extends Construct {
       sortKey: { name: 'gsi1sk', type: dynamodb.AttributeType.STRING },
     });
     
+    // Add GSI for tenant-level operational queries (all executions for tenant, recent failures, etc.)
+    // Enables queries like: "all executions for tenant X", "recent failures across tenant", etc.
+    // Without this, would need to scan table (inefficient for operational queries)
+    table.addGlobalSecondaryIndex({
+      indexName: 'gsi2-index',
+      partitionKey: { name: 'gsi2pk', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'gsi2sk', type: dynamodb.AttributeType.STRING },
+    });
+    
     return table;
   }
 
@@ -2355,6 +2483,15 @@ export class ExecutionInfrastructure extends Construct {
       indexName: 'gsi1-index',
       partitionKey: { name: 'gsi1pk', type: dynamodb.AttributeType.STRING },
       sortKey: { name: 'gsi1sk', type: dynamodb.AttributeType.STRING },
+    });
+    
+    // Add GSI for tenant-level operational queries (all outcomes for tenant, recent failures, etc.)
+    // Enables queries like: "all outcomes for tenant X", "recent failures across tenant", etc.
+    // Without this, would need to scan table (inefficient for operational queries)
+    table.addGlobalSecondaryIndex({
+      indexName: 'gsi2-index',
+      partitionKey: { name: 'gsi2pk', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'gsi2sk', type: dynamodb.AttributeType.STRING },
     });
     
     return table;

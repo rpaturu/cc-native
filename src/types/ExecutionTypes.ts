@@ -34,9 +34,11 @@ export interface ExecutionAttempt {
   // Composite keys
   pk: string; // TENANT#tenant_id#ACCOUNT#account_id
   sk: string; // EXECUTION#action_intent_id
-  // GSI attributes (for querying by action_intent_id)
-  gsi1pk?: string; // ACTION_INTENT#<action_intent_id>
+  // GSI attributes
+  gsi1pk?: string; // ACTION_INTENT#<action_intent_id> (for querying by action_intent_id)
   gsi1sk?: string; // UPDATED_AT#<timestamp>
+  gsi2pk?: string; // TENANT#<tenant_id> (for tenant-level operational queries)
+  gsi2sk?: string; // UPDATED_AT#<timestamp> or STATUS#<status>#UPDATED_AT#<timestamp>
   
   // Execution locking
   action_intent_id: string;
@@ -67,9 +69,11 @@ export interface ActionOutcomeV1 {
   // Composite keys
   pk: string; // TENANT#tenant_id#ACCOUNT#account_id
   sk: string; // OUTCOME#action_intent_id
-  // GSI attributes (for querying by action_intent_id)
-  gsi1pk?: string; // ACTION_INTENT#<action_intent_id>
+  // GSI attributes
+  gsi1pk?: string; // ACTION_INTENT#<action_intent_id> (for querying by action_intent_id)
   gsi1sk?: string; // COMPLETED_AT#<timestamp>
+  gsi2pk?: string; // TENANT#<tenant_id> (for tenant-level operational queries)
+  gsi2sk?: string; // COMPLETED_AT#<timestamp> or STATUS#<status>#COMPLETED_AT#<timestamp>
   
   // Outcome metadata
   action_intent_id: string;
@@ -275,6 +279,8 @@ export const ActionOutcomeV1Schema = z.object({
   sk: z.string(),
   gsi1pk: z.string().optional(),
   gsi1sk: z.string().optional(),
+  gsi2pk: z.string().optional(),
+  gsi2sk: z.string().optional(),
   action_intent_id: z.string(),
   status: z.enum(['SUCCEEDED', 'FAILED', 'RETRYING', 'CANCELLED']),
   external_object_refs: z.array(z.object({

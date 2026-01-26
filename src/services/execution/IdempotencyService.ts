@@ -54,8 +54,11 @@ export class IdempotencyService {
   }
 
   /**
-   * Generate idempotency key for execution
+   * Generate idempotency key for execution (execution-layer idempotency)
    * Format: hash(tenant_id + action_intent_id + tool_name + canonical_params + registry_version)
+   * 
+   * This key is per-intent: two ActionIntents with identical params will have different keys.
+   * Use this for execution-layer dedupe (preventing duplicate Step Functions executions).
    * 
    * Uses deep canonical JSON to ensure consistent keys for semantically identical params.
    */
@@ -72,6 +75,32 @@ export class IdempotencyService {
     const canonicalParams = JSON.stringify(canonicalized);
     
     const input = `${tenantId}:${actionIntentId}:${toolName}:${canonicalParams}:${registryVersion}`;
+    return createHash('sha256').update(input, 'utf8').digest('hex');
+  }
+
+  /**
+   * Generate semantic idempotency key (adapter-level idempotency)
+   * Format: hash(tenant_id + tool_name + canonical_params + registry_version)
+   * 
+   * This key omits action_intent_id, enabling "never double-write externally" even across
+   * duplicate ActionIntents with identical params. Use this for ExternalWriteDedupe if
+   * your product goal is to prevent duplicate external writes regardless of intent source.
+   * 
+   * Note: This is optional - current design uses execution-layer key (includes intent_id)
+   * for ExternalWriteDedupe. If you want semantic dedupe, use this method instead.
+   */
+  generateSemanticIdempotencyKey(
+    tenantId: string,
+    toolName: string,
+    normalizedParams: Record<string, any>,
+    registryVersion: number
+  ): string {
+    // Deep canonicalize: recursively sort all object keys, drop undefined
+    const canonicalized = this.deepCanonicalize(normalizedParams);
+    // Stringify once at the end
+    const canonicalParams = JSON.stringify(canonicalized);
+    
+    const input = `${tenantId}:${toolName}:${canonicalParams}:${registryVersion}`;
     return createHash('sha256').update(input, 'utf8').digest('hex');
   }
 
@@ -118,7 +147,22 @@ export class IdempotencyService {
     
     // LATEST pointer missing - query history items directly (source of truth)
     // This is slower but ensures correctness even if LATEST pointer write failed
-    // TODO: Implement history query fallback if needed (for Phase 4.1, LATEST should always exist)
+    // Query all history items for this idempotency_key and return the most recent one
+    const historyResult = await dynamoClient.send(new QueryCommand({
+      TableName: tableName,
+      KeyConditionExpression: 'pk = :pk AND begins_with(sk, :skPrefix)',
+      ExpressionAttributeValues: {
+        ':pk': `IDEMPOTENCY_KEY#${idempotencyKey}`,
+        ':skPrefix': 'CREATED_AT#',
+      },
+      ScanIndexForward: false, // Sort descending (newest first)
+      Limit: 1, // Only need the most recent
+    }));
+    
+    if (historyResult.Items && historyResult.Items.length > 0) {
+      const historyItem = historyResult.Items[0] as ExternalWriteDedupe;
+      return historyItem.external_object_id;
+    }
     
     return null;
   }
