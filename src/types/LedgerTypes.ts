@@ -25,6 +25,12 @@ export enum LedgerEventType {
   ACTION_APPROVED = 'ACTION_APPROVED',
   ACTION_REJECTED = 'ACTION_REJECTED',
   ACTION_EDITED = 'ACTION_EDITED',
+  // Phase 4: Execution Layer events
+  EXECUTION_STARTED = 'EXECUTION_STARTED',
+  ACTION_EXECUTED = 'ACTION_EXECUTED',
+  ACTION_FAILED = 'ACTION_FAILED',
+  // Note: IDEMPOTENCY_COLLISION_DETECTED will be added in Phase 4.2 when IdempotencyService
+  // gets LedgerService injection. For Phase 4.1, collisions are logged as critical errors.
 }
 
 /**

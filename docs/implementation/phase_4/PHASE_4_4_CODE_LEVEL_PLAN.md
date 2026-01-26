@@ -49,10 +49,31 @@ import { EventBridgeClient, PutEventsCommand } from '@aws-sdk/client-eventbridge
 // Initialize SignalService (add to handler initialization)
 const eventBridgeClient = new EventBridgeClient(clientConfig);
 
+/**
+ * Helper to validate required environment variables with descriptive errors
+ */
+function requireEnv(name: string, handlerName: string): string {
+  const value = process.env[name];
+  if (!value) {
+    const error = new Error(
+      `[${handlerName}] Missing required environment variable: ${name}. ` +
+      `This variable must be set in the Lambda function configuration. ` +
+      `Check CDK stack definition for ExecutionInfrastructure construct.`
+    );
+    error.name = 'ConfigurationError';
+    throw error;
+  }
+  return value;
+}
+
+// Validate required environment variables for SignalService with better error handling
+const signalsTableName = requireEnv('SIGNALS_TABLE_NAME', 'ExecutionRecorderHandler');
+const accountsTableName = requireEnv('ACCOUNTS_TABLE_NAME', 'ExecutionRecorderHandler');
+
 const signalService = new SignalService({
   logger,
-  signalsTableName: process.env.SIGNALS_TABLE_NAME || 'cc-native-signals',
-  accountsTableName: process.env.ACCOUNTS_TABLE_NAME || 'cc-native-accounts',
+  signalsTableName,
+  accountsTableName,
   lifecycleStateService: null as any, // Not needed for execution signals
   eventPublisher: eventBridgeClient,
   ledgerService: ledgerService,
@@ -75,7 +96,52 @@ await signalService.createSignal({
 });
 ```
 
-**Note:** Verify SignalType enum includes `ACTION_EXECUTED` and `ACTION_FAILED`. If not, add them to `src/types/SignalTypes.ts`.
+**Prerequisite:** Before implementing signal emission, ensure `SignalType` enum includes `ACTION_EXECUTED` and `ACTION_FAILED`. 
+
+**Required Changes to `src/types/SignalTypes.ts`:**
+1. Add new SignalType values:
+   ```typescript
+   ACTION_EXECUTED = 'ACTION_EXECUTED',
+   ACTION_FAILED = 'ACTION_FAILED',
+   ```
+
+2. Add window key derivation logic to `WINDOW_KEY_DERIVATION`:
+   ```typescript
+   [SignalType.ACTION_EXECUTED]: (accountId, evidence, timestamp) => {
+    const actionIntentId = evidence?.action_intent_id;
+    if (!actionIntentId) {
+      const error = new Error(
+        `[SignalService] Missing required field in evidence: action_intent_id. ` +
+        `Cannot create ACTION_EXECUTED signal without action_intent_id. ` +
+        `Evidence provided: ${JSON.stringify(evidence)}`
+      );
+      error.name = 'InvalidEvidenceError';
+      throw error;
+    }
+     return `${accountId}-${actionIntentId}`;
+   },
+   [SignalType.ACTION_FAILED]: (accountId, evidence, timestamp) => {
+    const actionIntentId = evidence?.action_intent_id;
+    if (!actionIntentId) {
+      const error = new Error(
+        `[SignalService] Missing required field in evidence: action_intent_id. ` +
+        `Cannot create ACTION_FAILED signal without action_intent_id. ` +
+        `Evidence provided: ${JSON.stringify(evidence)}`
+      );
+      error.name = 'InvalidEvidenceError';
+      throw error;
+    }
+     return `${accountId}-${actionIntentId}`;
+   },
+   ```
+
+3. Add TTL configuration to `DEFAULT_SIGNAL_TTL`:
+   ```typescript
+   [SignalType.ACTION_EXECUTED]: { ttlDays: 90, isPermanent: false },
+   [SignalType.ACTION_FAILED]: { ttlDays: 90, isPermanent: false },
+   ```
+
+**See:** `PHASE_4_1_CODE_LEVEL_PLAN.md` - Section 5 (Prerequisites) for complete details.
 
 ---
 
@@ -102,8 +168,31 @@ import { getAWSClientConfig } from '../../utils/aws-client-config';
 const logger = new Logger('ExecutionStatusAPIHandler');
 const traceService = new TraceService(logger);
 
+/**
+ * Helper to validate required environment variables with descriptive errors
+ */
+function requireEnv(name: string, handlerName: string): string {
+  const value = process.env[name];
+  if (!value) {
+    const error = new Error(
+      `[${handlerName}] Missing required environment variable: ${name}. ` +
+      `This variable must be set in the Lambda function configuration. ` +
+      `Check CDK stack definition for ExecutionInfrastructure construct.`
+    );
+    error.name = 'ConfigurationError';
+    throw error;
+  }
+  return value;
+}
+
+// Note: AWS_REGION is automatically set by Lambda runtime (not set in CDK environment variables)
+// Validate it exists (should always be present, but fail fast if somehow missing)
+const region = requireEnv('AWS_REGION', 'ExecutionStatusAPIHandler');
+const executionOutcomesTableName = requireEnv('EXECUTION_OUTCOMES_TABLE_NAME', 'ExecutionStatusAPIHandler');
+const executionAttemptsTableName = requireEnv('EXECUTION_ATTEMPTS_TABLE_NAME', 'ExecutionStatusAPIHandler');
+const actionIntentTableName = requireEnv('ACTION_INTENT_TABLE_NAME', 'ExecutionStatusAPIHandler');
+
 // Initialize AWS clients
-const region = process.env.AWS_REGION || 'us-west-2';
 const clientConfig = getAWSClientConfig(region);
 const dynamoClient = DynamoDBDocumentClient.from(new DynamoDBClient(clientConfig), {
   marshallOptions: { removeUndefinedValues: true },
@@ -112,19 +201,19 @@ const dynamoClient = DynamoDBDocumentClient.from(new DynamoDBClient(clientConfig
 // Initialize services
 const executionOutcomeService = new ExecutionOutcomeService(
   dynamoClient,
-  process.env.EXECUTION_OUTCOMES_TABLE_NAME || 'cc-native-execution-outcomes',
+  executionOutcomesTableName,
   logger
 );
 
 const executionAttemptService = new ExecutionAttemptService(
   dynamoClient,
-  process.env.EXECUTION_ATTEMPTS_TABLE_NAME || 'cc-native-execution-attempts',
+  executionAttemptsTableName,
   logger
 );
 
 const actionIntentService = new ActionIntentService(
   dynamoClient,
-  process.env.ACTION_INTENT_TABLE_NAME || 'cc-native-action-intents',
+  actionIntentTableName,
   logger
 );
 
@@ -149,8 +238,8 @@ function addCorsHeaders(response: APIGatewayProxyResult): APIGatewayProxyResult 
  */
 async function getExecutionStatusHandler(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
   const { action_intent_id } = event.pathParameters || {};
-  const tenantId = event.headers['x-tenant-id'] || '';
-  const accountId = event.queryStringParameters?.account_id || '';
+  const tenantId = event.headers['x-tenant-id'];
+  const accountId = event.queryStringParameters?.account_id;
   
   if (!action_intent_id || !tenantId || !accountId) {
     return addCorsHeaders({
@@ -231,8 +320,31 @@ async function getExecutionStatusHandler(event: APIGatewayProxyEvent): Promise<A
  */
 async function listAccountExecutionsHandler(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
   const { account_id } = event.pathParameters || {};
-  const tenantId = event.headers['x-tenant-id'] || '';
-  const limit = parseInt(event.queryStringParameters?.limit || '50', 10);
+  const tenantId = event.headers['x-tenant-id'];
+  if (!tenantId) {
+    return addCorsHeaders({
+      statusCode: 400,
+      body: JSON.stringify({ 
+        error: 'Missing required header: x-tenant-id',
+        message: 'The x-tenant-id header is required for all API requests. Include it in your request headers.',
+        path: event.path,
+      }),
+    });
+  }
+  
+  const limitParam = event.queryStringParameters?.limit;
+  const limit = limitParam ? parseInt(limitParam, 10) : 50;
+  if (limitParam && (isNaN(limit) || limit < 1 || limit > 100)) {
+    return addCorsHeaders({
+      statusCode: 400,
+      body: JSON.stringify({ 
+        error: 'Invalid limit parameter',
+        message: 'The limit query parameter must be a number between 1 and 100.',
+        provided: limitParam,
+        path: event.path,
+      }),
+    });
+  }
   
   if (!account_id || !tenantId) {
     return addCorsHeaders({
@@ -391,19 +503,23 @@ public readonly executionStatusApiHandler: lambda.Function;
 public readonly executionStatusApiResource?: apigateway.Resource;
 
 // In constructor:
-private createExecutionStatusAPI(props: ExecutionInfrastructureProps): void {
+private createExecutionStatusAPI(
+  props: ExecutionInfrastructureProps,
+  config: ExecutionInfrastructureConfig
+): void {
   // Create Lambda handler
   this.executionStatusApiHandler = new lambdaNodejs.NodejsFunction(this, 'ExecutionStatusAPIHandler', {
-    functionName: 'cc-native-execution-status-api',
+    functionName: config.functionNames.executionStatusApi,
     entry: 'src/handlers/phase4/execution-status-api-handler.ts',
     handler: 'handler',
     runtime: lambda.Runtime.NODEJS_20_X,
-    timeout: cdk.Duration.seconds(30),
+    timeout: cdk.Duration.seconds(config.defaults.timeout.executionStatusApi),
+    memorySize: config.defaults.memorySize?.executionStatusApi,
     environment: {
       EXECUTION_OUTCOMES_TABLE_NAME: this.executionOutcomesTable.tableName,
       EXECUTION_ATTEMPTS_TABLE_NAME: this.executionAttemptsTable.tableName,
       ACTION_INTENT_TABLE_NAME: props.actionIntentTable.tableName,
-      AWS_REGION: props.region || 'us-west-2',
+      // Note: AWS_REGION is automatically set by Lambda runtime and should not be set manually
     },
   });
   

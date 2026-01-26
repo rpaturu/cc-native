@@ -32,6 +32,81 @@ For detailed implementation plans, see:
 
 **Note:** This main document serves as a reference and overview. All detailed code-level plans are in the sub-phase documents above.
 
+**Important:** Code examples in this document are for reference only. For the most up-to-date and detailed implementation code, see the sub-phase documents:
+- Phase 4.1: `PHASE_4_1_CODE_LEVEL_PLAN.md`
+- Phase 4.2: `PHASE_4_2_CODE_LEVEL_PLAN.md`
+- Phase 4.3: `PHASE_4_3_CODE_LEVEL_PLAN.md`
+- Phase 4.4: `PHASE_4_4_CODE_LEVEL_PLAN.md`
+- Phase 4.5: `PHASE_4_5_CODE_LEVEL_PLAN.md`
+
+**Region Handling Pattern (consistent with Phase 3):**
+- In CDK: `const region = props.region || cdk.Stack.of(this).region;`
+- In Lambda environment variables: **Do NOT set AWS_REGION** - it's automatically provided by Lambda runtime
+- In Lambda handler code: Use `process.env.AWS_REGION` directly (validate with `requireEnv()` helper)
+
+---
+
+## Prerequisites (Before Starting Implementation)
+
+**Critical:** The following changes must be made to existing code before Phase 4 implementation begins:
+
+### 1. ActionIntentService.getIntent() Visibility
+
+**File:** `src/services/decision/ActionIntentService.ts`
+
+**Change:** Make `getIntent()` method public (currently private)
+
+```typescript
+// Change from:
+private async getIntent(intentId: string, tenantId: string, accountId: string): Promise<ActionIntentV1 | null>
+
+// To:
+public async getIntent(intentId: string, tenantId: string, accountId: string): Promise<ActionIntentV1 | null>
+```
+
+**Reason:** Phase 4 execution handlers need to fetch ActionIntentV1 records.
+
+**See:** `PHASE_4_1_CODE_LEVEL_PLAN.md` - Section 5 (Prerequisites) for details.
+
+### 2. LedgerEventType Enum Updates
+
+**File:** `src/types/LedgerTypes.ts`
+
+**Change:** Add Phase 4 execution event types
+
+```typescript
+export enum LedgerEventType {
+  // ... existing values ...
+  // Phase 4: Execution Layer events
+  EXECUTION_STARTED = 'EXECUTION_STARTED',
+  ACTION_EXECUTED = 'ACTION_EXECUTED',
+  ACTION_FAILED = 'ACTION_FAILED',
+}
+```
+
+**Reason:** Execution handlers need to log execution lifecycle events to the ledger.
+
+**See:** `PHASE_4_1_CODE_LEVEL_PLAN.md` - Section 5 (Prerequisites) for details.
+
+### 3. SignalType Enum Updates
+
+**File:** `src/types/SignalTypes.ts`
+
+**Change:** Add execution outcome signal types and supporting configuration
+
+1. Add new SignalType values:
+   ```typescript
+   ACTION_EXECUTED = 'ACTION_EXECUTED',
+   ACTION_FAILED = 'ACTION_FAILED',
+   ```
+
+2. Add window key derivation logic to `WINDOW_KEY_DERIVATION` mapping
+3. Add TTL configuration to `DEFAULT_SIGNAL_TTL` mapping
+
+**Reason:** Phase 4.4 signal emission needs these signal types to feed execution outcomes back into the perception layer.
+
+**See:** `PHASE_4_1_CODE_LEVEL_PLAN.md` - Section 5 (Prerequisites) and `PHASE_4_4_CODE_LEVEL_PLAN.md` - Section 1 for complete details.
+
 ---
 
 ## Implementation Order
@@ -972,8 +1047,34 @@ import { getAWSClientConfig } from '../../utils/aws-client-config';
 const logger = new Logger('ExecutionStarterHandler');
 const traceService = new TraceService(logger);
 
+/**
+ * Helper to validate required environment variables with descriptive errors
+ */
+function requireEnv(name: string, handlerName: string): string {
+  const value = process.env[name];
+  if (!value) {
+    const error = new Error(
+      `[${handlerName}] Missing required environment variable: ${name}. ` +
+      `This variable must be set in the Lambda function configuration. ` +
+      `Check CDK stack definition for ExecutionInfrastructure construct.`
+    );
+    error.name = 'ConfigurationError';
+    throw error;
+  }
+  return value;
+}
+
+// Note: AWS_REGION is automatically set by Lambda runtime (not set in CDK environment variables)
+// Validate it exists (should always be present, but fail fast if somehow missing)
+const region = requireEnv('AWS_REGION', 'ExecutionStarterHandler');
+
+// Validate required environment variables with better error handling
+const executionAttemptsTableName = requireEnv('EXECUTION_ATTEMPTS_TABLE_NAME', 'ExecutionStarterHandler');
+const actionIntentTableName = requireEnv('ACTION_INTENT_TABLE_NAME', 'ExecutionStarterHandler');
+const actionTypeRegistryTableName = requireEnv('ACTION_TYPE_REGISTRY_TABLE_NAME', 'ExecutionStarterHandler');
+const ledgerTableName = requireEnv('LEDGER_TABLE_NAME', 'ExecutionStarterHandler');
+
 // Initialize AWS clients
-const region = process.env.AWS_REGION || 'us-west-2';
 const clientConfig = getAWSClientConfig(region);
 const dynamoClient = DynamoDBDocumentClient.from(new DynamoDBClient(clientConfig), {
   marshallOptions: { removeUndefinedValues: true },
@@ -982,19 +1083,19 @@ const dynamoClient = DynamoDBDocumentClient.from(new DynamoDBClient(clientConfig
 // Initialize services
 const executionAttemptService = new ExecutionAttemptService(
   dynamoClient,
-  process.env.EXECUTION_ATTEMPTS_TABLE_NAME || 'cc-native-execution-attempts',
+  executionAttemptsTableName,
   logger
 );
 
 const actionIntentService = new ActionIntentService(
   dynamoClient,
-  process.env.ACTION_INTENT_TABLE_NAME || 'cc-native-action-intents',
+  actionIntentTableName,
   logger
 );
 
 const actionTypeRegistryService = new ActionTypeRegistryService(
   dynamoClient,
-  process.env.ACTION_TYPE_REGISTRY_TABLE_NAME || 'cc-native-action-type-registry',
+  actionTypeRegistryTableName,
   logger
 );
 
@@ -1002,7 +1103,7 @@ const idempotencyService = new IdempotencyService();
 
 const ledgerService = new LedgerService(
   logger,
-  process.env.LEDGER_TABLE_NAME || 'cc-native-ledger',
+  ledgerTableName,
   region
 );
 
@@ -1119,8 +1220,29 @@ import { getAWSClientConfig } from '../../utils/aws-client-config';
 const logger = new Logger('ExecutionValidatorHandler');
 const traceService = new TraceService(logger);
 
-// Initialize AWS clients
-const region = process.env.AWS_REGION || 'us-west-2';
+/**
+ * Helper to validate required environment variables with descriptive errors
+ */
+function requireEnv(name: string, handlerName: string): string {
+  const value = process.env[name];
+  if (!value) {
+    const error = new Error(
+      `[${handlerName}] Missing required environment variable: ${name}. ` +
+      `This variable must be set in the Lambda function configuration. ` +
+      `Check CDK stack definition for ExecutionInfrastructure construct.`
+    );
+    error.name = 'ConfigurationError';
+    throw error;
+  }
+  return value;
+}
+
+// Note: AWS_REGION is automatically set by Lambda runtime (not set in CDK environment variables)
+// Validate it exists (should always be present, but fail fast if somehow missing)
+const region = requireEnv('AWS_REGION', 'ExecutionValidatorHandler');
+const actionIntentTableName = requireEnv('ACTION_INTENT_TABLE_NAME', 'ExecutionValidatorHandler');
+const tenantsTableName = requireEnv('TENANTS_TABLE_NAME', 'ExecutionValidatorHandler');
+
 const clientConfig = getAWSClientConfig(region);
 const dynamoClient = DynamoDBDocumentClient.from(new DynamoDBClient(clientConfig), {
   marshallOptions: { removeUndefinedValues: true },
@@ -1129,13 +1251,13 @@ const dynamoClient = DynamoDBDocumentClient.from(new DynamoDBClient(clientConfig
 // Initialize services
 const actionIntentService = new ActionIntentService(
   dynamoClient,
-  process.env.ACTION_INTENT_TABLE_NAME || 'cc-native-action-intents',
+  actionIntentTableName,
   logger
 );
 
 const killSwitchService = new KillSwitchService(
   dynamoClient,
-  process.env.TENANTS_TABLE_NAME || 'cc-native-tenants',
+  tenantsTableName,
   logger
 );
 
@@ -1207,8 +1329,30 @@ import { getAWSClientConfig } from '../../utils/aws-client-config';
 const logger = new Logger('ToolMapperHandler');
 const traceService = new TraceService(logger);
 
-// Initialize AWS clients
-const region = process.env.AWS_REGION || 'us-west-2';
+/**
+ * Helper to validate required environment variables with descriptive errors
+ */
+function requireEnv(name: string, handlerName: string): string {
+  const value = process.env[name];
+  if (!value) {
+    const error = new Error(
+      `[${handlerName}] Missing required environment variable: ${name}. ` +
+      `This variable must be set in the Lambda function configuration. ` +
+      `Check CDK stack definition for ExecutionInfrastructure construct.`
+    );
+    error.name = 'ConfigurationError';
+    throw error;
+  }
+  return value;
+}
+
+// Note: AWS_REGION is automatically set by Lambda runtime (not set in CDK environment variables)
+// Validate it exists (should always be present, but fail fast if somehow missing)
+const region = requireEnv('AWS_REGION', 'ToolMapperHandler');
+const actionIntentTableName = requireEnv('ACTION_INTENT_TABLE_NAME', 'ToolMapperHandler');
+const actionTypeRegistryTableName = requireEnv('ACTION_TYPE_REGISTRY_TABLE_NAME', 'ToolMapperHandler');
+const gatewayUrl = requireEnv('AGENTCORE_GATEWAY_URL', 'ToolMapperHandler');
+
 const clientConfig = getAWSClientConfig(region);
 const dynamoClient = DynamoDBDocumentClient.from(new DynamoDBClient(clientConfig), {
   marshallOptions: { removeUndefinedValues: true },
@@ -1217,13 +1361,13 @@ const dynamoClient = DynamoDBDocumentClient.from(new DynamoDBClient(clientConfig
 // Initialize services
 const actionIntentService = new ActionIntentService(
   dynamoClient,
-  process.env.ACTION_INTENT_TABLE_NAME || 'cc-native-action-intents',
+  actionIntentTableName,
   logger
 );
 
 const actionTypeRegistryService = new ActionTypeRegistryService(
   dynamoClient,
-  process.env.ACTION_TYPE_REGISTRY_TABLE_NAME || 'cc-native-action-type-registry',
+  actionTypeRegistryTableName,
   logger
 );
 
@@ -1269,8 +1413,8 @@ export const handler: Handler = async (event: {
     // 4. Add idempotency_key to tool arguments (for adapter-level idempotency)
     toolArguments.idempotency_key = idempotency_key;
     
-    // 5. Get Gateway URL and JWT token (from environment/config)
-    const gatewayUrl = process.env.AGENTCORE_GATEWAY_URL || '';
+    // 5. Get JWT token (from environment/config)
+    // Note: gatewayUrl is already validated and available from module scope
     const jwtToken = await getJwtToken(tenant_id); // Implement JWT token retrieval (Cognito)
     
     // 6. Return for Step Functions
@@ -1623,8 +1767,9 @@ import { getAWSClientConfig } from '../../utils/aws-client-config';
 const logger = new Logger('ExecutionRecorderHandler');
 const traceService = new TraceService(logger);
 
-// Initialize AWS clients
-const region = process.env.AWS_REGION || 'us-west-2';
+// Note: AWS_REGION is automatically set by Lambda runtime (not set in CDK environment variables)
+// Validate it exists (should always be present, but fail fast if somehow missing)
+const region = requireEnv('AWS_REGION', 'ExecutionValidatorHandler');
 const clientConfig = getAWSClientConfig(region);
 const dynamoClient = DynamoDBDocumentClient.from(new DynamoDBClient(clientConfig), {
   marshallOptions: { removeUndefinedValues: true },
@@ -1800,8 +1945,9 @@ import { getAWSClientConfig } from '../../utils/aws-client-config';
 const logger = new Logger('CompensationHandler');
 const traceService = new TraceService(logger);
 
-// Initialize AWS clients
-const region = process.env.AWS_REGION || 'us-west-2';
+// Note: AWS_REGION is automatically set by Lambda runtime (not set in CDK environment variables)
+// Validate it exists (should always be present, but fail fast if somehow missing)
+const region = requireEnv('AWS_REGION', 'ExecutionValidatorHandler');
 const clientConfig = getAWSClientConfig(region);
 const dynamoClient = DynamoDBDocumentClient.from(new DynamoDBClient(clientConfig), {
   marshallOptions: { removeUndefinedValues: true },
@@ -1989,6 +2135,9 @@ export class ExecutionInfrastructure extends Construct {
   constructor(scope: Construct, id: string, props: ExecutionInfrastructureProps) {
     super(scope, id);
 
+    // Get region from props or stack (consistent with Phase 3 pattern)
+    const region = props.region || cdk.Stack.of(this).region;
+
     // 1. Create DynamoDB Tables
     this.executionAttemptsTable = this.createExecutionAttemptsTable();
     this.executionOutcomesTable = this.createExecutionOutcomesTable();
@@ -2117,7 +2266,7 @@ export class ExecutionInfrastructure extends Construct {
         ACTION_INTENT_TABLE_NAME: props.actionIntentTable.tableName,
         ACTION_TYPE_REGISTRY_TABLE_NAME: this.actionTypeRegistryTable.tableName,
         LEDGER_TABLE_NAME: props.ledgerTable.tableName,
-        AWS_REGION: props.region || 'us-west-2',
+        // Note: AWS_REGION is automatically set by Lambda runtime and should not be set manually
       },
       deadLetterQueue: this.executionStarterDlq,
       deadLetterQueueEnabled: true,
@@ -2143,7 +2292,7 @@ export class ExecutionInfrastructure extends Construct {
       environment: {
         ACTION_INTENT_TABLE_NAME: props.actionIntentTable.tableName,
         TENANTS_TABLE_NAME: props.tenantsTable.tableName,
-        AWS_REGION: props.region || 'us-west-2',
+        // Note: AWS_REGION is automatically set by Lambda runtime and should not be set manually
       },
       deadLetterQueue: this.executionValidatorDlq,
       deadLetterQueueEnabled: true,
@@ -2168,7 +2317,7 @@ export class ExecutionInfrastructure extends Construct {
         ACTION_INTENT_TABLE_NAME: props.actionIntentTable.tableName,
         ACTION_TYPE_REGISTRY_TABLE_NAME: this.actionTypeRegistryTable.tableName,
         AGENTCORE_GATEWAY_URL: process.env.AGENTCORE_GATEWAY_URL || '', // TODO: Get from Gateway construct
-        AWS_REGION: props.region || 'us-west-2',
+        // Note: AWS_REGION is automatically set by Lambda runtime and should not be set manually
       },
       deadLetterQueue: this.toolMapperDlq,
       deadLetterQueueEnabled: true,
@@ -2200,7 +2349,7 @@ export class ExecutionInfrastructure extends Construct {
       timeout: cdk.Duration.seconds(60), // Longer timeout for external calls
       environment: {
         EXECUTION_ARTIFACTS_BUCKET: this.executionArtifactsBucket?.bucketName || '',
-        AWS_REGION: props.region || 'us-west-2',
+        // Note: AWS_REGION is automatically set by Lambda runtime and should not be set manually
       },
       deadLetterQueue: this.toolInvokerDlq,
       deadLetterQueueEnabled: true,
@@ -2232,7 +2381,7 @@ export class ExecutionInfrastructure extends Construct {
         SIGNALS_TABLE_NAME: process.env.SIGNALS_TABLE_NAME || 'cc-native-signals',
         ACCOUNTS_TABLE_NAME: process.env.ACCOUNTS_TABLE_NAME || 'cc-native-accounts',
         EVENT_BUS_NAME: props.eventBus.eventBusName,
-        AWS_REGION: props.region || 'us-west-2',
+        // Note: AWS_REGION is automatically set by Lambda runtime and should not be set manually
       },
       deadLetterQueue: this.executionRecorderDlq,
       deadLetterQueueEnabled: true,
@@ -2260,7 +2409,7 @@ export class ExecutionInfrastructure extends Construct {
         ACTION_TYPE_REGISTRY_TABLE_NAME: this.actionTypeRegistryTable.tableName,
         EXECUTION_OUTCOMES_TABLE_NAME: this.executionOutcomesTable.tableName,
         EXTERNAL_WRITE_DEDUPE_TABLE_NAME: this.externalWriteDedupeTable.tableName,
-        AWS_REGION: props.region || 'us-west-2',
+        // Note: AWS_REGION is automatically set by Lambda runtime and should not be set manually
       },
       deadLetterQueue: this.compensationDlq,
       deadLetterQueueEnabled: true,

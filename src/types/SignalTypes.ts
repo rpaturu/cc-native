@@ -33,6 +33,11 @@ export enum SignalType {
   USAGE_TREND_CHANGE = 'USAGE_TREND_CHANGE',
   SUPPORT_RISK_EMERGING = 'SUPPORT_RISK_EMERGING',
   RENEWAL_WINDOW_ENTERED = 'RENEWAL_WINDOW_ENTERED',
+  // Phase 4: Execution outcome signals
+  // These signals feed execution outcomes back into the perception layer
+  // for future decision-making and learning (Phase 5+)
+  ACTION_EXECUTED = 'ACTION_EXECUTED',
+  ACTION_FAILED = 'ACTION_FAILED',
 }
 
 /**
@@ -202,6 +207,17 @@ export const WINDOW_KEY_DERIVATION: Record<SignalType, (accountId: string, evide
     const thresholdBoundary = evidence?.thresholdBoundary || 'default';
     return `${accountId}-${contractId}-${thresholdBoundary}`;
   },
+  // Phase 4: Execution outcome signals
+  [SignalType.ACTION_EXECUTED]: (accountId, evidence, timestamp) => {
+    // One signal per action_intent_id (from evidence)
+    const actionIntentId = evidence?.action_intent_id || 'unknown';
+    return `${accountId}-${actionIntentId}`;
+  },
+  [SignalType.ACTION_FAILED]: (accountId, evidence, timestamp) => {
+    // One signal per action_intent_id (from evidence)
+    const actionIntentId = evidence?.action_intent_id || 'unknown';
+    return `${accountId}-${actionIntentId}`;
+  },
 };
 
 /**
@@ -216,4 +232,7 @@ export const DEFAULT_SIGNAL_TTL: Record<SignalType, { ttlDays: number | null; is
   [SignalType.USAGE_TREND_CHANGE]: { ttlDays: 30, isPermanent: false },
   [SignalType.SUPPORT_RISK_EMERGING]: { ttlDays: 30, isPermanent: false },
   [SignalType.RENEWAL_WINDOW_ENTERED]: { ttlDays: null, isPermanent: false }, // Contract-bound
+  // Phase 4: Execution outcome signals
+  [SignalType.ACTION_EXECUTED]: { ttlDays: 90, isPermanent: false },
+  [SignalType.ACTION_FAILED]: { ttlDays: 90, isPermanent: false },
 };

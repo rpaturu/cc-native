@@ -538,6 +538,10 @@ export interface ActionIntentV1 {
   tenant_id: string;
   account_id: string;
   trace_id: string;
+  // Phase 4: Execution contract requirement
+  registry_version: number; // REQUIRED: Registry version used at decision time
+  // This locks the mapping used for execution, preventing silent behavioral drift
+  // Phase 3 must populate this when creating ActionIntentV1
 }
 
 /**

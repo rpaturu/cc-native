@@ -57,7 +57,11 @@ export class ActionIntentService {
       edited_at: editedFields && editedFields.length > 0 ? new Date().toISOString() : undefined,
       tenant_id: tenantId,
       account_id: accountId,
-      trace_id: traceId
+      trace_id: traceId,
+      // Phase 4: Registry version (required for deterministic execution)
+      // TODO: Phase 3 needs to be updated to fetch registry_version from ActionTypeRegistryService
+      // For now, defaulting to 1 (will be properly populated when Phase 3 is updated)
+      registry_version: 1 // TODO: Get from ActionTypeRegistryService.getToolMapping(action_type)?.registry_version
     };
     
     // Validate provenance invariant (original_proposal_id == original_decision_id)
@@ -167,8 +171,10 @@ export class ActionIntentService {
   /**
    * Get intent by action_intent_id (uses GSI)
    * CRITICAL: Verifies tenant and account match to prevent cross-scope access
+   * 
+   * Phase 4: Made public for execution-starter-handler to fetch intent
    */
-  private async getIntent(intentId: string, tenantId: string, accountId: string): Promise<ActionIntentV1 | null> {
+  public async getIntent(intentId: string, tenantId: string, accountId: string): Promise<ActionIntentV1 | null> {
     // Use GSI for direct lookup
     const result = await this.dynamoClient.send(new QueryCommand({
       TableName: this.intentTableName,

@@ -2,9 +2,36 @@
 
 **Status:** 🟡 **PLANNING**  
 **Created:** 2026-01-26  
-**Last Updated:** 2026-01-26  
+**Last Updated:** 2026-01-26 (Updated to align with Phase 4.1 revisions)  
 **Parent Document:** `PHASE_4_CODE_LEVEL_PLAN.md`  
 **Prerequisites:** Phase 4.1 complete
+
+---
+
+## Execution Contract (Canonical)
+
+**See Phase 4.1 document for complete contract details. Key points:**
+
+1. **Step Functions Input** (from EventBridge rule): `{ action_intent_id, tenant_id, account_id }`
+2. **execution-starter-handler Output**: `{ action_intent_id, idempotency_key, tenant_id, account_id, trace_id, registry_version }`
+   - `trace_id` = `execution_trace_id` (generated at execution start)
+   - `registry_version` = Registry version used for this execution (from ActionIntentV1)
+3. **Execution Tracing**: Two separate traces:
+   - `execution_trace_id`: Generated at execution start, used for all execution lifecycle events
+   - `decision_trace_id`: From Phase 3 ActionIntentV1, used as correlation field in ledger events
+4. **ActionIntent Contract**: `ActionIntentV1.registry_version` is REQUIRED (stored at Phase 3 decision time)
+
+**All Phase 4.2 handlers must:**
+- Use `execution_trace_id` (from Step Functions input) for execution lifecycle events
+- Use `registry_version` (from Step Functions input) for tool mapping lookup
+- Include `decision_trace_id` as correlation field in ledger events (fetch from intent if needed)
+
+**Key Changes from Phase 4.1 Revisions:**
+1. **registry_version**: Use `registry_version` from ActionIntentV1 (not `parameters_schema_version`)
+2. **execution_trace_id**: Use `trace_id` from Step Functions input (from starter handler), not `intent.trace_id`
+3. **Zod Validation**: All handlers use Zod schemas for SFN input validation (fail-fast)
+4. **registry_version in outcomes**: Include `registry_version` in execution outcomes for audit
+5. **decision_trace_id correlation**: Fetch intent to get `decision_trace_id` for ledger event correlation
 
 ---
 
@@ -56,8 +83,32 @@ import { getAWSClientConfig } from '../../utils/aws-client-config';
 const logger = new Logger('ToolMapperHandler');
 const traceService = new TraceService(logger);
 
+/**
+ * Helper to validate required environment variables with descriptive errors
+ */
+function requireEnv(name: string, handlerName: string): string {
+  const value = process.env[name];
+  if (!value) {
+    const error = new Error(
+      `[${handlerName}] Missing required environment variable: ${name}. ` +
+      `This variable must be set in the Lambda function configuration. ` +
+      `Check CDK stack definition for ExecutionInfrastructure construct. ` +
+      `For AGENTCORE_GATEWAY_URL, ensure Gateway is configured and URL is provided.`
+    );
+    error.name = 'ConfigurationError';
+    throw error;
+  }
+  return value;
+}
+
+// Note: AWS_REGION is automatically set by Lambda runtime (not set in CDK environment variables)
+// Validate it exists (should always be present, but fail fast if somehow missing)
+const region = requireEnv('AWS_REGION', 'ToolMapperHandler');
+const actionIntentTableName = requireEnv('ACTION_INTENT_TABLE_NAME', 'ToolMapperHandler');
+const actionTypeRegistryTableName = requireEnv('ACTION_TYPE_REGISTRY_TABLE_NAME', 'ToolMapperHandler');
+const gatewayUrl = requireEnv('AGENTCORE_GATEWAY_URL', 'ToolMapperHandler');
+
 // Initialize AWS clients
-const region = process.env.AWS_REGION || 'us-west-2';
 const clientConfig = getAWSClientConfig(region);
 const dynamoClient = DynamoDBDocumentClient.from(new DynamoDBClient(clientConfig), {
   marshallOptions: { removeUndefinedValues: true },
@@ -66,30 +117,54 @@ const dynamoClient = DynamoDBDocumentClient.from(new DynamoDBClient(clientConfig
 // Initialize services
 const actionIntentService = new ActionIntentService(
   dynamoClient,
-  process.env.ACTION_INTENT_TABLE_NAME || 'cc-native-action-intents',
+  actionIntentTableName,
   logger
 );
 
 const actionTypeRegistryService = new ActionTypeRegistryService(
   dynamoClient,
-  process.env.ACTION_TYPE_REGISTRY_TABLE_NAME || 'cc-native-action-type-registry',
+  actionTypeRegistryTableName,
   logger
 );
 
 /**
- * Step Functions input: { action_intent_id, tenant_id, account_id, idempotency_key }
- * Step Functions output: { gateway_url, tool_name, tool_arguments, tool_schema_version, idempotency_key, jwt_token, action_intent_id, tenant_id, account_id, trace_id }
+ * Step Functions input: { action_intent_id, tenant_id, account_id, idempotency_key, trace_id, registry_version }
+ * (trace_id and registry_version come from execution-starter-handler output)
+ * 
+ * Step Functions output: { gateway_url, tool_name, tool_arguments, tool_schema_version, registry_version, idempotency_key, jwt_token, action_intent_id, tenant_id, account_id, trace_id }
+ * 
+ * Note: trace_id is execution_trace_id (from starter handler), not decision_trace_id.
+ * Note: registry_version is from starter handler output (deterministic execution).
  */
-export const handler: Handler = async (event: {
-  action_intent_id: string;
-  tenant_id: string;
-  account_id: string;
-  idempotency_key: string;
-}) => {
-  const { action_intent_id, tenant_id, account_id, idempotency_key } = event;
-  const traceId = traceService.generateTraceId();
+import { z } from 'zod';
+
+// Zod schema for SFN input validation (fail fast with precise errors)
+const StepFunctionsInputSchema = z.object({
+  action_intent_id: z.string().min(1, 'action_intent_id is required'),
+  tenant_id: z.string().min(1, 'tenant_id is required'),
+  account_id: z.string().min(1, 'account_id is required'),
+  idempotency_key: z.string().min(1, 'idempotency_key is required'),
+  trace_id: z.string().min(1, 'trace_id is required'), // execution_trace_id from starter handler
+  registry_version: z.number().int().positive('registry_version must be positive integer'), // From starter handler output
+}).strict();
+
+export const handler: Handler = async (event: unknown) => {
+  // Validate SFN input with Zod (fail fast with precise errors)
+  const validationResult = StepFunctionsInputSchema.safeParse(event);
+  if (!validationResult.success) {
+    const error = new Error(
+      `[ToolMapperHandler] Invalid Step Functions input: ${validationResult.error.message}. ` +
+      `Expected: { action_intent_id: string, tenant_id: string, account_id: string, idempotency_key: string, trace_id: string, registry_version: number }. ` +
+      `Received: ${JSON.stringify(event)}. ` +
+      `Check Step Functions state machine definition to ensure all required fields are passed from execution-starter-handler output.`
+    );
+    error.name = 'InvalidEventError';
+    throw error;
+  }
   
-  logger.info('Tool mapper invoked', { action_intent_id, tenant_id, account_id, traceId });
+  const { action_intent_id, tenant_id, account_id, idempotency_key, trace_id, registry_version } = validationResult.data;
+  
+  logger.info('Tool mapper invoked', { action_intent_id, tenant_id, account_id, trace_id, registry_version });
   
   try {
     // 1. Fetch ActionIntentV1
@@ -99,14 +174,19 @@ export const handler: Handler = async (event: {
       throw new Error(`ActionIntent not found: ${action_intent_id}`);
     }
     
-    // 2. Get tool mapping from registry
+    // 2. Get tool mapping from registry using registry_version (from starter handler output)
+    // This ensures deterministic execution - uses the exact registry version recorded at decision time
     const toolMapping = await actionTypeRegistryService.getToolMapping(
       intent.action_type,
-      intent.parameters_schema_version
+      registry_version // Use registry_version from Step Functions input (from starter handler)
     );
     
     if (!toolMapping) {
-      throw new Error(`Tool mapping not found for action_type: ${intent.action_type}, schema_version: ${intent.parameters_schema_version}`);
+      throw new Error(
+        `Tool mapping not found for action_type: ${intent.action_type}, registry_version: ${registry_version}. ` +
+        `This may indicate the action type was removed or the registry version is invalid. ` +
+        `Check ActionTypeRegistry table for ACTION_TYPE#${intent.action_type}, REGISTRY_VERSION#${registry_version}.`
+      );
     }
     
     // 3. Map parameters to tool arguments
@@ -118,25 +198,27 @@ export const handler: Handler = async (event: {
     // 4. Add idempotency_key to tool arguments (for adapter-level idempotency)
     toolArguments.idempotency_key = idempotency_key;
     
-    // 5. Get Gateway URL and JWT token (from environment/config)
-    const gatewayUrl = process.env.AGENTCORE_GATEWAY_URL || '';
+    // 5. Get JWT token (from environment/config)
     const jwtToken = await getJwtToken(tenant_id); // Implement JWT token retrieval (Cognito)
     
     // 6. Return for Step Functions
+    // Note: trace_id is execution_trace_id (from starter handler), not decision_trace_id
+    // Note: registry_version is passed through for backwards compatibility and audit
     return {
       gateway_url: gatewayUrl,
       tool_name: toolMapping.tool_name,
       tool_arguments: toolArguments,
       tool_schema_version: toolMapping.tool_schema_version,
+      registry_version: registry_version, // Pass through for execution recorder
       idempotency_key: idempotency_key,
       jwt_token: jwtToken,
       action_intent_id,
       tenant_id,
       account_id,
-      trace_id: intent.trace_id,
+      trace_id, // execution_trace_id (from starter handler), not intent.trace_id
     };
   } catch (error: any) {
-    logger.error('Tool mapping failed', { action_intent_id, error });
+    logger.error('Tool mapping failed', { action_intent_id, error: error.message, errorName: error.name, stack: error.stack });
     throw error;
   }
 };
@@ -362,9 +444,29 @@ function extractExternalObjectRefs(parsedResponse: any): ToolInvocationResponse[
   // Infer system from tool name or response
   const system = inferSystemFromTool(parsedResponse.tool_name);
   
+  if (!parsedResponse.external_object_id) {
+    const error = new Error(
+      'Tool invocation response is missing required field: external_object_id. ' +
+      'The connector adapter must return external_object_id in the MCP response. ' +
+      `Tool: ${parsedResponse.tool_name || 'unknown'}, Response: ${JSON.stringify(parsedResponse)}`
+    );
+    error.name = 'InvalidToolResponseError';
+    throw error;
+  }
+  
+  if (!parsedResponse.object_type) {
+    const error = new Error(
+      'Tool invocation response is missing required field: object_type. ' +
+      'The connector adapter must return object_type in the MCP response. ' +
+      `Tool: ${parsedResponse.tool_name || 'unknown'}, Response: ${JSON.stringify(parsedResponse)}`
+    );
+    error.name = 'InvalidToolResponseError';
+    throw error;
+  }
+  
   return [{
     system,
-    object_type: parsedResponse.object_type || 'Unknown',
+    object_type: parsedResponse.object_type,
     object_id: parsedResponse.external_object_id,
     object_url: parsedResponse.object_url,
   }];
@@ -396,7 +498,16 @@ function classifyError(parsedResponse: any): {
   }
   
   const error = parsedResponse.error || parsedResponse;
-  const errorMessage = error.message || error.error || 'Unknown error';
+  const errorMessage = error.message || error.error;
+  if (!errorMessage) {
+    const errorObj = new Error(
+      'Tool invocation failed but no error message was provided. ' +
+      'The connector adapter must return a descriptive error message in the MCP response. ' +
+      `Tool: ${parsedResponse.tool_name || 'unknown'}, Response: ${JSON.stringify(parsedResponse)}`
+    );
+    errorObj.name = 'InvalidToolResponseError';
+    throw errorObj;
+  }
   
   // Classify by error message patterns
   if (errorMessage.includes('authentication') || errorMessage.includes('unauthorized')) {
@@ -462,6 +573,7 @@ import { Logger } from '../../services/core/Logger';
 import { TraceService } from '../../services/core/TraceService';
 import { ExecutionOutcomeService } from '../../services/execution/ExecutionOutcomeService';
 import { ExecutionAttemptService } from '../../services/execution/ExecutionAttemptService';
+import { ActionIntentService } from '../../services/decision/ActionIntentService';
 import { LedgerService } from '../../services/ledger/LedgerService';
 import { LedgerEventType } from '../../types/LedgerTypes';
 import { ToolInvocationResponse } from '../../types/ExecutionTypes';
@@ -472,8 +584,32 @@ import { getAWSClientConfig } from '../../utils/aws-client-config';
 const logger = new Logger('ExecutionRecorderHandler');
 const traceService = new TraceService(logger);
 
+/**
+ * Helper to validate required environment variables with descriptive errors
+ */
+function requireEnv(name: string, handlerName: string): string {
+  const value = process.env[name];
+  if (!value) {
+    const error = new Error(
+      `[${handlerName}] Missing required environment variable: ${name}. ` +
+      `This variable must be set in the Lambda function configuration. ` +
+      `Check CDK stack definition for ExecutionInfrastructure construct.`
+    );
+    error.name = 'ConfigurationError';
+    throw error;
+  }
+  return value;
+}
+
+// Note: AWS_REGION is automatically set by Lambda runtime (not set in CDK environment variables)
+// Validate it exists (should always be present, but fail fast if somehow missing)
+const region = requireEnv('AWS_REGION', 'ExecutionRecorderHandler');
+const executionOutcomesTableName = requireEnv('EXECUTION_OUTCOMES_TABLE_NAME', 'ExecutionRecorderHandler');
+const executionAttemptsTableName = requireEnv('EXECUTION_ATTEMPTS_TABLE_NAME', 'ExecutionRecorderHandler');
+const actionIntentTableName = requireEnv('ACTION_INTENT_TABLE_NAME', 'ExecutionRecorderHandler');
+const ledgerTableName = requireEnv('LEDGER_TABLE_NAME', 'ExecutionRecorderHandler');
+
 // Initialize AWS clients
-const region = process.env.AWS_REGION || 'us-west-2';
 const clientConfig = getAWSClientConfig(region);
 const dynamoClient = DynamoDBDocumentClient.from(new DynamoDBClient(clientConfig), {
   marshallOptions: { removeUndefinedValues: true },
@@ -482,19 +618,25 @@ const dynamoClient = DynamoDBDocumentClient.from(new DynamoDBClient(clientConfig
 // Initialize services
 const executionOutcomeService = new ExecutionOutcomeService(
   dynamoClient,
-  process.env.EXECUTION_OUTCOMES_TABLE_NAME || 'cc-native-execution-outcomes',
+  executionOutcomesTableName,
   logger
 );
 
 const executionAttemptService = new ExecutionAttemptService(
   dynamoClient,
-  process.env.EXECUTION_ATTEMPTS_TABLE_NAME || 'cc-native-execution-attempts',
+  executionAttemptsTableName,
+  logger
+);
+
+const actionIntentService = new ActionIntentService(
+  dynamoClient,
+  actionIntentTableName,
   logger
 );
 
 const ledgerService = new LedgerService(
   logger,
-  process.env.LEDGER_TABLE_NAME || 'cc-native-ledger',
+  ledgerTableName,
   region
 );
 
@@ -503,44 +645,75 @@ const ledgerService = new LedgerService(
  *   action_intent_id,
  *   tenant_id,
  *   account_id,
- *   trace_id,
+ *   trace_id, // execution_trace_id (from starter handler)
  *   tool_invocation_response: ToolInvocationResponse,
  *   tool_name,
  *   tool_schema_version,
+ *   registry_version, // From starter handler output (for audit and backwards compatibility)
  *   attempt_count,
  *   started_at
  * }
+ * 
+ * Note: trace_id is execution_trace_id (from starter handler), not decision_trace_id.
  */
-export const handler: Handler = async (event: {
-  action_intent_id: string;
-  tenant_id: string;
-  account_id: string;
-  trace_id: string;
-  tool_invocation_response: ToolInvocationResponse;
-  tool_name: string;
-  tool_schema_version: string;
-  attempt_count: number;
-  started_at: string;
-}) => {
+import { z } from 'zod';
+
+// Zod schema for SFN input validation (fail fast with precise errors)
+const StepFunctionsInputSchema = z.object({
+  action_intent_id: z.string().min(1, 'action_intent_id is required'),
+  tenant_id: z.string().min(1, 'tenant_id is required'),
+  account_id: z.string().min(1, 'account_id is required'),
+  trace_id: z.string().min(1, 'trace_id is required'), // execution_trace_id
+  tool_invocation_response: z.object({
+    success: z.boolean(),
+    external_object_refs: z.array(z.any()).optional(),
+    tool_run_ref: z.string(),
+    raw_response_artifact_ref: z.string().optional(),
+    error_code: z.string().optional(),
+    error_class: z.string().optional(),
+    error_message: z.string().optional(),
+  }),
+  tool_name: z.string().min(1, 'tool_name is required'),
+  tool_schema_version: z.string().min(1, 'tool_schema_version is required'),
+  registry_version: z.number().int().positive('registry_version must be positive integer'), // From starter handler
+  attempt_count: z.number().int().positive('attempt_count must be positive integer'),
+  started_at: z.string().min(1, 'started_at is required'),
+}).strict();
+
+export const handler: Handler = async (event: unknown) => {
+  // Validate SFN input with Zod (fail fast with precise errors)
+  const validationResult = StepFunctionsInputSchema.safeParse(event);
+  if (!validationResult.success) {
+    const error = new Error(
+      `[ExecutionRecorderHandler] Invalid Step Functions input: ${validationResult.error.message}. ` +
+      `Expected: { action_intent_id, tenant_id, account_id, trace_id, tool_invocation_response, tool_name, tool_schema_version, registry_version, attempt_count, started_at }. ` +
+      `Received: ${JSON.stringify(event)}. ` +
+      `Check Step Functions state machine definition to ensure all required fields are passed from tool-invoker-handler output.`
+    );
+    error.name = 'InvalidEventError';
+    throw error;
+  }
+  
   const {
     action_intent_id,
     tenant_id,
     account_id,
-    trace_id,
+    trace_id, // execution_trace_id (from starter handler)
     tool_invocation_response,
     tool_name,
     tool_schema_version,
+    registry_version, // From starter handler output
     attempt_count,
     started_at,
-  } = event;
+  } = validationResult.data;
   
-  logger.info('Execution recorder invoked', { action_intent_id, trace_id });
+  logger.info('Execution recorder invoked', { action_intent_id, trace_id, registry_version });
   
   try {
     const completedAt = new Date().toISOString();
     const status = tool_invocation_response.success ? 'SUCCEEDED' : 'FAILED';
     
-    // 1. Record outcome
+    // 1. Record outcome (include registry_version for audit and backwards compatibility)
     const outcome = await executionOutcomeService.recordOutcome({
       action_intent_id,
       status,
@@ -551,6 +724,7 @@ export const handler: Handler = async (event: {
       attempt_count,
       tool_name,
       tool_schema_version,
+      registry_version, // Include registry_version in outcome (for audit and backwards compatibility)
       tool_run_ref: tool_invocation_response.tool_run_ref,
       raw_response_artifact_ref: tool_invocation_response.raw_response_artifact_ref,
       started_at,
@@ -558,7 +732,7 @@ export const handler: Handler = async (event: {
       compensation_status: 'NONE', // Compensation handled separately
       tenant_id,
       account_id,
-      trace_id,
+      trace_id, // execution_trace_id (from starter handler), not decision_trace_id
     });
     
     // 2. Update execution attempt status
@@ -570,21 +744,29 @@ export const handler: Handler = async (event: {
     );
     
     // 3. Emit ledger event
+    // Note: Use execution_trace_id (trace_id) for execution lifecycle events
+    // Include decision_trace_id as correlation field (fetch from intent if needed)
     const ledgerEventType = status === 'SUCCEEDED' 
       ? LedgerEventType.ACTION_EXECUTED 
       : LedgerEventType.ACTION_FAILED;
+    
+    // Fetch intent to get decision_trace_id for correlation
+    const intent = await actionIntentService.getIntent(action_intent_id, tenant_id, account_id);
+    const decisionTraceId = intent?.trace_id; // decision_trace_id from Phase 3
     
     await ledgerService.append({
       eventType: ledgerEventType,
       tenantId: tenant_id,
       accountId: account_id,
-      traceId: trace_id,
+      traceId: trace_id, // execution_trace_id (from starter handler)
       data: {
         action_intent_id,
         status,
         external_object_refs: outcome.external_object_refs,
         error_code: outcome.error_code,
         error_class: outcome.error_class,
+        registry_version: registry_version, // Include registry_version for audit
+        decision_trace_id: decisionTraceId, // Correlation field (decision trace)
         attempt_count,
       },
     });
@@ -620,11 +802,24 @@ export const handler: Handler = async (event: {
     logger.error('Execution recording failed', { action_intent_id, error });
     
     // Return structured error for Step Functions
-    throw new Error(JSON.stringify({
-      errorType: error.name || 'Error',
-      errorMessage: error.message,
+    const errorDetails = {
+      errorType: error.name || 'UnknownError',
+      errorMessage: error.message || 'Unknown error occurred',
       action_intent_id,
-    }));
+      handler: 'ExecutionRecorderHandler',
+      timestamp: new Date().toISOString(),
+    };
+    
+    logger.error('Execution recording failed with details', errorDetails);
+    
+    // Throw structured error for Step Functions
+    const recordingError = new Error(
+      `[ExecutionRecorderHandler] Failed to record execution outcome for action_intent_id: ${action_intent_id}. ` +
+      `Error: ${error.message || 'Unknown error'}. ` +
+      `This may indicate a problem with DynamoDB write permissions or table configuration.`
+    );
+    recordingError.name = error.name || 'ExecutionRecordingError';
+    throw recordingError;
   }
 };
 ```
@@ -649,8 +844,31 @@ import { getAWSClientConfig } from '../../utils/aws-client-config';
 const logger = new Logger('CompensationHandler');
 const traceService = new TraceService(logger);
 
+/**
+ * Helper to validate required environment variables with descriptive errors
+ */
+function requireEnv(name: string, handlerName: string): string {
+  const value = process.env[name];
+  if (!value) {
+    const error = new Error(
+      `[${handlerName}] Missing required environment variable: ${name}. ` +
+      `This variable must be set in the Lambda function configuration. ` +
+      `Check CDK stack definition for ExecutionInfrastructure construct.`
+    );
+    error.name = 'ConfigurationError';
+    throw error;
+  }
+  return value;
+}
+
+// Note: AWS_REGION is automatically set by Lambda runtime (not set in CDK environment variables)
+// Validate it exists (should always be present, but fail fast if somehow missing)
+const region = requireEnv('AWS_REGION', 'CompensationHandler');
+const actionIntentTableName = requireEnv('ACTION_INTENT_TABLE_NAME', 'CompensationHandler');
+const actionTypeRegistryTableName = requireEnv('ACTION_TYPE_REGISTRY_TABLE_NAME', 'CompensationHandler');
+const executionOutcomesTableName = requireEnv('EXECUTION_OUTCOMES_TABLE_NAME', 'CompensationHandler');
+
 // Initialize AWS clients
-const region = process.env.AWS_REGION || 'us-west-2';
 const clientConfig = getAWSClientConfig(region);
 const dynamoClient = DynamoDBDocumentClient.from(new DynamoDBClient(clientConfig), {
   marshallOptions: { removeUndefinedValues: true },
@@ -659,19 +877,19 @@ const dynamoClient = DynamoDBDocumentClient.from(new DynamoDBClient(clientConfig
 // Initialize services
 const actionIntentService = new ActionIntentService(
   dynamoClient,
-  process.env.ACTION_INTENT_TABLE_NAME || 'cc-native-action-intents',
+  actionIntentTableName,
   logger
 );
 
 const actionTypeRegistryService = new ActionTypeRegistryService(
   dynamoClient,
-  process.env.ACTION_TYPE_REGISTRY_TABLE_NAME || 'cc-native-action-type-registry',
+  actionTypeRegistryTableName,
   logger
 );
 
 const executionOutcomeService = new ExecutionOutcomeService(
   dynamoClient,
-  process.env.EXECUTION_OUTCOMES_TABLE_NAME || 'cc-native-execution-outcomes',
+  executionOutcomesTableName,
   logger
 );
 
@@ -801,28 +1019,32 @@ public readonly executionTriggerRule: events.Rule;
 // S3 Bucket (for raw response artifacts)
 public readonly executionArtifactsBucket?: s3.IBucket;
 
-// In constructor, add Phase 4.2 components:
-constructor(scope: Construct, id: string, props: ExecutionInfrastructureProps) {
-  super(scope, id);
+  // In constructor, add Phase 4.2 components:
+  constructor(scope: Construct, id: string, props: ExecutionInfrastructureProps) {
+    super(scope, id);
 
-  // ... Phase 4.1 components ...
+    // Use provided config or default (consistent with Phase 3 pattern)
+    const config = props.config || DEFAULT_EXECUTION_INFRASTRUCTURE_CONFIG;
+    const region = props.region || config.defaults.region;
+
+    // ... Phase 4.1 components ...
   
   // Phase 4.2: Additional DLQs
-  this.toolMapperDlq = this.createDlq('ToolMapperDlq', 'cc-native-tool-mapper-handler-dlq');
-  this.toolInvokerDlq = this.createDlq('ToolInvokerDlq', 'cc-native-tool-invoker-handler-dlq');
-  this.executionRecorderDlq = this.createDlq('ExecutionRecorderDlq', 'cc-native-execution-recorder-handler-dlq');
-  this.compensationDlq = this.createDlq('CompensationDlq', 'cc-native-compensation-handler-dlq');
+  this.toolMapperDlq = this.createDlq('ToolMapperDlq', config.queueNames.toolMapperDlq, config);
+  this.toolInvokerDlq = this.createDlq('ToolInvokerDlq', config.queueNames.toolInvokerDlq, config);
+  this.executionRecorderDlq = this.createDlq('ExecutionRecorderDlq', config.queueNames.executionRecorderDlq, config);
+  this.compensationDlq = this.createDlq('CompensationDlq', config.queueNames.compensationDlq, config);
   
   // Phase 4.2: Additional Lambda Functions
-  this.toolMapperHandler = this.createToolMapperHandler(props);
-  this.toolInvokerHandler = this.createToolInvokerHandler(props);
-  this.executionRecorderHandler = this.createExecutionRecorderHandler(props);
-  this.compensationHandler = this.createCompensationHandler(props);
+  this.toolMapperHandler = this.createToolMapperHandler(props, config);
+  this.toolInvokerHandler = this.createToolInvokerHandler(props, config);
+  this.executionRecorderHandler = this.createExecutionRecorderHandler(props, config);
+  this.compensationHandler = this.createCompensationHandler(props, config);
   
   // Phase 4.2: S3 Bucket (if not provided)
   if (!props.artifactsBucket) {
     this.executionArtifactsBucket = new s3.Bucket(this, 'ExecutionArtifactsBucket', {
-      bucketName: `cc-native-execution-artifacts-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}`,
+      bucketName: `${config.s3.executionArtifactsBucketPrefix}-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}`,
       versioned: true,
       encryption: s3.BucketEncryption.S3_MANAGED,
     });
@@ -831,28 +1053,38 @@ constructor(scope: Construct, id: string, props: ExecutionInfrastructureProps) {
   }
   
   // Phase 4.2: Step Functions State Machine
-  this.executionStateMachine = this.createExecutionStateMachine();
+  this.executionStateMachine = this.createExecutionStateMachine(config);
   
   // Phase 4.2: EventBridge Rule
-  this.executionTriggerRule = this.createExecutionTriggerRule(props);
+  this.executionTriggerRule = this.createExecutionTriggerRule(props, config);
 }
 
-private createToolMapperHandler(props: ExecutionInfrastructureProps): lambda.Function {
+private createToolMapperHandler(
+  props: ExecutionInfrastructureProps,
+  config: ExecutionInfrastructureConfig
+): lambda.Function {
   const handler = new lambdaNodejs.NodejsFunction(this, 'ToolMapperHandler', {
-    functionName: 'cc-native-tool-mapper',
+    functionName: config.functionNames.toolMapper,
     entry: 'src/handlers/phase4/tool-mapper-handler.ts',
     handler: 'handler',
     runtime: lambda.Runtime.NODEJS_20_X,
-    timeout: cdk.Duration.seconds(30),
+    timeout: cdk.Duration.seconds(config.defaults.timeout.toolMapper),
+    memorySize: config.defaults.memorySize?.toolMapper,
     environment: {
       ACTION_INTENT_TABLE_NAME: props.actionIntentTable.tableName,
       ACTION_TYPE_REGISTRY_TABLE_NAME: this.actionTypeRegistryTable.tableName,
-      AGENTCORE_GATEWAY_URL: process.env.AGENTCORE_GATEWAY_URL || '', // TODO: Get from Gateway construct
-      AWS_REGION: props.region || 'us-west-2',
+      AGENTCORE_GATEWAY_URL: props.gatewayUrl || (() => {
+        throw new Error(
+          '[ExecutionInfrastructure] Missing required property: gatewayUrl. ' +
+          'Provide gatewayUrl in ExecutionInfrastructureProps or ensure AgentCore Gateway is configured. ' +
+          'The Gateway URL is required for tool-mapper-handler to invoke connector adapters.'
+        );
+      })(),
+      // Note: AWS_REGION is automatically set by Lambda runtime and should not be set manually
     },
     deadLetterQueue: this.toolMapperDlq,
     deadLetterQueueEnabled: true,
-    retryAttempts: 2,
+    retryAttempts: config.lambda.retryAttempts,
   });
   
   // Grant permissions
@@ -871,20 +1103,30 @@ private createToolMapperHandler(props: ExecutionInfrastructureProps): lambda.Fun
   return handler;
 }
 
-private createToolInvokerHandler(props: ExecutionInfrastructureProps): lambda.Function {
+private createToolInvokerHandler(
+  props: ExecutionInfrastructureProps,
+  config: ExecutionInfrastructureConfig
+): lambda.Function {
   const handler = new lambdaNodejs.NodejsFunction(this, 'ToolInvokerHandler', {
-    functionName: 'cc-native-tool-invoker',
+    functionName: config.functionNames.toolInvoker,
     entry: 'src/handlers/phase4/tool-invoker-handler.ts',
     handler: 'handler',
     runtime: lambda.Runtime.NODEJS_20_X,
-    timeout: cdk.Duration.seconds(60), // Longer timeout for external calls
+    timeout: cdk.Duration.seconds(config.defaults.timeout.toolInvoker),
+    memorySize: config.defaults.memorySize?.toolInvoker,
     environment: {
-      EXECUTION_ARTIFACTS_BUCKET: this.executionArtifactsBucket?.bucketName || '',
-      AWS_REGION: props.region || 'us-west-2',
+      EXECUTION_ARTIFACTS_BUCKET: this.executionArtifactsBucket?.bucketName || (() => {
+        throw new Error(
+          '[ExecutionInfrastructure] Missing required property: artifactsBucket. ' +
+          'Provide artifactsBucket in ExecutionInfrastructureProps or ensure ExecutionArtifactsBucket is created. ' +
+          'This bucket is used to store large tool invocation responses.'
+        );
+      })(),
+      // Note: AWS_REGION is automatically set by Lambda runtime and should not be set manually
     },
     deadLetterQueue: this.toolInvokerDlq,
     deadLetterQueueEnabled: true,
-    retryAttempts: 2,
+    retryAttempts: config.lambda.retryAttempts,
   });
   
   // Grant S3 permissions (for raw response artifacts)
@@ -895,53 +1137,74 @@ private createToolInvokerHandler(props: ExecutionInfrastructureProps): lambda.Fu
   return handler;
 }
 
-private createExecutionRecorderHandler(props: ExecutionInfrastructureProps): lambda.Function {
+private createExecutionRecorderHandler(
+  props: ExecutionInfrastructureProps,
+  config: ExecutionInfrastructureConfig
+): lambda.Function {
   const handler = new lambdaNodejs.NodejsFunction(this, 'ExecutionRecorderHandler', {
-    functionName: 'cc-native-execution-recorder',
+    functionName: config.functionNames.executionRecorder,
     entry: 'src/handlers/phase4/execution-recorder-handler.ts',
     handler: 'handler',
     runtime: lambda.Runtime.NODEJS_20_X,
-    timeout: cdk.Duration.seconds(30),
+    timeout: cdk.Duration.seconds(config.defaults.timeout.executionRecorder),
+    memorySize: config.defaults.memorySize?.executionRecorder,
     environment: {
       EXECUTION_OUTCOMES_TABLE_NAME: this.executionOutcomesTable.tableName,
       EXECUTION_ATTEMPTS_TABLE_NAME: this.executionAttemptsTable.tableName,
       LEDGER_TABLE_NAME: props.ledgerTable.tableName,
-      SIGNALS_TABLE_NAME: process.env.SIGNALS_TABLE_NAME || 'cc-native-signals',
-      ACCOUNTS_TABLE_NAME: process.env.ACCOUNTS_TABLE_NAME || 'cc-native-accounts',
+      SIGNALS_TABLE_NAME: props.signalsTable?.tableName || (() => {
+        throw new Error(
+          '[ExecutionInfrastructure] Missing required property: signalsTable. ' +
+          'Provide signalsTable in ExecutionInfrastructureProps. ' +
+          'This table is required for execution-recorder-handler to emit execution outcome signals.'
+        );
+      })(),
+      ACCOUNTS_TABLE_NAME: props.accountsTable?.tableName || (() => {
+        throw new Error(
+          '[ExecutionInfrastructure] Missing required property: accountsTable. ' +
+          'Provide accountsTable in ExecutionInfrastructureProps. ' +
+          'This table is required for SignalService to update account state atomically with signals.'
+        );
+      })(),
       EVENT_BUS_NAME: props.eventBus.eventBusName,
-      AWS_REGION: props.region || 'us-west-2',
+      // Note: AWS_REGION is automatically set by Lambda runtime and should not be set manually
     },
     deadLetterQueue: this.executionRecorderDlq,
     deadLetterQueueEnabled: true,
-    retryAttempts: 2,
+    retryAttempts: config.lambda.retryAttempts,
   });
   
-  // Grant permissions
-  this.executionOutcomesTable.grantWriteData(handler);
-  this.executionAttemptsTable.grantWriteData(handler);
-  props.ledgerTable.grantWriteData(handler);
+    // Grant permissions
+    this.executionOutcomesTable.grantWriteData(handler);
+    this.executionAttemptsTable.grantWriteData(handler);
+    props.actionIntentTable.grantReadData(handler); // For fetching decision_trace_id
+    props.ledgerTable.grantWriteData(handler);
   props.eventBus.grantPutEventsTo(handler);
   
   return handler;
 }
 
-private createCompensationHandler(props: ExecutionInfrastructureProps): lambda.Function {
+private createCompensationHandler(
+  props: ExecutionInfrastructureProps,
+  config: ExecutionInfrastructureConfig
+): lambda.Function {
   const handler = new lambdaNodejs.NodejsFunction(this, 'CompensationHandler', {
-    functionName: 'cc-native-compensation-handler',
+    functionName: config.functionNames.compensation,
     entry: 'src/handlers/phase4/compensation-handler.ts',
     handler: 'handler',
     runtime: lambda.Runtime.NODEJS_20_X,
-    timeout: cdk.Duration.seconds(60),
+    timeout: cdk.Duration.seconds(config.defaults.timeout.compensation),
+    memorySize: config.defaults.memorySize?.compensation,
     environment: {
       ACTION_INTENT_TABLE_NAME: props.actionIntentTable.tableName,
       ACTION_TYPE_REGISTRY_TABLE_NAME: this.actionTypeRegistryTable.tableName,
       EXECUTION_OUTCOMES_TABLE_NAME: this.executionOutcomesTable.tableName,
       EXTERNAL_WRITE_DEDUPE_TABLE_NAME: this.externalWriteDedupeTable.tableName,
-      AWS_REGION: props.region || 'us-west-2',
+      // Note: AWS_REGION is automatically set by Lambda runtime and should not be set manually
     },
     deadLetterQueue: this.compensationDlq,
     deadLetterQueueEnabled: true,
-    retryAttempts: 2,
+    retryAttempts: config.lambda.retryAttempts,
   });
   
   // Grant permissions
@@ -953,13 +1216,13 @@ private createCompensationHandler(props: ExecutionInfrastructureProps): lambda.F
   return handler;
 }
 
-private createExecutionStateMachine(): stepfunctions.StateMachine {
+private createExecutionStateMachine(config: ExecutionInfrastructureConfig): stepfunctions.StateMachine {
   const definition = this.buildStateMachineDefinition();
   
   return new stepfunctions.StateMachine(this, 'ExecutionStateMachine', {
-    stateMachineName: 'cc-native-execution-orchestrator',
+    stateMachineName: config.stepFunctions.stateMachineName,
     definition,
-    timeout: cdk.Duration.hours(1),
+    timeout: cdk.Duration.hours(config.stepFunctions.timeoutHours),
   });
 }
 
@@ -1046,17 +1309,21 @@ private buildStateMachineDefinition(): stepfunctions.IChainable {
     .next(recordOutcome);
 }
 
-private createExecutionTriggerRule(props: ExecutionInfrastructureProps): events.Rule {
+private createExecutionTriggerRule(
+  props: ExecutionInfrastructureProps,
+  config: ExecutionInfrastructureConfig
+): events.Rule {
   const rule = new events.Rule(this, 'ExecutionTriggerRule', {
     eventBus: props.eventBus,
     eventPattern: {
-      source: ['cc-native'],
-      detailType: ['ACTION_APPROVED'],
+      source: [config.eventBridge.source],
+      detailType: [config.eventBridge.detailTypes.actionApproved],
     },
   });
   
-  // Trigger Step Functions with action_intent_id
+  // Trigger Step Functions with action_intent_id, tenant_id, and account_id
   // Note: Execution name uses action_intent_id for idempotency (Step Functions enforces uniqueness)
+  // Note: tenant_id and account_id are REQUIRED - execution-starter-handler needs them for security validation
   rule.addTarget(new eventsTargets.SfnStateMachine(this.executionStateMachine, {
     input: events.RuleTargetInput.fromObject({
       action_intent_id: events.EventField.fromPath('$.detail.data.action_intent_id'),
@@ -1078,7 +1345,9 @@ private createExecutionTriggerRule(props: ExecutionInfrastructureProps): events.
 
 **File:** `src/stacks/constructs/ExecutionInfrastructure.ts` (in `buildStateMachineDefinition` method)
 
-**State Machine JSON (for reference):**
+**Note:** The Step Functions state machine is built programmatically in CDK using `stepfunctionsTasks.LambdaInvoke` with Lambda function references. Function names come from `config.functionNames.*`. The JSON below is for reference only - the actual implementation uses CDK constructs.
+
+**State Machine JSON (for reference only - actual implementation uses CDK):**
 
 ```json
 {
@@ -1091,7 +1360,9 @@ private createExecutionTriggerRule(props: ExecutionInfrastructureProps): events.
       "Parameters": {
         "FunctionName": "cc-native-execution-starter",
         "Payload": {
-          "action_intent_id": "$.action_intent_id"
+          "action_intent_id": "$.action_intent_id",
+          "tenant_id": "$.tenant_id",
+          "account_id": "$.account_id"
         }
       },
       "Next": "ValidatePreflight",
@@ -1132,7 +1403,9 @@ private createExecutionTriggerRule(props: ExecutionInfrastructureProps): events.
           "action_intent_id": "$.action_intent_id",
           "tenant_id": "$.tenant_id",
           "account_id": "$.account_id",
-          "idempotency_key": "$.idempotency_key"
+          "idempotency_key": "$.idempotency_key",
+          "trace_id": "$.trace_id",
+          "registry_version": "$.registry_version"
         }
       },
       "Next": "InvokeTool",
@@ -1191,6 +1464,8 @@ private createExecutionTriggerRule(props: ExecutionInfrastructureProps): events.
           "action_intent_id": "$.action_intent_id",
           "tenant_id": "$.tenant_id",
           "account_id": "$.account_id",
+          "trace_id": "$.trace_id",
+          "registry_version": "$.registry_version",
           "execution_result": "$"
         }
       },
@@ -1209,6 +1484,7 @@ private createExecutionTriggerRule(props: ExecutionInfrastructureProps): events.
           "tool_invocation_response": "$.tool_invocation_response",
           "tool_name": "$.tool_name",
           "tool_schema_version": "$.tool_schema_version",
+          "registry_version": "$.registry_version",
           "attempt_count": 1,
           "started_at": "$.started_at"
         }
@@ -1225,6 +1501,7 @@ private createExecutionTriggerRule(props: ExecutionInfrastructureProps): events.
           "tenant_id": "$.tenant_id",
           "account_id": "$.account_id",
           "trace_id": "$.trace_id",
+          "registry_version": "$.registry_version",
           "status": "FAILED",
           "error": "$.error"
         }
@@ -1253,11 +1530,12 @@ private createExecutionTriggerRule(props: ExecutionInfrastructureProps): events.
 - [ ] Create `src/handlers/phase4/tool-invoker-handler.ts`
 - [ ] Create `src/handlers/phase4/execution-recorder-handler.ts`
 - [ ] Create `src/handlers/phase4/compensation-handler.ts`
-- [ ] Add Phase 4.2 handlers to CDK construct
-- [ ] Add Phase 4.2 DLQs to CDK construct
-- [ ] Add S3 bucket for raw response artifacts
-- [ ] Create Step Functions state machine in CDK (with error handling)
-- [ ] Create EventBridge rule (ACTION_APPROVED → Step Functions)
+- [ ] Update `src/stacks/constructs/ExecutionInfrastructure.ts` (Phase 4.2 additions - use config for all hardcoded values)
+- [ ] Add Phase 4.2 handlers to CDK construct - use `config.functionNames.*`, `config.defaults.timeout.*`, `config.lambda.retryAttempts`
+- [ ] Add Phase 4.2 DLQs to CDK construct - use `config.queueNames.*` and `config.lambda.dlqRetentionDays`
+- [ ] Add S3 bucket for raw response artifacts - use `config.s3.executionArtifactsBucketPrefix`
+- [ ] Create Step Functions state machine in CDK (with error handling) - use `config.stepFunctions.*`
+- [ ] Create EventBridge rule (ACTION_APPROVED → Step Functions) - use `config.eventBridge.*`
 - [ ] Integration tests for orchestration
 
 ---
