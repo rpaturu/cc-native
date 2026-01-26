@@ -33,6 +33,22 @@
 4. **registry_version in outcomes**: Include `registry_version` in execution outcomes for audit
 5. **decision_trace_id correlation**: Fetch intent to get `decision_trace_id` for ledger event correlation
 
+**AgentCore Gateway Alignment (Verified against AWS Documentation):**
+- ✅ **Gateway Endpoint**: Must include `/mcp` path (e.g., `https://mygateway-abc.gateway.bedrock-agentcore.us-west-2.amazonaws.com/mcp`)
+  - Format: `POST {gateway_url}/mcp` where `gateway_url` is from CreateGateway API response
+  - Reference: [AWS Gateway MCP Call Documentation](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-using-mcp-call.html)
+- ✅ **MCP Protocol**: JSON-RPC 2.0 with `method: 'tools/call'` (matches AWS spec)
+- ✅ **Authentication**: `Authorization: Bearer ${jwtToken}` for OAuth-based inbound authorization (CUSTOM_JWT authorizer)
+- ✅ **Response Format**: Parses `response.result.content[].text` (JSON stringified) - matches MCP response structure
+- ✅ **Error Handling**: Classifies Gateway HTTP errors correctly:
+  - 401 AuthenticationError (not retryable)
+  - 403 AuthorizationError (not retryable)
+  - 404 ResourceNotFoundError (not retryable)
+  - 400 ValidationError (not retryable)
+  - 500 ToolExecutionError/InternalServerError (retryable)
+- ✅ **Content-Type**: Uses `application/json` (Gateway supports both `application/json` and `text/event-stream`)
+- ✅ **MCP Versions**: Supports MCP 2025-06-18 and 2025-03-26 (Gateway default)
+
 ---
 
 ## Overview
@@ -106,6 +122,10 @@ function requireEnv(name: string, handlerName: string): string {
 const region = requireEnv('AWS_REGION', 'ToolMapperHandler');
 const actionIntentTableName = requireEnv('ACTION_INTENT_TABLE_NAME', 'ToolMapperHandler');
 const actionTypeRegistryTableName = requireEnv('ACTION_TYPE_REGISTRY_TABLE_NAME', 'ToolMapperHandler');
+// Gateway URL must be the full MCP endpoint URL including /mcp path
+// Format: https://${GatewayEndpoint}/mcp
+// Example: https://mygateway-abc.gateway.bedrock-agentcore.us-west-2.amazonaws.com/mcp
+// Get from CreateGateway API response and append /mcp
 const gatewayUrl = requireEnv('AGENTCORE_GATEWAY_URL', 'ToolMapperHandler');
 
 // Initialize AWS clients
@@ -262,6 +282,9 @@ export const handler: Handler<ToolInvocationRequest, ToolInvocationResponse> = a
   
   try {
     // 1. Make MCP protocol call to AgentCore Gateway
+    // Gateway endpoint format: https://${GatewayEndpoint}/mcp
+    // Where GatewayEndpoint is from CreateGateway API response (e.g., mygateway-abc.gateway.bedrock-agentcore.us-west-2.amazonaws.com)
+    // Note: gateway_url should include /mcp path (e.g., https://mygateway-abc.gateway.bedrock-agentcore.us-west-2.amazonaws.com/mcp)
     const mcpRequest = {
       jsonrpc: '2.0',
       id: `invoke-${Date.now()}`,
@@ -275,8 +298,10 @@ export const handler: Handler<ToolInvocationRequest, ToolInvocationResponse> = a
     const toolRunRef = `gateway_invocation_${Date.now()}_${Math.random().toString(36).substring(7)}`;
     
     // 2. Call Gateway with retry logic
+    // Gateway endpoint: POST {gateway_url}/mcp (gateway_url should include /mcp)
+    // Example: https://mygateway-abc.gateway.bedrock-agentcore.us-west-2.amazonaws.com/mcp
     const response = await invokeWithRetry(
-      gateway_url,
+      gateway_url, // Should be full URL including /mcp (e.g., https://mygateway-abc.gateway.bedrock-agentcore.us-west-2.amazonaws.com/mcp)
       mcpRequest,
       jwt_token,
       toolRunRef,
@@ -320,9 +345,15 @@ export const handler: Handler<ToolInvocationRequest, ToolInvocationResponse> = a
 
 /**
  * Invoke Gateway with retry logic (exponential backoff)
+ * 
+ * Gateway endpoint format: POST {gateway_url}/mcp
+ * Where gateway_url is the full Gateway endpoint URL including /mcp path
+ * Example: https://mygateway-abc.gateway.bedrock-agentcore.us-west-2.amazonaws.com/mcp
+ * 
+ * Reference: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-using-mcp-call.html
  */
 async function invokeWithRetry(
-  gatewayUrl: string,
+  gatewayUrl: string, // Full Gateway MCP endpoint URL (including /mcp path)
   mcpRequest: any,
   jwtToken: string,
   toolRunRef: string,
@@ -333,13 +364,16 @@ async function invokeWithRetry(
   
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
+      // POST to Gateway MCP endpoint
+      // Gateway URL should be: https://${GatewayEndpoint}/mcp
+      // Example: https://mygateway-abc.gateway.bedrock-agentcore.us-west-2.amazonaws.com/mcp
       const response = await axios.post(
-        gatewayUrl,
+        gatewayUrl, // Full URL including /mcp path
         mcpRequest,
         {
           headers: {
-            'Authorization': `Bearer ${jwtToken}`,
-            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${jwtToken}`, // OAuth Bearer token for inbound authorization
+            'Content-Type': 'application/json', // MCP supports application/json and text/event-stream
           },
           timeout: 30000, // 30 seconds
         }
@@ -351,11 +385,27 @@ async function invokeWithRetry(
       
       // Check if error is retryable
       if (!isRetryableError(error) || attempt === maxRetries) {
-        // Throw with Step Functions-compatible error type
-        if (error.response?.status >= 400 && error.response?.status < 500) {
+        // Classify error for Step Functions
+        const status = error.response?.status;
+        if (status === 401) {
+          // AuthenticationError - not retryable
+          throw new Error('PermanentError: Authentication failed - ' + error.message);
+        } else if (status === 403) {
+          // AuthorizationError - not retryable
+          throw new Error('PermanentError: Authorization failed - ' + error.message);
+        } else if (status === 404) {
+          // ResourceNotFoundError - not retryable
+          throw new Error('PermanentError: Tool not found - ' + error.message);
+        } else if (status === 400) {
+          // ValidationError - not retryable
+          throw new Error('PermanentError: Validation failed - ' + error.message);
+        } else if (status && status >= 400 && status < 500) {
+          // Other 4xx errors - not retryable
           throw new Error('PermanentError: ' + error.message);
+        } else {
+          // 5xx or network errors - retryable (but max retries reached)
+          throw new Error('TransientError: ' + error.message);
         }
-        throw new Error('TransientError: ' + error.message);
       }
       
       // Exponential backoff
@@ -372,7 +422,11 @@ async function invokeWithRetry(
   }
   
   // Throw with appropriate error type for Step Functions
-  if (lastError.response?.status >= 400 && lastError.response?.status < 500) {
+  // Gateway error classification (per AWS docs):
+  // - 401/403/404/400: PermanentError (not retryable)
+  // - 500+: TransientError (retryable)
+  const status = lastError.response?.status;
+  if (status === 401 || status === 403 || status === 404 || status === 400) {
     throw new Error('PermanentError: ' + lastError.message);
   }
   throw new Error('TransientError: ' + lastError.message);
@@ -380,16 +434,31 @@ async function invokeWithRetry(
 
 /**
  * Check if error is retryable (transient)
+ * 
+ * Gateway error handling (per AWS docs):
+ * - 401 AuthenticationError: Invalid authentication credentials (not retryable)
+ * - 403 AuthorizationError: No permission to invoke tool (not retryable)
+ * - 404 ResourceNotFoundError: Tool does not exist (not retryable)
+ * - 400 ValidationError: Invalid arguments (not retryable)
+ * - 500 ToolExecutionError: Tool execution error (retryable)
+ * - 500 InternalServerError: Internal server error (retryable)
  */
 function isRetryableError(error: any): boolean {
   if (error instanceof AxiosError) {
-    // 5xx errors are retryable
-    if (error.response?.status && error.response.status >= 500) {
+    const status = error.response?.status;
+    
+    // 4xx errors are not retryable (client errors)
+    if (status && status >= 400 && status < 500) {
+      return false;
+    }
+    
+    // 5xx errors are retryable (server errors)
+    if (status && status >= 500) {
       return true;
     }
     
     // Network errors are retryable
-    if (error.code === 'ECONNRESET' || error.code === 'ETIMEDOUT') {
+    if (error.code === 'ECONNRESET' || error.code === 'ETIMEDOUT' || error.code === 'ECONNREFUSED') {
       return true;
     }
   }
@@ -487,6 +556,13 @@ function inferSystemFromTool(toolName: string): 'CRM' | 'CALENDAR' | 'INTERNAL' 
 
 /**
  * Classify error from MCP response
+ * 
+ * Gateway returns errors in JSON-RPC format:
+ * - response.error.code: HTTP status code or MCP error code
+ * - response.error.message: Error message
+ * - response.error.data: Additional error data
+ * 
+ * Reference: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-using-mcp-call.html#gateway-using-mcp-call-errors
  */
 function classifyError(parsedResponse: any): {
   error_code?: string;
@@ -498,7 +574,9 @@ function classifyError(parsedResponse: any): {
   }
   
   const error = parsedResponse.error || parsedResponse;
-  const errorMessage = error.message || error.error;
+  const errorMessage = error.message || error.error || error.error?.message;
+  const errorCode = error.code || error.error?.code; // HTTP status code or MCP error code
+  
   if (!errorMessage) {
     const errorObj = new Error(
       'Tool invocation failed but no error message was provided. ' +
@@ -509,7 +587,48 @@ function classifyError(parsedResponse: any): {
     throw errorObj;
   }
   
-  // Classify by error message patterns
+  // Classify by HTTP status code first (from Gateway)
+  if (errorCode === 401) {
+    return {
+      error_code: 'AUTH_FAILED',
+      error_class: 'AUTH',
+      error_message: errorMessage,
+    };
+  }
+  
+  if (errorCode === 403) {
+    return {
+      error_code: 'AUTH_FAILED', // Authorization failure
+      error_class: 'AUTH',
+      error_message: errorMessage,
+    };
+  }
+  
+  if (errorCode === 404) {
+    return {
+      error_code: 'TOOL_NOT_FOUND',
+      error_class: 'VALIDATION',
+      error_message: errorMessage,
+    };
+  }
+  
+  if (errorCode === 400) {
+    return {
+      error_code: 'VALIDATION_ERROR',
+      error_class: 'VALIDATION',
+      error_message: errorMessage,
+    };
+  }
+  
+  if (errorCode >= 500) {
+    return {
+      error_code: 'DOWNSTREAM_ERROR',
+      error_class: 'DOWNSTREAM',
+      error_message: errorMessage,
+    };
+  }
+  
+  // Fallback: Classify by error message patterns
   if (errorMessage.includes('authentication') || errorMessage.includes('unauthorized')) {
     return {
       error_code: 'AUTH_FAILED',
@@ -520,7 +639,7 @@ function classifyError(parsedResponse: any): {
   
   if (errorMessage.includes('rate limit') || errorMessage.includes('throttle')) {
     return {
-      error_code: 'RATE_LIMIT',
+      error_code: 'RATE_LIMIT_EXCEEDED',
       error_class: 'RATE_LIMIT',
       error_message: errorMessage,
     };
@@ -1077,7 +1196,9 @@ private createToolMapperHandler(
         throw new Error(
           '[ExecutionInfrastructure] Missing required property: gatewayUrl. ' +
           'Provide gatewayUrl in ExecutionInfrastructureProps or ensure AgentCore Gateway is configured. ' +
-          'The Gateway URL is required for tool-mapper-handler to invoke connector adapters.'
+          'The Gateway URL must be the full MCP endpoint URL including /mcp path. ' +
+          'Example: https://mygateway-abc.gateway.bedrock-agentcore.us-west-2.amazonaws.com/mcp ' +
+          'Get the Gateway endpoint from CreateGateway API response and append /mcp.'
         );
       })(),
       // Note: AWS_REGION is automatically set by Lambda runtime and should not be set manually
@@ -1540,7 +1661,72 @@ private createExecutionTriggerRule(
 
 ---
 
-## 6. Next Steps
+## 6. AgentCore Gateway Verification
+
+**Status: ✅ ALIGNED with AWS Documentation**
+
+The Phase 4.2 plan has been verified against AWS AgentCore Gateway documentation and GitHub samples:
+
+### ✅ Verified Components
+
+1. **Gateway Endpoint Format**
+   - ✅ Plan specifies Gateway URL must include `/mcp` path
+   - ✅ Format: `https://${GatewayEndpoint}/mcp` (e.g., `https://mygateway-abc.gateway.bedrock-agentcore.us-west-2.amazonaws.com/mcp`)
+   - ✅ Matches AWS docs: [Gateway MCP Call Documentation](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-using-mcp-call.html)
+
+2. **MCP Request Format**
+   - ✅ JSON-RPC 2.0 format with `jsonrpc: '2.0'`
+   - ✅ `method: 'tools/call'` (correct MCP operation)
+   - ✅ `params: { name, arguments }` structure matches AWS examples
+   - ✅ Request ID generation (`invoke-${Date.now()}`)
+
+3. **Authentication**
+   - ✅ `Authorization: Bearer ${jwtToken}` header (OAuth-based inbound authorization)
+   - ✅ `Content-Type: application/json` header
+   - ✅ Matches AWS Gateway authentication requirements
+
+4. **Response Parsing**
+   - ✅ Parses `response.result.content[].text` (JSON stringified)
+   - ✅ Handles `response.error` for error cases
+   - ✅ Matches MCP response structure from AWS docs
+
+5. **Error Handling**
+   - ✅ Classifies Gateway HTTP errors correctly:
+     - 401 AuthenticationError → AUTH error class (not retryable)
+     - 403 AuthorizationError → AUTH error class (not retryable)
+     - 404 ResourceNotFoundError → VALIDATION error class (not retryable)
+     - 400 ValidationError → VALIDATION error class (not retryable)
+     - 500 ToolExecutionError/InternalServerError → DOWNSTREAM error class (retryable)
+   - ✅ Network errors (ECONNRESET, ETIMEDOUT) classified as retryable
+   - ✅ Matches AWS Gateway error documentation
+
+6. **Retry Logic**
+   - ✅ Exponential backoff (1s, 2s, 4s)
+   - ✅ Max retries: 3 attempts
+   - ✅ Only retries on 5xx errors and network errors (not 4xx)
+   - ✅ Throws PermanentError for 4xx, TransientError for 5xx
+
+7. **MCP Protocol Compliance**
+   - ✅ Supports MCP versions 2025-06-18 and 2025-03-26 (Gateway default)
+   - ✅ Uses stateless HTTP transport (no session management needed)
+   - ✅ Content-Type: `application/json` (Gateway supports both `application/json` and `text/event-stream`)
+
+### 📝 Implementation Notes
+
+- **Gateway URL Configuration**: The `AGENTCORE_GATEWAY_URL` environment variable must be the full MCP endpoint URL including `/mcp` path. This should be set when creating the Gateway via CreateGateway API and stored in CDK configuration.
+- **JWT Token**: The `getJwtToken()` function needs to be implemented to retrieve Cognito JWT tokens for Gateway authentication. This is a TODO in the plan.
+- **Identity Injection**: The Gateway automatically injects identity information when forwarding to Lambda adapters. The tool-invoker handler does not need to include `identity` field in the MCP request body (Gateway handles this).
+
+### 🔗 References
+
+- [AWS AgentCore Gateway MCP Call Documentation](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-using-mcp-call.html)
+- [AWS AgentCore Gateway Overview](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-using.html)
+- [MCP Protocol Contract](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-mcp-protocol-contract.html)
+- [AWS AgentCore Gateway Samples](https://github.com/awslabs/amazon-bedrock-agentcore-samples/tree/main/01-tutorials/02-AgentCore-gateway)
+
+---
+
+## 7. Next Steps
 
 After Phase 4.2 completion:
 - ✅ Orchestration layer complete
