@@ -870,30 +870,10 @@ export const handler: Handler = async (event: unknown) => {
       },
     });
     
-    // 4. Emit signal for Phase 1 perception layer
-    // Note: SignalService initialization should be added to handler
-    // import { SignalService } from '../../services/perception/SignalService';
-    // import { SignalType } from '../../types/SignalTypes';
-    // 
-    // const signalService = new SignalService({
-    //   logger,
-    //   signalsTableName: process.env.SIGNALS_TABLE_NAME || 'cc-native-signals',
-    //   accountsTableName: process.env.ACCOUNTS_TABLE_NAME || 'cc-native-accounts',
-    //   // ... other dependencies
-    // });
-    // 
-    // await signalService.createSignal({
-    //   signalType: status === 'SUCCEEDED' ? SignalType.ACTION_EXECUTED : SignalType.ACTION_FAILED,
-    //   accountId: account_id,
-    //   tenantId: tenant_id,
-    //   data: {
-    //     action_intent_id,
-    //     status,
-    //     external_object_refs: outcome.external_object_refs,
-    //   },
-    // });
+    // Note: Signal emission for Phase 1 perception layer is implemented in Phase 4.4 (Safety & Outcomes)
+    // See PHASE_4_4_CODE_LEVEL_PLAN.md for SignalService integration
     
-    // 5. Return outcome
+    // 4. Return outcome
     return {
       outcome,
     };
