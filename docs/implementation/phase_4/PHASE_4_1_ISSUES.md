@@ -1,7 +1,7 @@
 # Phase 4.1 Issue Analysis
 
 **Review Date:** 2026-01-26  
-**Status:** Analysis Complete - Issues Identified
+**Status:** ✅ All Issues Fixed (2026-01-26)
 
 ---
 
@@ -197,17 +197,17 @@
 
 | Issue # | Issue | Status | Severity | Location |
 |---------|-------|--------|----------|----------|
-| 1 | Error taxonomy split-brain | ❌ EXISTS | High | execution-starter-handler.ts |
-| 2 | No explicit rerun flag | ❌ EXISTS | Medium | ExecutionAttemptService.ts |
-| 3 | Idempotency key design | ⚠️ DESIGN CHOICE | Low | IdempotencyService.ts |
-| 4 | TTL deletion hides stuck executions | ❌ EXISTS | Medium | ExecutionAttemptService.ts |
-| 5 | Limited DynamoDB querying | ❌ EXISTS | Medium | ExecutionInfrastructure.ts |
-| 6 | Missing ledger event types | ❌ EXISTS | Low | LedgerTypes.ts |
-| 7 | registry_version validation | ⚠️ POTENTIAL | Low | ActionTypeRegistryService.ts |
-| 8 | Parameter validation error type | ❌ EXISTS | Medium | ActionTypeRegistryService.ts |
-| 9 | No history query fallback | ❌ EXISTS | Medium | IdempotencyService.ts |
+| 1 | Error taxonomy split-brain | ✅ FIXED | High | execution-starter-handler.ts | Unified error handling |
+| 2 | No explicit rerun flag | ✅ FIXED | Medium | ExecutionAttemptService.ts | Added `allow_rerun` parameter |
+| 3 | Idempotency key design | ✅ DOCUMENTED | Low | IdempotencyService.ts | Added semantic key option |
+| 4 | TTL deletion hides stuck executions | ✅ DOCUMENTED | Medium | ExecutionAttemptService.ts | Added operational sweeper note |
+| 5 | Limited DynamoDB querying | ✅ FIXED | Medium | ExecutionInfrastructure.ts | Added `gsi2` for tenant queries |
+| 6 | Missing ledger event types | ✅ FIXED | Low | LedgerTypes.ts | Added `EXECUTION_CANCELLED`, `EXECUTION_EXPIRED` |
+| 7 | registry_version validation | ✅ FIXED | Low | ActionTypeRegistryService.ts | Added validation logic |
+| 8 | Parameter validation error type | ✅ FIXED | Medium | ActionTypeRegistryService.ts | Changed to `ValidationError` |
+| 9 | No history query fallback | ✅ FIXED | Medium | IdempotencyService.ts | Implemented history query |
 
-**Total Issues:** 7 confirmed, 2 design choices/awareness items
+**Total Issues:** 7 fixed, 2 documented/improved
 
 ---
 
