@@ -270,7 +270,16 @@ import { z } from 'zod';
 const ToolInvocationRequestSchema = z.object({
   gateway_url: z.string().url('gateway_url must be a valid URL'),
   tool_name: z.string().min(1, 'tool_name is required'),
-  tool_arguments: z.record(z.any(), 'tool_arguments must be an object'),
+  tool_arguments: z.record(z.string(), z.any(), 'tool_arguments must be a plain object (not array, not null)')
+    .refine(
+      (val) => {
+        // Size guard: prevent huge SFN payloads (max 256KB for SFN input)
+        // tool_arguments should be < 200KB to leave room for other fields
+        const size = JSON.stringify(val).length;
+        return size < 200 * 1024; // 200KB
+      },
+      { message: 'tool_arguments exceeds size limit (200KB). Large payloads should be passed via S3 artifact reference.' }
+    ),
   idempotency_key: z.string().min(1, 'idempotency_key is required'),
   action_intent_id: z.string().min(1, 'action_intent_id is required'),
   tenant_id: z.string().min(1, 'tenant_id is required'),
@@ -447,18 +456,40 @@ async function invokeWithRetry(
 
 /**
  * Check if error is retryable (transient)
+ * 
+ * Retryable errors include:
+ * - 5xx server errors (gateway/adapter failures)
+ * - 429 rate limiting (with backoff)
+ * - Network errors: DNS failures, connection refused, timeouts, resets
  */
 function isRetryableError(error: any): boolean {
   if (error instanceof AxiosError) {
-    // 5xx errors are retryable
+    // 5xx errors are retryable (server failures)
     if (error.response?.status && error.response.status >= 500) {
       return true;
     }
     
-    // Network errors are retryable
-    if (error.code === 'ECONNRESET' || error.code === 'ETIMEDOUT') {
+    // 429 rate limiting is retryable (with exponential backoff)
+    if (error.response?.status === 429) {
       return true;
     }
+    
+    // Network errors are retryable
+    const retryableNetworkCodes = [
+      'ECONNRESET',    // Connection reset by peer
+      'ETIMEDOUT',     // Connection timeout
+      'ENOTFOUND',     // DNS lookup failed
+      'EAI_AGAIN',     // DNS temporary failure
+      'ECONNREFUSED',  // Connection refused
+    ];
+    if (error.code && retryableNetworkCodes.includes(error.code)) {
+      return true;
+    }
+  }
+  
+  // Non-Axios network errors (e.g., from fetch or other HTTP clients)
+  if (error.code && ['ENOTFOUND', 'EAI_AGAIN', 'ECONNREFUSED', 'ECONNRESET', 'ETIMEDOUT'].includes(error.code)) {
+    return true;
   }
   
   return false;
@@ -466,13 +497,20 @@ function isRetryableError(error: any): boolean {
 
 /**
  * Parse MCP response
+ * 
+ * IMPORTANT: Protocol failures (malformed JSON, invalid MCP structure) throw errors for SFN retry/catch.
+ * Only tool-reported business failures (success:false in valid JSON) return success:false.
  */
 function parseMCPResponse(response: any): any {
+  // MCP error response (structured error from Gateway)
   if (response.error) {
-    return {
-      success: false,
-      error: response.error,
-    };
+    // MCP protocol error - throw for SFN retry/catch
+    const error = new Error(
+      `MCP protocol error: ${JSON.stringify(response.error)}. ` +
+      `This indicates a Gateway or adapter protocol failure, not a tool business failure.`
+    );
+    error.name = 'PermanentError'; // Protocol errors are typically non-retryable (but can be changed to TransientError if needed)
+    throw error;
   }
   
   if (response.result?.content) {
@@ -481,23 +519,32 @@ function parseMCPResponse(response: any): any {
     if (textContent) {
       try {
         const parsed = JSON.parse(textContent.text);
+        // Valid JSON - return parsed response (success may be false for business failures)
         return {
           success: parsed.success !== false,
           ...parsed,
         };
       } catch (e) {
-        return {
-          success: false,
-          error: 'Failed to parse MCP response',
-        };
+        // JSON parse failure - protocol failure, throw for SFN
+        const error = new Error(
+          `Failed to parse MCP response JSON: ${e instanceof Error ? e.message : 'Unknown parse error'}. ` +
+          `Response text: ${textContent.text?.substring(0, 500)}. ` +
+          `This is a protocol failure, not a tool business failure.`
+        );
+        error.name = 'PermanentError'; // Malformed JSON is typically non-retryable
+        throw error;
       }
     }
   }
   
-  return {
-    success: false,
-    error: 'Invalid MCP response format',
-  };
+  // Invalid MCP response structure - protocol failure, throw for SFN
+  const error = new Error(
+    `Invalid MCP response format: missing result.content or text content. ` +
+    `Response: ${JSON.stringify(response).substring(0, 500)}. ` +
+    `This is a protocol failure, not a tool business failure.`
+  );
+  error.name = 'PermanentError';
+  throw error;
 }
 
 /**
@@ -1047,16 +1094,24 @@ export const handler: Handler = async (event: unknown) => {
     const errorClass = classifyErrorFromStepFunctionsError(errorDetails);
     
     // 4. Record failure outcome
+    // Note: If registry_version is missing, record null and set error_class=VALIDATION
+    // Missing registry_version is a Phase 3 contract violation that should be flagged
+    const finalRegistryVersion = registry_version ?? intent?.registry_version ?? null;
+    const finalErrorClass = finalRegistryVersion === null ? 'VALIDATION' : errorClass;
+    const finalErrorCode = finalRegistryVersion === null ? 'REGISTRY_VERSION_MISSING' : 'EXECUTION_FAILED';
+    
     const outcome = await executionOutcomeService.recordOutcome({
       action_intent_id,
       tenant_id,
       account_id,
       trace_id, // execution_trace_id
-      registry_version: registry_version || intent.registry_version || 1, // Fallback to intent if missing
+      registry_version: finalRegistryVersion,
       status: 'FAILED',
-      error_class: errorClass,
-      error_code: 'EXECUTION_FAILED',
-      error_message: errorMessage,
+      error_class: finalErrorClass,
+      error_code: finalErrorCode,
+      error_message: finalRegistryVersion === null 
+        ? 'Missing registry_version in ActionIntentV1 (Phase 3 contract violation)'
+        : errorMessage,
       completed_at: new Date().toISOString(),
       attempt_count: attempt.attempt_count,
       started_at: attempt.started_at,
@@ -1221,9 +1276,11 @@ export const handler: Handler = async (event: {
   execution_result: any;
 }) => {
   const { action_intent_id, tenant_id, account_id, trace_id, registry_version, execution_result } = event;
-  const traceId = traceService.generateTraceId();
+  // Use execution_trace_id from SFN input (do NOT generate new traceId)
+  // This maintains trace correlation across the entire execution lifecycle
+  // If you need per-handler span IDs for distributed tracing, use a different field name
   
-  logger.info('Compensation handler invoked', { action_intent_id, traceId });
+  logger.info('Compensation handler invoked', { action_intent_id, trace_id });
   
   try {
     // 1. Fetch ActionIntentV1
@@ -1895,11 +1952,7 @@ private createExecutionTriggerRule(
           "registry_version": "$.registry_version",
           "compensation_strategy": "$.compensation_strategy",
           "attempt_count": "$.attempt_count",
-          "started_at": "$.started_at",
-          "action_intent_id": "$.action_intent_id",
-          "tenant_id": "$.tenant_id",
-          "account_id": "$.account_id",
-          "trace_id": "$.trace_id"
+          "started_at": "$.started_at"
         }
       },
       "End": true
