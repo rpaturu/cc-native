@@ -383,6 +383,8 @@ export class LifecycleStateService {
       [SignalType.FIRST_ENGAGEMENT_OCCURRED]: [],
       [SignalType.DISCOVERY_PROGRESS_STALLED]: [],
       [SignalType.STAKEHOLDER_GAP_DETECTED]: [],
+      [SignalType.ACTION_EXECUTED]: [],
+      [SignalType.ACTION_FAILED]: [],
       [SignalType.USAGE_TREND_CHANGE]: [],
       [SignalType.SUPPORT_RISK_EMERGING]: [],
       [SignalType.RENEWAL_WINDOW_ENTERED]: [],

@@ -7,6 +7,7 @@
 import { DynamoDBDocumentClient, GetCommand, QueryCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
 import { Logger } from '../core/Logger';
 import { ActionTypeRegistry } from '../../types/ExecutionTypes';
+import { ValidationError } from '../../types/ExecutionErrors';
 
 export class ActionTypeRegistryService {
   constructor(

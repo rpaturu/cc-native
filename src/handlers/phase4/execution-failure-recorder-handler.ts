@@ -144,7 +144,7 @@ export const handler: Handler = async (event: unknown) => {
     // Note: If registry_version is missing, record null and set error_class=VALIDATION
     // Missing registry_version is a Phase 3 contract violation that should be flagged
     const finalRegistryVersion = registry_version ?? intent?.registry_version ?? null;
-    const finalErrorClass = finalRegistryVersion === null ? 'VALIDATION' : errorClass;
+    const finalErrorClass = (finalRegistryVersion === null ? 'VALIDATION' : errorClass) as 'AUTH' | 'RATE_LIMIT' | 'VALIDATION' | 'DOWNSTREAM' | 'TIMEOUT' | 'UNKNOWN';
     const finalErrorCode = finalRegistryVersion === null ? 'REGISTRY_VERSION_MISSING' : 'EXECUTION_FAILED';
     
     const outcome = await executionOutcomeService.recordOutcome({
@@ -152,16 +152,23 @@ export const handler: Handler = async (event: unknown) => {
       tenant_id,
       account_id,
       trace_id, // execution_trace_id
-      registry_version: finalRegistryVersion,
+      // Note: registry_version is required in ActionOutcomeV1, but may be null for pre-tool failures
+      // Use 0 as fallback (indicates contract violation, but allows recording the failure)
+      registry_version: finalRegistryVersion ?? 0,
       status: 'FAILED',
+      external_object_refs: [], // Pre-tool failures have no external objects
       error_class: finalErrorClass,
       error_code: finalErrorCode,
       error_message: finalRegistryVersion === null 
         ? 'Missing registry_version in ActionIntentV1 (Phase 3 contract violation)'
         : errorMessage,
-      completed_at: new Date().toISOString(),
       attempt_count: attempt.attempt_count,
+      tool_name: 'unknown', // Pre-tool failure - tool was never invoked
+      tool_schema_version: 'unknown', // Pre-tool failure - tool was never invoked
+      tool_run_ref: `pre-tool-failure-${action_intent_id}`, // Placeholder for pre-tool failures
       started_at: attempt.started_at,
+      completed_at: new Date().toISOString(),
+      compensation_status: 'NONE', // Pre-tool failures have nothing to compensate
     });
     
     // 5. Update execution attempt status

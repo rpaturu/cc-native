@@ -5,7 +5,7 @@
  */
 
 import { createHash } from 'crypto';
-import { DynamoDBDocumentClient, GetCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { ExternalWriteDedupe } from '../../types/ExecutionTypes';
 
 export class IdempotencyService {

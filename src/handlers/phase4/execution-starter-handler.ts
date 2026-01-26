@@ -22,6 +22,7 @@ import { ActionTypeRegistryService } from '../../services/execution/ActionTypeRe
 import { LedgerService } from '../../services/ledger/LedgerService';
 import { LedgerEventType } from '../../types/LedgerTypes';
 import {
+  ExecutionError,
   IntentNotFoundError,
   ValidationError,
   ExecutionAlreadyInProgressError,

@@ -522,6 +522,8 @@ export class SignalService {
       [SignalType.STAKEHOLDER_GAP_DETECTED]: [],
       [SignalType.USAGE_TREND_CHANGE]: [],
       [SignalType.SUPPORT_RISK_EMERGING]: [],
+      [SignalType.ACTION_EXECUTED]: [],
+      [SignalType.ACTION_FAILED]: [],
       [SignalType.RENEWAL_WINDOW_ENTERED]: [],
     };
   }

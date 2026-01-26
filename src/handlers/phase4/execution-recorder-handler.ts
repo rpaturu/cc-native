@@ -150,7 +150,7 @@ export const handler: Handler = async (event: unknown) => {
       status,
       external_object_refs: tool_invocation_response.external_object_refs || [],
       error_code: tool_invocation_response.error_code,
-      error_class: tool_invocation_response.error_class,
+      error_class: tool_invocation_response.error_class as 'AUTH' | 'RATE_LIMIT' | 'VALIDATION' | 'DOWNSTREAM' | 'TIMEOUT' | 'UNKNOWN' | undefined,
       error_message: tool_invocation_response.error_message,
       attempt_count,
       tool_name,
