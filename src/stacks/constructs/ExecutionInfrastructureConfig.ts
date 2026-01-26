@@ -119,6 +119,7 @@ export const DEFAULT_EXECUTION_INFRASTRUCTURE_CONFIG: ExecutionInfrastructureCon
     toolMapperDlq: 'cc-native-tool-mapper-handler-dlq',
     toolInvokerDlq: 'cc-native-tool-invoker-handler-dlq',
     executionRecorderDlq: 'cc-native-execution-recorder-handler-dlq',
+    executionFailureRecorderDlq: 'cc-native-execution-failure-recorder-handler-dlq',
     compensationDlq: 'cc-native-compensation-handler-dlq',
   },
   

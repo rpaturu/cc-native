@@ -150,6 +150,8 @@ const StepFunctionsInputSchema = z.object({
   idempotency_key: z.string().min(1, 'idempotency_key is required'),
   trace_id: z.string().min(1, 'trace_id is required'), // execution_trace_id from starter handler
   registry_version: z.number().int().positive('registry_version must be positive integer'), // From starter handler output
+  attempt_count: z.number().int().positive('attempt_count must be positive integer'), // From starter handler output
+  started_at: z.string().min(1, 'started_at is required'), // From starter handler output
 }).strict();
 
 export const handler: Handler = async (event: unknown) => {
@@ -158,7 +160,7 @@ export const handler: Handler = async (event: unknown) => {
   if (!validationResult.success) {
     const error = new Error(
       `[ToolMapperHandler] Invalid Step Functions input: ${validationResult.error.message}. ` +
-      `Expected: { action_intent_id: string, tenant_id: string, account_id: string, idempotency_key: string, trace_id: string, registry_version: number }. ` +
+      `Expected: { action_intent_id: string, tenant_id: string, account_id: string, idempotency_key: string, trace_id: string, registry_version: number, attempt_count: number, started_at: string }. ` +
       `Received: ${JSON.stringify(event)}. ` +
       `Check Step Functions state machine definition to ensure all required fields are passed from execution-starter-handler output.`
     );
@@ -250,6 +252,12 @@ const traceService = new TraceService(logger);
 /**
  * Step Functions input: ToolInvocationRequest
  * Step Functions output: ToolInvocationResponse
+ * 
+ * IMPORTANT: This handler throws errors for SFN retry/catch logic:
+ * - Throws Error with name='TransientError' for retryable errors (via invokeWithRetry)
+ * - Throws Error with name='PermanentError' for non-retryable errors (via invokeWithRetry)
+ * - Only returns ToolInvocationResponse (with success:false) for tool-level business failures
+ *   where tool ran but reported an error (proceed to RecordOutcome without SFN retry)
  */
 export const handler: Handler<ToolInvocationRequest, ToolInvocationResponse> = async (event) => {
   const { gateway_url, tool_name, tool_arguments, idempotency_key, action_intent_id, tenant_id, account_id, trace_id } = event;
@@ -1452,21 +1460,23 @@ private createExecutionFailureRecorderHandler(
   props: ExecutionInfrastructureProps,
   config: ExecutionInfrastructureConfig
 ): lambda.Function {
-  const handler = new lambda.Function(this, 'ExecutionFailureRecorderHandler', {
+  // Use NodejsFunction for consistency with other handlers (same bundling, env var behavior)
+  const handler = new lambdaNodejs.NodejsFunction(this, 'ExecutionFailureRecorderHandler', {
     functionName: config.functionNames.executionFailureRecorder,
+    entry: 'src/handlers/phase4/execution-failure-recorder-handler.ts',
+    handler: 'handler',
     runtime: lambda.Runtime.NODEJS_20_X,
-    handler: 'execution-failure-recorder-handler.handler',
-    code: lambda.Code.fromAsset('dist'),
-    timeout: cdk.Duration.seconds(config.defaults.lambdaTimeoutSeconds),
-    memorySize: config.defaults.lambdaMemoryMB,
+    timeout: cdk.Duration.seconds(config.defaults.timeout.executionRecorder),
+    memorySize: config.defaults.memorySize?.executionRecorder,
     environment: {
-      AWS_REGION: props.region || cdk.Stack.of(this).region,
       EXECUTION_OUTCOMES_TABLE_NAME: config.tableNames.executionOutcomes,
       EXECUTION_ATTEMPTS_TABLE_NAME: config.tableNames.executionAttempts,
       ACTION_INTENT_TABLE_NAME: config.tableNames.actionIntent,
       LEDGER_TABLE_NAME: config.tableNames.ledger,
+      // Note: AWS_REGION is automatically set by Lambda runtime and should not be set manually
     },
     deadLetterQueue: this.executionFailureRecorderDlq,
+    deadLetterQueueEnabled: true,
     retryAttempts: 0, // No retries - failures are terminal
   });
   
@@ -1541,9 +1551,12 @@ private buildStateMachineDefinition(): stepfunctions.IChainable {
   });
   
   // INVOKE_TOOL (with retry)
+  // Note: resultPath wraps ToolInvoker output under tool_invocation_response key
+  // This matches execution-recorder-handler input schema
   const invokeTool = new stepfunctionsTasks.LambdaInvoke(this, 'InvokeTool', {
     lambdaFunction: this.toolInvokerHandler,
     payloadResponseOnly: true,
+    resultPath: '$.tool_invocation_response', // Wrap output for recorder handler
     retryOnServiceExceptions: true,
   }).addRetry({
     errors: ['TransientError'],
@@ -1552,7 +1565,9 @@ private buildStateMachineDefinition(): stepfunctions.IChainable {
     backoffRate: 2.0,
   });
   
-  // COMPENSATE_ACTION (for permanent errors)
+  // COMPENSATE_ACTION (conditional - only if external write occurred)
+  // Note: Compensation should only run if tool succeeded or partially succeeded with external_object_refs
+  // Use Choice state to check if compensation is needed, not automatic catch on PermanentError
   const compensateAction = new stepfunctionsTasks.LambdaInvoke(this, 'CompensateAction', {
     lambdaFunction: this.compensationHandler,
     payloadResponseOnly: true,
@@ -1586,22 +1601,34 @@ private buildStateMachineDefinition(): stepfunctions.IChainable {
     resultPath: '$.error',
   });
   
-  invokeTool.addCatch(compensateAction, {
-    errors: ['PermanentError'],
+  // InvokeTool errors: route to RecordFailure (not compensation)
+  // Compensation should only run conditionally if external write occurred (see Choice state below)
+  invokeTool.addCatch(recordFailure, {
+    errors: ['States.ALL'], // All errors (TransientError exhausted, PermanentError, etc.)
     resultPath: '$.error',
   });
   
-  invokeTool.addCatch(recordFailure, {
-    errors: ['States.ALL'],
-    resultPath: '$.error',
-  });
+  // Choice state: Check if compensation is needed after tool invocation
+  // Compensation should only run if:
+  // 1. Tool invocation failed (success: false) AND
+  // 2. External object refs exist (write occurred) AND
+  // 3. Registry compensation strategy is AUTOMATIC
+  const checkCompensation = new stepfunctions.Choice(this, 'CheckCompensation')
+    .when(
+      stepfunctions.Condition.and(
+        stepfunctions.Condition.booleanEquals('$.tool_invocation_response.success', false),
+        stepfunctions.Condition.isPresent('$.tool_invocation_response.external_object_refs[0]')
+      ),
+      compensateAction.next(recordOutcome)
+    )
+    .otherwise(recordOutcome);
   
   // Build chain
   return startExecution
     .next(validatePreflight)
     .next(mapActionToTool)
     .next(invokeTool)
-    .next(recordOutcome);
+    .next(checkCompensation); // Choice state routes to compensation or directly to recordOutcome
 }
 
 private createExecutionTriggerRule(
@@ -1760,7 +1787,7 @@ private createExecutionTriggerRule(
           "account_id": "$.account_id",
           "trace_id": "$.trace_id",
           "registry_version": "$.registry_version",
-          "execution_result": "$"
+          "execution_result": "$.tool_invocation_response"
         }
       },
       "Next": "RecordOutcome"
