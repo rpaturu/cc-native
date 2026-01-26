@@ -70,9 +70,20 @@ Execution Result: Recorded & Audited
 ```json
 {
   "Comment": "Action Intent Execution Orchestrator",
-  "StartAt": "ValidateExecution",
+  "StartAt": "StartExecution",
   "States": {
-    "ValidateExecution": {
+    "StartExecution": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "cc-native-execution-starter",
+        "Payload": {
+          "action_intent_id": "$.action_intent_id"
+        }
+      },
+      "Next": "ValidatePreflight"
+    },
+    "ValidatePreflight": {
       "Type": "Task",
       "Resource": "arn:aws:states:::lambda:invoke",
       "Parameters": {
@@ -95,15 +106,16 @@ Execution Result: Recorded & Audited
       },
       "Next": "InvokeToolViaGateway"
     },
-    "InvokeToolViaGateway": {
+    "InvokeTool": {
       "Type": "Task",
       "Resource": "arn:aws:states:::lambda:invoke",
       "Parameters": {
-        "FunctionName": "cc-native-mcp-gateway-client",
+        "FunctionName": "cc-native-tool-invoker",
         "Payload": {
           "gateway_url": "$.gateway_url",
           "tool_name": "$.tool_name",
           "tool_arguments": "$.tool_arguments",
+          "idempotency_key": "$.idempotency_key",
           "jwt_token": "$.jwt_token"
         }
       },
@@ -172,33 +184,63 @@ Execution Result: Recorded & Audited
 
 **State Responsibilities:**
 
-1. **ValidateExecution**
+1. **StartExecution** (NEW - Execution Attempt Locking)
+   - Create `ExecutionAttempt` record in DynamoDB with conditional write
+   - `action_intent_id` + `attempt_id` + `status = RUNNING`
+   - Generate `idempotency_key = hash(tenant_id + action_intent_id + tool_name + normalized_params + version)`
+   - Emit ledger event: `EXECUTION_STARTED`
+   - If execution already exists → fail with "already executing" reason
+   - **Purpose:** Exactly-once execution guarantee (prevents double-execution from Step Functions retries or EventBridge duplicates)
+
+2. **ValidatePreflight** (Split from ValidateExecution)
    - Fetch `ActionIntentV1` from DynamoDB
    - Check expiration (`expires_at_epoch`)
    - Check kill switches (tenant execution enabled, action type not disabled)
-   - Check idempotency (execution not already started)
+   - Check required parameters present
+   - Check budget/rate limits if applicable
    - If invalid → fail with reason
 
-2. **MapActionToTool**
-   - Map `ActionIntentV1.action_type` → MCP tool name
-   - Map `ActionIntentV1.parameters` → tool arguments
-   - Example: `CREATE_CRM_TASK` → `crm.create_task`
+3. **MapActionToTool** (Deterministic + Versioned)
+   - Lookup in `ActionTypeRegistry` (DynamoDB table or AppConfig)
+   - Map `ActionIntentV1.action_type` → MCP tool name + schema version
+   - Map `ActionIntentV1.parameters` → tool arguments (using schema version)
+   - Extract: `tool_name`, `tool_schema_version`, `required_scopes`, `risk_class`, `compensation_strategy`
+   - Example: `CREATE_CRM_TASK` → `crm.create_task` (v1.0)
+   - **Purpose:** Versioned mapping ensures old ActionIntents remain executable or fail cleanly
 
-3. **InvokeToolViaGateway**
-   - Make MCP protocol call to AgentCore Gateway
-   - Handle retries for transient failures
-   - Parse MCP response
-   - Extract external object IDs
+4. **InvokeTool** (ToolInvoker Lambda → Gateway)
+   - ToolInvoker Lambda makes MCP protocol call to AgentCore Gateway
+   - Centralizes MCP protocol handling, auth/JWT signing, retries, timeouts, logging
+   - Passes `idempotency_key` to adapter for dual-layer idempotency
+   - Handles retries for transient failures (with backoff)
+   - Parses MCP response
+   - Captures `ToolRunRef` + raw response pointer (S3 if large)
+   - **Purpose:** Clean separation, swap Gateway endpoints without touching state machine
 
-4. **CompensateAction**
-   - Rollback if action is reversible
+5. **Runtime Guards** (Implicit in InvokeTool retry logic)
+   - Timeout enforcement
+   - Circuit breaker per connector
+   - Backoff discipline
+   - "Stop retrying" classification for 4xx errors (permanent failures)
+
+6. **CompensateAction**
+   - Rollback if action is reversible (based on `compensation_strategy` from registry)
    - Call compensation tool via Gateway
    - Handle compensation failures
 
-5. **RecordOutcome**
-   - Write `ExecutionRecord` to DynamoDB
+7. **RecordOutcome** (Structured Outcome Contract)
+   - Write `ActionOutcomeV1` (structured) to DynamoDB
+   - Store raw response artifact pointer (S3) if needed
+   - Outcome fields:
+     - `status: SUCCEEDED | FAILED | RETRYING | CANCELLED`
+     - `external_object_refs[]` (e.g., CRM task ID)
+     - `error_code` + `error_class` (AUTH, RATE_LIMIT, VALIDATION, DOWNSTREAM)
+     - `attempt_count`
+     - `completed_at`
+     - `tool_run_ref` (traceable to gateway invocation)
    - Emit ledger event: `ACTION_EXECUTED` or `ACTION_FAILED`
    - Emit signal for Phase 1 perception layer
+   - **Purpose:** Normalized outcomes for future learning, analytics, debugging
 
 ---
 
@@ -600,38 +642,63 @@ Attributes:
 
 ## Data Models
 
-### ExecutionRecord (DynamoDB)
+### ExecutionAttempt (DynamoDB) - Execution Locking
 
 ```typescript
-interface ExecutionRecord {
+interface ExecutionAttempt {
   // Composite keys
   pk: string; // TENANT#tenant_id#ACCOUNT#account_id
   sk: string; // EXECUTION#action_intent_id
   
-  // Execution metadata
+  // Execution locking
   action_intent_id: string;
-  step_functions_execution_arn: string;
-  status: 'PENDING' | 'EXECUTING' | 'SUCCEEDED' | 'FAILED' | 'EXPIRED' | 'COMPENSATED';
-  connector_type: 'CRM' | 'CALENDAR' | 'INTERNAL';
-  tool_name: string; // e.g., "crm.create_task"
+  attempt_id: string; // Unique per attempt (for retries)
+  status: 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'CANCELLED';
+  idempotency_key: string; // hash(tenant_id + action_intent_id + tool_name + normalized_params + version)
   
   // Timestamps
   started_at: string; // ISO timestamp
-  completed_at?: string; // ISO timestamp
   
-  // Retry tracking
-  retry_count: number;
+  // TTL (for cleanup of stuck RUNNING states)
+  ttl?: number; // started_at + 1 hour (epoch seconds)
+}
+```
+
+### ActionOutcomeV1 (DynamoDB) - Structured Outcome
+
+```typescript
+interface ActionOutcomeV1 {
+  // Composite keys
+  pk: string; // TENANT#tenant_id#ACCOUNT#account_id
+  sk: string; // OUTCOME#action_intent_id
   
-  // External system IDs
-  external_object_ids: {
-    crm_task_id?: string;
-    calendar_event_id?: string;
-    internal_note_id?: string;
-  };
+  // Outcome metadata
+  action_intent_id: string;
+  status: 'SUCCEEDED' | 'FAILED' | 'RETRYING' | 'CANCELLED';
   
-  // Error handling
+  // External system references
+  external_object_refs: Array<{
+    system: 'CRM' | 'CALENDAR' | 'INTERNAL';
+    object_type: string; // e.g., "Task", "Event", "Note"
+    object_id: string; // External system ID
+    object_url?: string; // Link to external object (if available)
+  }>;
+  
+  // Error classification
+  error_code?: string; // e.g., "AUTH_FAILED", "RATE_LIMIT", "VALIDATION_ERROR"
+  error_class?: 'AUTH' | 'RATE_LIMIT' | 'VALIDATION' | 'DOWNSTREAM' | 'TIMEOUT' | 'UNKNOWN';
   error_message?: string;
-  error_type?: 'TRANSIENT' | 'PERMANENT';
+  
+  // Execution metadata
+  attempt_count: number;
+  tool_name: string; // e.g., "crm.create_task"
+  tool_schema_version: string; // e.g., "v1.0"
+  tool_run_ref: string; // Reference to Gateway invocation (for traceability)
+  raw_response_artifact_ref?: string; // S3 pointer if response is large
+  
+  // Timestamps
+  started_at: string; // ISO timestamp
+  completed_at: string; // ISO timestamp
   
   // Compensation
   compensation_status: 'NONE' | 'PENDING' | 'COMPLETED' | 'FAILED';
@@ -639,6 +706,39 @@ interface ExecutionRecord {
   
   // TTL
   ttl?: number; // completed_at + 90 days (epoch seconds)
+}
+```
+
+### ActionTypeRegistry (DynamoDB) - Versioned Tool Mapping
+
+```typescript
+interface ActionTypeRegistry {
+  // Composite keys
+  pk: string; // ACTION_TYPE#action_type
+  sk: string; // VERSION#schema_version
+  
+  // Mapping metadata
+  action_type: string; // e.g., "CREATE_CRM_TASK"
+  tool_name: string; // e.g., "crm.create_task"
+  tool_schema_version: string; // e.g., "v1.0"
+  
+  // Tool configuration
+  required_scopes: string[]; // OAuth scopes required
+  risk_class: 'MINIMAL' | 'LOW' | 'MEDIUM' | 'HIGH';
+  compensation_strategy: 'AUTOMATIC' | 'MANUAL' | 'NONE';
+  
+  // Parameter mapping
+  parameter_mapping: {
+    [actionParam: string]: {
+      toolParam: string;
+      transform?: 'PASSTHROUGH' | 'UPPERCASE' | 'LOWERCASE' | 'CUSTOM';
+      required: boolean;
+    };
+  };
+  
+  // Metadata
+  created_at: string;
+  deprecated_at?: string; // If deprecated, old ActionIntents may still use this version
 }
 ```
 
@@ -777,19 +877,42 @@ interface MCPToolResponse {
 
 ## Idempotency Enforcement
 
-### Defense in Depth
+### Dual-Layer Idempotency (Defense in Depth)
 
-1. **Step Functions Execution Name**
-   - Use `action_intent_id` as execution name
-   - Step Functions enforces uniqueness
+**Layer 1: Orchestrator Level (ExecutionAttempt)**
+- **Purpose:** Prevent duplicate Step Functions executions
+- **Mechanism:** DynamoDB conditional write on `ExecutionAttempt`
+  - Condition: `attribute_not_exists(action_intent_id) OR status IN [SUCCEEDED, FAILED, CANCELLED]`
+  - If execution already RUNNING → fail with "already executing"
+- **Enforced at:** `START_EXECUTION` state
+- **Why:** Step Functions can retry; EventBridge can deliver twice
 
-2. **DynamoDB Conditional Write**
-   - ExecutionRecord write: `attribute_not_exists(action_intent_id)`
-   - Prevents duplicate execution records
+**Layer 2: Adapter Level (External Write Dedupe)**
+- **Purpose:** Prevent duplicate external API calls
+- **Mechanism:** 
+  - Generate: `idempotency_key = hash(tenant_id + action_intent_id + tool_name + normalized_params + version)`
+  - Use as: External API idempotency header (if supported) OR DynamoDB `external_write_dedupe` table key
+- **Enforced at:** Connector adapter Lambda
+- **Why:** External APIs may not support idempotency; adapter must handle it
 
-3. **Connector-Level Idempotency**
-   - External APIs: Use idempotency keys where supported
-   - Internal writes: Check existence before create
+**Idempotency Key Generation:**
+```typescript
+function generateIdempotencyKey(
+  tenantId: string,
+  actionIntentId: string,
+  toolName: string,
+  normalizedParams: Record<string, any>,
+  schemaVersion: string
+): string {
+  const normalized = JSON.stringify(normalizedParams, Object.keys(normalizedParams).sort());
+  const input = `${tenantId}:${actionIntentId}:${toolName}:${normalized}:${schemaVersion}`;
+  return createHash('sha256').update(input, 'utf8').digest('hex');
+}
+```
+
+**Additional Safeguards:**
+- Step Functions execution name: `exec-{action_intent_id}` (enforces uniqueness)
+- Internal writes: Check existence before create
 
 ---
 
@@ -886,8 +1009,14 @@ const crmTarget = new bedrockAgentCore.GatewayTarget(this, 'CrmTarget', {
 |----------|--------|-----------|
 | Orchestration | Step Functions | Built-in retry, compensation, state persistence |
 | Tool Execution | AgentCore Gateway (MCP) | Unified auth, governance, matches architecture doc |
+| Gateway Client | ToolInvoker Lambda | Centralizes MCP protocol, allows endpoint swapping |
 | Connector Pattern | Lambda per connector | Isolation, independent scaling, per-connector IAM |
 | Execution Trigger | EventBridge event | Immediate, event-driven, matches Phase 3 pattern |
+| Execution Locking | ExecutionAttempt table | Exactly-once guarantee (prevents double-execution) |
+| Idempotency | Dual-layer (orchestrator + adapter) | Defense in depth against duplicates |
+| Tool Mapping | ActionTypeRegistry (versioned) | Deterministic, supports schema evolution |
+| Validation | Split (preflight + runtime guards) | Clear separation of concerns |
+| Outcome Storage | ActionOutcomeV1 (structured) | Normalized for analytics, debugging, future learning |
 | State Storage | DynamoDB + Step Functions | Queryability + orchestration state |
 | Throttling | SQS (optional) | Per-connector rate limiting, decoupling |
 | Network | Public subnets (initially) | Most SaaS APIs are public HTTPS |
