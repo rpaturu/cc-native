@@ -270,7 +270,17 @@ import { z } from 'zod';
 const ToolInvocationRequestSchema = z.object({
   gateway_url: z.string().url('gateway_url must be a valid URL'),
   tool_name: z.string().min(1, 'tool_name is required'),
-  tool_arguments: z.record(z.string(), z.any(), 'tool_arguments must be a plain object (not array, not null)')
+  tool_arguments: z.record(z.any())
+    .refine(
+      (val) => {
+        // Must be a plain object (not array, not null)
+        if (!val || typeof val !== 'object' || Array.isArray(val)) {
+          return false;
+        }
+        return true;
+      },
+      { message: 'tool_arguments must be a plain object (not array, not null)' }
+    )
     .refine(
       (val) => {
         // Size guard: prevent huge SFN payloads (max 256KB for SFN input)
@@ -500,16 +510,22 @@ function isRetryableError(error: any): boolean {
  * 
  * IMPORTANT: Protocol failures (malformed JSON, invalid MCP structure) throw errors for SFN retry/catch.
  * Only tool-reported business failures (success:false in valid JSON) return success:false.
+ * 
+ * Error Classification Policy:
+ * - Invalid structure (missing result.content): TransientError (plausibly upstream outage/partial response)
+ * - Malformed JSON: TransientError (plausibly gateway timeout/truncation)
+ * - MCP error response: PermanentError (structured error from Gateway/adapter, typically non-retryable)
  */
 function parseMCPResponse(response: any): any {
   // MCP error response (structured error from Gateway)
   if (response.error) {
-    // MCP protocol error - throw for SFN retry/catch
+    // MCP protocol error - structured error from Gateway/adapter
+    // Typically indicates configuration/auth issues (non-retryable)
     const error = new Error(
       `MCP protocol error: ${JSON.stringify(response.error)}. ` +
       `This indicates a Gateway or adapter protocol failure, not a tool business failure.`
     );
-    error.name = 'PermanentError'; // Protocol errors are typically non-retryable (but can be changed to TransientError if needed)
+    error.name = 'PermanentError'; // Structured errors are typically non-retryable
     throw error;
   }
   
@@ -526,24 +542,26 @@ function parseMCPResponse(response: any): any {
         };
       } catch (e) {
         // JSON parse failure - protocol failure, throw for SFN
+        // Classify as TransientError (plausibly gateway timeout/truncation causing partial JSON)
         const error = new Error(
           `Failed to parse MCP response JSON: ${e instanceof Error ? e.message : 'Unknown parse error'}. ` +
           `Response text: ${textContent.text?.substring(0, 500)}. ` +
           `This is a protocol failure, not a tool business failure.`
         );
-        error.name = 'PermanentError'; // Malformed JSON is typically non-retryable
+        error.name = 'TransientError'; // Malformed JSON may be due to upstream timeout/truncation
         throw error;
       }
     }
   }
   
   // Invalid MCP response structure - protocol failure, throw for SFN
+  // Classify as TransientError (plausibly upstream outage/partial response)
   const error = new Error(
     `Invalid MCP response format: missing result.content or text content. ` +
     `Response: ${JSON.stringify(response).substring(0, 500)}. ` +
     `This is a protocol failure, not a tool business failure.`
   );
-  error.name = 'PermanentError';
+  error.name = 'TransientError'; // Invalid structure may be due to upstream outage
   throw error;
 }
 
@@ -552,6 +570,10 @@ function parseMCPResponse(response: any): any {
  * 
  * @param parsedResponse - Parsed MCP response from Gateway
  * @param toolName - Tool name from input (used for system inference, not from response)
+ * 
+ * CONTRACT REQUIREMENT: All execution tools must return external_object_refs on success.
+ * This is a Phase 4.2 contract requirement - tools that create/modify external objects must
+ * return references for audit, compensation, and signal emission.
  * 
  * Note: Adapter contract should return external_object_refs as an array directly.
  * This function supports both:
@@ -599,10 +621,12 @@ function extractExternalObjectRefs(
     }];
   }
   
-  // If tool succeeded but no external refs, that's an error (tool should return them)
+  // CONTRACT VIOLATION: Tool succeeded but no external refs
+  // All execution tools must return external_object_refs on success (Phase 4.2 contract requirement)
   const error = new Error(
     'Tool invocation response is missing required field: external_object_refs (or legacy external_object_id + object_type). ' +
-    'The connector adapter must return external_object_refs array in the MCP response when success=true. ' +
+    'CONTRACT REQUIREMENT: All execution tools must return external_object_refs when success=true. ' +
+    'This is required for audit, compensation, and signal emission. ' +
     `Tool: ${toolName}, Response: ${JSON.stringify(parsedResponse)}`
   );
   error.name = 'InvalidToolResponseError';
@@ -857,6 +881,8 @@ export const handler: Handler = async (event: unknown) => {
   
   try {
     const completedAt = new Date().toISOString();
+    // Note: status must match ExecutionAttempt.status enum: 'SUCCEEDED' | 'FAILED' | 'CANCELLED'
+    // Phase 4.1 ExecutionAttempt uses these exact values, so this is correct
     const status = tool_invocation_response.success ? 'SUCCEEDED' : 'FAILED';
     
     // 1. Record outcome (include registry_version for audit and backwards compatibility)
@@ -1335,15 +1361,17 @@ export const handler: Handler = async (event: {
     // TODO: Implement compensation tool invocation via Gateway
     // For now, mark as pending manual compensation
     if (toolMapping.compensation_strategy === 'AUTOMATIC') {
-      // TODO: Invoke compensation tool via Gateway
-      logger.info('Automatic compensation not yet implemented', {
+      // NOTE: AUTOMATIC compensation strategy exists in registry, but implementation lands in Phase 4.3/4.4
+      // Phase 4.2 only implements the SFN routing and handler structure
+      // The actual compensation tool invocation will be implemented in later phases
+      logger.info('Automatic compensation not yet implemented (Phase 4.3/4.4)', {
         action_intent_id,
         external_object_refs: externalObjectRefs,
       });
       
       return {
         compensation_status: 'PENDING',
-        reason: 'Automatic compensation not yet implemented',
+        reason: 'Automatic compensation implementation deferred to Phase 4.3/4.4',
       };
     }
     
@@ -2007,7 +2035,26 @@ private createExecutionTriggerRule(
 
 ---
 
-## 6. Next Steps
+## 6. Phase 4.2 Acceptance Criteria
+
+**Phase 4.2 is complete when:**
+
+1. ✅ Step Functions state machine orchestrates execution lifecycle (Start → Validate → Map → Invoke → Record)
+2. ✅ ToolMapper handler maps action types to tools using deterministic `registry_version`
+3. ✅ ToolInvoker handler invokes Gateway with retry logic and proper error classification
+4. ✅ Execution recorder handler records structured outcomes with audit fields
+5. ✅ Execution failure recorder handler records pre-tool failures with proper error classification
+6. ✅ Compensation handler structure exists (AUTOMATIC compensation implementation deferred to Phase 4.3/4.4)
+7. ✅ EventBridge rule triggers Step Functions on ACTION_APPROVED events with idempotency
+8. ✅ All handlers use Zod validation for fail-fast input validation
+9. ✅ All handlers use execution_trace_id for trace correlation
+10. ✅ Compensation routing is conditional (gated on success=false + external refs + strategy=AUTOMATIC)
+
+**Note:** AUTOMATIC compensation strategy exists in registry and is correctly routed by SFN Choice state, but the actual compensation tool invocation implementation is deferred to Phase 4.3/4.4.
+
+---
+
+## 7. Next Steps
 
 After Phase 4.2 completion:
 - ✅ Orchestration layer complete
