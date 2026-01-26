@@ -610,19 +610,21 @@ function classifyError(parsedResponse: any): {
 }
 
 /**
- * Classify error from exception
+ * Get JWT token for Gateway authentication (Cognito)
+ * 
+ * Note: This is done in ToolInvoker (not ToolMapper) to keep mapping deterministic
+ * and auth logic near the HTTP caller where retry/refresh logic lives.
+ * 
+ * IMPORTANT: If this throws, the error bubbles to SFN. Auth failures should be
+ * PermanentError (non-retryable). This function throws PermanentError for consistent SFN error handling.
  */
-function classifyErrorFromException(error: any): {
-  error_code: string;
-  error_class: ToolInvocationResponse['error_class'];
-  error_message: string;
-} {
-  // This should never be reached - invokeWithRetry throws errors for SFN
-  // But if somehow we get here, throw for SFN
-  const errorName = isRetryableError(error) ? 'TransientError' : 'PermanentError';
-  const sfError = new Error(`${errorName}: ${error.message || 'Unknown error'}`);
-  sfError.name = errorName;
-  throw sfError;
+async function getJwtToken(tenantId: string): Promise<string> {
+  // TODO: Implement Cognito JWT token retrieval
+  // Use Cognito Identity Pool or User Pool client credentials
+  // For now, throw PermanentError (auth failures are not retryable)
+  const error = new Error('PermanentError: JWT token retrieval not implemented');
+  error.name = 'PermanentError';
+  throw error;
 }
 ```
 
