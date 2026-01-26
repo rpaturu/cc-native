@@ -1891,7 +1891,7 @@ export const handler: Handler = async (event: unknown) => {
       },
     });
     
-    // 6. Return for Step Functions (include registry_version for downstream handlers)
+    // 6. Return for Step Functions (include registry_version, attempt_count, started_at for downstream handlers)
     return {
       action_intent_id,
       idempotency_key: idempotencyKey,
@@ -1899,6 +1899,8 @@ export const handler: Handler = async (event: unknown) => {
       account_id: intent.account_id,
       trace_id: executionTraceId, // Use execution trace (single trace for execution lifecycle)
       registry_version: toolMapping.registry_version, // Pass to downstream handlers
+      attempt_count: attempt.attempt_count, // Pass for outcome recording
+      started_at: attempt.started_at, // Pass for outcome recording
     };
   } catch (error: any) {
     logger.error('Execution starter failed', { 

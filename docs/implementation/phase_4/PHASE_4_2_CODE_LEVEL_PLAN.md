@@ -13,9 +13,11 @@
 **See Phase 4.1 document for complete contract details. Key points:**
 
 1. **Step Functions Input** (from EventBridge rule): `{ action_intent_id, tenant_id, account_id }`
-2. **execution-starter-handler Output**: `{ action_intent_id, idempotency_key, tenant_id, account_id, trace_id, registry_version }`
+2. **execution-starter-handler Output**: `{ action_intent_id, idempotency_key, tenant_id, account_id, trace_id, registry_version, attempt_count, started_at }`
    - `trace_id` = `execution_trace_id` (generated at execution start)
    - `registry_version` = Registry version used for this execution (from ActionIntentV1)
+   - `attempt_count` = Execution attempt count (from ExecutionAttempt)
+   - `started_at` = Execution start timestamp (from ExecutionAttempt)
 3. **Execution Tracing**: Two separate traces:
    - `execution_trace_id`: Generated at execution start, used for all execution lifecycle events
    - `decision_trace_id`: From Phase 3 ActionIntentV1, used as correlation field in ledger events
@@ -128,10 +130,12 @@ const actionTypeRegistryService = new ActionTypeRegistryService(
 );
 
 /**
- * Step Functions input: { action_intent_id, tenant_id, account_id, idempotency_key, trace_id, registry_version }
- * (trace_id and registry_version come from execution-starter-handler output)
+ * Step Functions input: { action_intent_id, tenant_id, account_id, idempotency_key, trace_id, registry_version, attempt_count, started_at }
+ * (trace_id, registry_version, attempt_count, started_at come from execution-starter-handler output)
  * 
- * Step Functions output: { gateway_url, tool_name, tool_arguments, tool_schema_version, registry_version, idempotency_key, jwt_token, action_intent_id, tenant_id, account_id, trace_id }
+ * Step Functions output: { gateway_url, tool_name, tool_arguments, tool_schema_version, registry_version, idempotency_key, action_intent_id, tenant_id, account_id, trace_id, attempt_count, started_at }
+ * 
+ * Note: jwt_token is retrieved in ToolInvoker handler (not in ToolMapper) to keep mapping deterministic.
  * 
  * Note: trace_id is execution_trace_id (from starter handler), not decision_trace_id.
  * Note: registry_version is from starter handler output (deterministic execution).
@@ -162,7 +166,7 @@ export const handler: Handler = async (event: unknown) => {
     throw error;
   }
   
-  const { action_intent_id, tenant_id, account_id, idempotency_key, trace_id, registry_version } = validationResult.data;
+  const { action_intent_id, tenant_id, account_id, idempotency_key, trace_id, registry_version, attempt_count, started_at } = validationResult.data;
   
   logger.info('Tool mapper invoked', { action_intent_id, tenant_id, account_id, trace_id, registry_version });
   
@@ -198,12 +202,9 @@ export const handler: Handler = async (event: unknown) => {
     // 4. Add idempotency_key to tool arguments (for adapter-level idempotency)
     toolArguments.idempotency_key = idempotency_key;
     
-    // 5. Get JWT token (from environment/config)
-    const jwtToken = await getJwtToken(tenant_id); // Implement JWT token retrieval (Cognito)
-    
-    // 6. Return for Step Functions
+    // 5. Return for Step Functions (JWT token retrieval moved to ToolInvoker)
     // Note: trace_id is execution_trace_id (from starter handler), not decision_trace_id
-    // Note: registry_version is passed through for backwards compatibility and audit
+    // Note: registry_version, attempt_count, started_at are passed through for execution recorder
     return {
       gateway_url: gatewayUrl,
       tool_name: toolMapping.tool_name,
@@ -211,11 +212,12 @@ export const handler: Handler = async (event: unknown) => {
       tool_schema_version: toolMapping.tool_schema_version,
       registry_version: registry_version, // Pass through for execution recorder
       idempotency_key: idempotency_key,
-      jwt_token: jwtToken,
       action_intent_id,
       tenant_id,
       account_id,
       trace_id, // execution_trace_id (from starter handler), not intent.trace_id
+      attempt_count, // Pass through for execution recorder
+      started_at, // Pass through for execution recorder
     };
   } catch (error: any) {
     logger.error('Tool mapping failed', { action_intent_id, error: error.message, errorName: error.name, stack: error.stack });
@@ -223,14 +225,8 @@ export const handler: Handler = async (event: unknown) => {
   }
 };
 
-/**
- * Get JWT token for Gateway authentication (Cognito)
- */
-async function getJwtToken(tenantId: string): Promise<string> {
-  // TODO: Implement Cognito JWT token retrieval
-  // Use Cognito Identity Pool or User Pool client credentials
-  throw new Error('JWT token retrieval not implemented');
-}
+// Note: JWT token retrieval moved to ToolInvoker handler (see tool-invoker-handler.ts)
+// This keeps mapping deterministic and purely data-driven, while auth logic lives near the HTTP caller
 ```
 
 ### File: `src/handlers/phase4/tool-invoker-handler.ts`
@@ -256,12 +252,16 @@ const traceService = new TraceService(logger);
  * Step Functions output: ToolInvocationResponse
  */
 export const handler: Handler<ToolInvocationRequest, ToolInvocationResponse> = async (event) => {
-  const { gateway_url, tool_name, tool_arguments, idempotency_key, jwt_token, action_intent_id, tenant_id, account_id, trace_id } = event;
+  const { gateway_url, tool_name, tool_arguments, idempotency_key, action_intent_id, tenant_id, account_id, trace_id } = event;
   
   logger.info('Tool invoker invoked', { action_intent_id, tool_name, trace_id });
   
   try {
-    // 1. Make MCP protocol call to AgentCore Gateway
+    // 1. Get JWT token for Gateway authentication (Cognito)
+    // This is done here (not in ToolMapper) to keep mapping deterministic and auth logic near HTTP caller
+    const jwtToken = await getJwtToken(tenant_id);
+    
+    // 2. Make MCP protocol call to AgentCore Gateway
     const mcpRequest = {
       jsonrpc: '2.0',
       id: `invoke-${Date.now()}`,
@@ -278,7 +278,7 @@ export const handler: Handler<ToolInvocationRequest, ToolInvocationResponse> = a
     const response = await invokeWithRetry(
       gateway_url,
       mcpRequest,
-      jwt_token,
+      jwtToken,
       toolRunRef,
       action_intent_id
     );
@@ -320,6 +320,15 @@ export const handler: Handler<ToolInvocationRequest, ToolInvocationResponse> = a
 
 /**
  * Invoke Gateway with retry logic (exponential backoff)
+ * 
+ * IMPORTANT: This function throws errors for SFN retry/catch logic.
+ * - Throws Error with name='TransientError' for retryable errors (5xx, network, timeout)
+ * - Throws Error with name='PermanentError' for non-retryable errors (4xx auth/validation)
+ * - Only returns response data on success
+ * 
+ * Step Functions will:
+ * - Retry on 'TransientError' (via .addRetry configuration)
+ * - Catch 'PermanentError' and route to compensation/failure handlers
  */
 async function invokeWithRetry(
   gatewayUrl: string,
@@ -350,12 +359,14 @@ async function invokeWithRetry(
       lastError = error;
       
       // Check if error is retryable
-      if (!isRetryableError(error) || attempt === maxRetries) {
-        // Throw with Step Functions-compatible error type
-        if (error.response?.status >= 400 && error.response?.status < 500) {
-          throw new Error('PermanentError: ' + error.message);
-        }
-        throw new Error('TransientError: ' + error.message);
+      const isRetryable = isRetryableError(error);
+      
+      // If not retryable or max retries reached, throw with SFN-compatible error name
+      if (!isRetryable || attempt === maxRetries) {
+        const errorName = isRetryable ? 'TransientError' : 'PermanentError';
+        const sfError = new Error(`${errorName}: ${error.message || 'Unknown error'}`);
+        sfError.name = errorName;
+        throw sfError;
       }
       
       // Exponential backoff
@@ -371,11 +382,11 @@ async function invokeWithRetry(
     }
   }
   
-  // Throw with appropriate error type for Step Functions
-  if (lastError.response?.status >= 400 && lastError.response?.status < 500) {
-    throw new Error('PermanentError: ' + lastError.message);
-  }
-  throw new Error('TransientError: ' + lastError.message);
+  // Should never reach here (thrown in loop), but TypeScript requires return
+  const errorName = isRetryableError(lastError) ? 'TransientError' : 'PermanentError';
+  const sfError = new Error(`${errorName}: ${lastError?.message || 'Unknown error'}`);
+  sfError.name = errorName;
+  throw sfError;
 }
 
 /**
@@ -557,13 +568,20 @@ function classifyErrorFromException(error: any): {
   error_class: ToolInvocationResponse['error_class'];
   error_message: string;
 } {
-  return classifyError({ success: false, error: error.message || String(error) });
+  // This should never be reached - invokeWithRetry throws errors for SFN
+  // But if somehow we get here, throw for SFN
+  const errorName = isRetryableError(error) ? 'TransientError' : 'PermanentError';
+  const sfError = new Error(`${errorName}: ${error.message || 'Unknown error'}`);
+  sfError.name = errorName;
+  throw sfError;
 }
 ```
 
 ### File: `src/handlers/phase4/execution-recorder-handler.ts`
 
-**Purpose:** Record structured execution outcome
+**Purpose:** Record structured execution outcome (tool invocation results)
+
+**Note:** For pre-tool failures (Start/Validate/Map errors), use `execution-failure-recorder-handler.ts` instead.
 
 **Handler:**
 
@@ -824,6 +842,236 @@ export const handler: Handler = async (event: unknown) => {
 };
 ```
 
+### File: `src/handlers/phase4/execution-failure-recorder-handler.ts`
+
+**Purpose:** Record execution failures that occur before tool invocation (Start/Validate/Map errors)
+
+**Handler:**
+
+```typescript
+import { Handler } from 'aws-lambda';
+import { Logger } from '../../services/core/Logger';
+import { TraceService } from '../../services/core/TraceService';
+import { ExecutionOutcomeService } from '../../services/execution/ExecutionOutcomeService';
+import { ExecutionAttemptService } from '../../services/execution/ExecutionAttemptService';
+import { ActionIntentService } from '../../services/decision/ActionIntentService';
+import { LedgerService } from '../../services/ledger/LedgerService';
+import { LedgerEventType } from '../../types/LedgerTypes';
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
+import { getAWSClientConfig } from '../../utils/aws-client-config';
+
+const logger = new Logger('ExecutionFailureRecorderHandler');
+const traceService = new TraceService(logger);
+
+/**
+ * Helper to validate required environment variables with descriptive errors
+ */
+function requireEnv(name: string, handlerName: string): string {
+  const value = process.env[name];
+  if (!value) {
+    const error = new Error(
+      `[${handlerName}] Missing required environment variable: ${name}. ` +
+      `This variable must be set in the Lambda function configuration. ` +
+      `Check CDK stack definition for ExecutionInfrastructure construct.`
+    );
+    error.name = 'ConfigurationError';
+    throw error;
+  }
+  return value;
+}
+
+// Note: AWS_REGION is automatically set by Lambda runtime
+const region = requireEnv('AWS_REGION', 'ExecutionFailureRecorderHandler');
+const executionOutcomesTableName = requireEnv('EXECUTION_OUTCOMES_TABLE_NAME', 'ExecutionFailureRecorderHandler');
+const executionAttemptsTableName = requireEnv('EXECUTION_ATTEMPTS_TABLE_NAME', 'ExecutionFailureRecorderHandler');
+const actionIntentTableName = requireEnv('ACTION_INTENT_TABLE_NAME', 'ExecutionFailureRecorderHandler');
+const ledgerTableName = requireEnv('LEDGER_TABLE_NAME', 'ExecutionFailureRecorderHandler');
+
+// Initialize AWS clients
+const clientConfig = getAWSClientConfig(region);
+const dynamoClient = DynamoDBDocumentClient.from(new DynamoDBClient(clientConfig), {
+  marshallOptions: { removeUndefinedValues: true },
+});
+
+// Initialize services
+const executionOutcomeService = new ExecutionOutcomeService(
+  dynamoClient,
+  executionOutcomesTableName,
+  logger
+);
+
+const executionAttemptService = new ExecutionAttemptService(
+  dynamoClient,
+  executionAttemptsTableName,
+  logger
+);
+
+const actionIntentService = new ActionIntentService(
+  dynamoClient,
+  actionIntentTableName,
+  logger
+);
+
+const ledgerService = new LedgerService(
+  logger,
+  ledgerTableName,
+  region
+);
+
+/**
+ * Step Functions input: {
+ *   action_intent_id,
+ *   tenant_id,
+ *   account_id,
+ *   trace_id, // execution_trace_id (from starter handler)
+ *   registry_version, // From starter handler output
+ *   status: "FAILED",
+ *   error: { // Error details from Step Functions catch
+ *     Error: string,
+ *     Cause: string
+ *   }
+ * }
+ * 
+ * Note: This handler is called from Step Functions Catch blocks for Start/Validate/Map errors.
+ */
+import { z } from 'zod';
+
+// Zod schema for SFN input validation (fail fast with precise errors)
+const StepFunctionsInputSchema = z.object({
+  action_intent_id: z.string().min(1, 'action_intent_id is required'),
+  tenant_id: z.string().min(1, 'tenant_id is required'),
+  account_id: z.string().min(1, 'account_id is required'),
+  trace_id: z.string().min(1, 'trace_id is required'), // execution_trace_id
+  registry_version: z.number().int().positive('registry_version must be positive integer').optional(), // May be missing if failure in starter
+  status: z.literal('FAILED'),
+  error: z.object({
+    Error: z.string().optional(),
+    Cause: z.string().optional(),
+  }).optional(),
+}).strict();
+
+export const handler: Handler = async (event: unknown) => {
+  // Validate SFN input with Zod (fail fast with precise errors)
+  const validationResult = StepFunctionsInputSchema.safeParse(event);
+  if (!validationResult.success) {
+    const error = new Error(
+      `[ExecutionFailureRecorderHandler] Invalid Step Functions input: ${validationResult.error.message}. ` +
+      `Expected: { action_intent_id: string, tenant_id: string, account_id: string, trace_id: string, registry_version?: number, status: "FAILED", error?: { Error?: string, Cause?: string } }. ` +
+      `Received: ${JSON.stringify(event)}.`
+    );
+    error.name = 'ValidationError';
+    throw error;
+  }
+  
+  const { action_intent_id, tenant_id, account_id, trace_id, registry_version, error: errorDetails } = validationResult.data;
+  
+  logger.info('Execution failure recorder invoked', { action_intent_id, trace_id, errorDetails });
+  
+  try {
+    // 1. Fetch ActionIntentV1 (for decision_trace_id correlation)
+    const intent = await actionIntentService.getIntent(action_intent_id, tenant_id, account_id);
+    if (!intent) {
+      throw new Error(`ActionIntent not found: ${action_intent_id}`);
+    }
+    
+    // 2. Get execution attempt (for attempt_count and started_at)
+    const attempt = await executionAttemptService.getAttempt(action_intent_id, tenant_id, account_id);
+    if (!attempt) {
+      throw new Error(`Execution attempt not found: ${action_intent_id}`);
+    }
+    
+    // 3. Classify error from Step Functions error details
+    const errorMessage = errorDetails?.Cause || errorDetails?.Error || 'Unknown error';
+    const errorClass = classifyErrorFromStepFunctionsError(errorDetails);
+    
+    // 4. Record failure outcome
+    const outcome = await executionOutcomeService.recordOutcome({
+      action_intent_id,
+      tenant_id,
+      account_id,
+      trace_id, // execution_trace_id
+      registry_version: registry_version || intent.registry_version || 1, // Fallback to intent if missing
+      status: 'FAILED',
+      error_class: errorClass,
+      error_code: 'EXECUTION_FAILED',
+      error_message: errorMessage,
+      completed_at: new Date().toISOString(),
+      attempt_count: attempt.attempt_count,
+      started_at: attempt.started_at,
+    });
+    
+    // 5. Update execution attempt status
+    await executionAttemptService.updateStatus(
+      action_intent_id,
+      tenant_id,
+      account_id,
+      'FAILED',
+      errorClass
+    );
+    
+    // 6. Emit ledger event (use execution trace for execution lifecycle events)
+    await ledgerService.append({
+      eventType: LedgerEventType.ACTION_FAILED,
+      tenantId: tenant_id,
+      accountId: account_id,
+      traceId: trace_id, // Use execution trace
+      data: {
+        action_intent_id,
+        error_class: errorClass,
+        error_code: 'EXECUTION_FAILED',
+        error_message: errorMessage,
+        decision_trace_id: intent.trace_id, // Preserve decision trace for correlation
+        registry_version: registry_version || intent.registry_version,
+      },
+    });
+    
+    logger.info('Execution failure recorded', { action_intent_id, trace_id, outcome });
+    
+    return {
+      success: true,
+      outcome_id: `${action_intent_id}#${outcome.completed_at}`,
+    };
+  } catch (error: any) {
+    logger.error('Execution failure recorder failed', { 
+      action_intent_id, 
+      error: error.message,
+      errorName: error.name,
+      stack: error.stack,
+    });
+    throw error;
+  }
+};
+
+/**
+ * Classify error from Step Functions error structure
+ */
+function classifyErrorFromStepFunctionsError(errorDetails?: { Error?: string; Cause?: string }): string {
+  if (!errorDetails) {
+    return 'UNKNOWN';
+  }
+  
+  const errorStr = (errorDetails.Error || errorDetails.Cause || '').toUpperCase();
+  
+  if (errorStr.includes('VALIDATION') || errorStr.includes('INTENT_NOT_FOUND') || errorStr.includes('INTENT_EXPIRED')) {
+    return 'VALIDATION';
+  }
+  if (errorStr.includes('AUTH') || errorStr.includes('AUTHENTICATION')) {
+    return 'AUTH';
+  }
+  if (errorStr.includes('KILL_SWITCH')) {
+    return 'VALIDATION';
+  }
+  if (errorStr.includes('CONFIGURATION')) {
+    return 'VALIDATION';
+  }
+  
+  return 'UNKNOWN';
+}
+```
+
+---
+
 ### File: `src/handlers/phase4/compensation-handler.ts`
 
 **Purpose:** Handle compensation (rollback) for failed executions
@@ -898,6 +1146,8 @@ const executionOutcomeService = new ExecutionOutcomeService(
  *   action_intent_id,
  *   tenant_id,
  *   account_id,
+ *   trace_id, // execution_trace_id (from starter handler)
+ *   registry_version, // From starter handler output (REQUIRED for deterministic compensation)
  *   execution_result: ToolInvocationResponse
  * }
  */
@@ -905,9 +1155,11 @@ export const handler: Handler = async (event: {
   action_intent_id: string;
   tenant_id: string;
   account_id: string;
+  trace_id: string;
+  registry_version: number;
   execution_result: any;
 }) => {
-  const { action_intent_id, tenant_id, account_id, execution_result } = event;
+  const { action_intent_id, tenant_id, account_id, trace_id, registry_version, execution_result } = event;
   const traceId = traceService.generateTraceId();
   
   logger.info('Compensation handler invoked', { action_intent_id, traceId });
@@ -921,9 +1173,17 @@ export const handler: Handler = async (event: {
     }
     
     // 2. Get tool mapping to determine compensation strategy
+    // Use registry_version from SFN input (deterministic execution)
+    // If not provided, fall back to intent.registry_version
+    const registryVersion = event.registry_version || intent.registry_version;
+    if (!registryVersion) {
+      throw new Error(`Registry version not found for action_intent_id: ${action_intent_id}. ` +
+        `This is required for deterministic compensation.`);
+    }
+    
     const toolMapping = await actionTypeRegistryService.getToolMapping(
       intent.action_type,
-      intent.parameters_schema_version
+      registryVersion
     );
     
     if (!toolMapping) {
@@ -1002,12 +1262,14 @@ export const handler: Handler = async (event: {
 public readonly toolMapperHandler: lambda.Function;
 public readonly toolInvokerHandler: lambda.Function;
 public readonly executionRecorderHandler: lambda.Function;
+public readonly executionFailureRecorderHandler: lambda.Function; // For pre-tool failures
 public readonly compensationHandler: lambda.Function;
 
 // Additional Dead Letter Queues (Phase 4.2)
 public readonly toolMapperDlq: sqs.Queue;
 public readonly toolInvokerDlq: sqs.Queue;
 public readonly executionRecorderDlq: sqs.Queue;
+public readonly executionFailureRecorderDlq: sqs.Queue;
 public readonly compensationDlq: sqs.Queue;
 
 // Step Functions
@@ -1033,12 +1295,14 @@ public readonly executionArtifactsBucket?: s3.IBucket;
   this.toolMapperDlq = this.createDlq('ToolMapperDlq', config.queueNames.toolMapperDlq, config);
   this.toolInvokerDlq = this.createDlq('ToolInvokerDlq', config.queueNames.toolInvokerDlq, config);
   this.executionRecorderDlq = this.createDlq('ExecutionRecorderDlq', config.queueNames.executionRecorderDlq, config);
+  this.executionFailureRecorderDlq = this.createDlq('ExecutionFailureRecorderDlq', config.queueNames.executionFailureRecorderDlq, config);
   this.compensationDlq = this.createDlq('CompensationDlq', config.queueNames.compensationDlq, config);
   
   // Phase 4.2: Additional Lambda Functions
   this.toolMapperHandler = this.createToolMapperHandler(props, config);
   this.toolInvokerHandler = this.createToolInvokerHandler(props, config);
   this.executionRecorderHandler = this.createExecutionRecorderHandler(props, config);
+  this.executionFailureRecorderHandler = this.createExecutionFailureRecorderHandler(props, config);
   this.compensationHandler = this.createCompensationHandler(props, config);
   
   // Phase 4.2: S3 Bucket (if not provided)
@@ -1184,6 +1448,37 @@ private createExecutionRecorderHandler(
   return handler;
 }
 
+private createExecutionFailureRecorderHandler(
+  props: ExecutionInfrastructureProps,
+  config: ExecutionInfrastructureConfig
+): lambda.Function {
+  const handler = new lambda.Function(this, 'ExecutionFailureRecorderHandler', {
+    functionName: config.functionNames.executionFailureRecorder,
+    runtime: lambda.Runtime.NODEJS_20_X,
+    handler: 'execution-failure-recorder-handler.handler',
+    code: lambda.Code.fromAsset('dist'),
+    timeout: cdk.Duration.seconds(config.defaults.lambdaTimeoutSeconds),
+    memorySize: config.defaults.lambdaMemoryMB,
+    environment: {
+      AWS_REGION: props.region || cdk.Stack.of(this).region,
+      EXECUTION_OUTCOMES_TABLE_NAME: config.tableNames.executionOutcomes,
+      EXECUTION_ATTEMPTS_TABLE_NAME: config.tableNames.executionAttempts,
+      ACTION_INTENT_TABLE_NAME: config.tableNames.actionIntent,
+      LEDGER_TABLE_NAME: config.tableNames.ledger,
+    },
+    deadLetterQueue: this.executionFailureRecorderDlq,
+    retryAttempts: 0, // No retries - failures are terminal
+  });
+  
+  // Grant permissions
+  this.executionOutcomesTable.grantWriteData(handler);
+  this.executionAttemptsTable.grantReadWriteData(handler);
+  this.actionIntentTable.grantReadData(handler);
+  this.ledgerTable.grantWriteData(handler);
+  
+  return handler;
+}
+
 private createCompensationHandler(
   props: ExecutionInfrastructureProps,
   config: ExecutionInfrastructureConfig
@@ -1230,25 +1525,25 @@ private buildStateMachineDefinition(): stepfunctions.IChainable {
   // START_EXECUTION
   const startExecution = new stepfunctionsTasks.LambdaInvoke(this, 'StartExecution', {
     lambdaFunction: this.executionStarterHandler,
-    outputPath: '$',
+    payloadResponseOnly: true, // Return payload only (not Lambda response envelope)
   });
   
   // VALIDATE_PREFLIGHT
   const validatePreflight = new stepfunctionsTasks.LambdaInvoke(this, 'ValidatePreflight', {
     lambdaFunction: this.executionValidatorHandler,
-    outputPath: '$',
+    payloadResponseOnly: true,
   });
   
   // MAP_ACTION_TO_TOOL
   const mapActionToTool = new stepfunctionsTasks.LambdaInvoke(this, 'MapActionToTool', {
     lambdaFunction: this.toolMapperHandler,
-    outputPath: '$',
+    payloadResponseOnly: true,
   });
   
   // INVOKE_TOOL (with retry)
   const invokeTool = new stepfunctionsTasks.LambdaInvoke(this, 'InvokeTool', {
     lambdaFunction: this.toolInvokerHandler,
-    outputPath: '$',
+    payloadResponseOnly: true,
     retryOnServiceExceptions: true,
   }).addRetry({
     errors: ['TransientError'],
@@ -1260,19 +1555,19 @@ private buildStateMachineDefinition(): stepfunctions.IChainable {
   // COMPENSATE_ACTION (for permanent errors)
   const compensateAction = new stepfunctionsTasks.LambdaInvoke(this, 'CompensateAction', {
     lambdaFunction: this.compensationHandler,
-    outputPath: '$',
+    payloadResponseOnly: true,
   });
   
-  // RECORD_OUTCOME
+  // RECORD_OUTCOME (for tool invocation results)
   const recordOutcome = new stepfunctionsTasks.LambdaInvoke(this, 'RecordOutcome', {
     lambdaFunction: this.executionRecorderHandler,
-    outputPath: '$',
+    payloadResponseOnly: true,
   });
   
-  // RECORD_FAILURE (for errors in early states)
+  // RECORD_FAILURE (for errors in early states - uses separate failure recorder)
   const recordFailure = new stepfunctionsTasks.LambdaInvoke(this, 'RecordFailure', {
-    lambdaFunction: this.executionRecorderHandler,
-    outputPath: '$',
+    lambdaFunction: this.executionFailureRecorderHandler,
+    payloadResponseOnly: true,
   });
   
   // Add error handling
@@ -1427,7 +1722,6 @@ private createExecutionTriggerRule(
           "tool_name": "$.tool_name",
           "tool_arguments": "$.tool_arguments",
           "idempotency_key": "$.idempotency_key",
-          "jwt_token": "$.jwt_token",
           "action_intent_id": "$.action_intent_id",
           "tenant_id": "$.tenant_id",
           "account_id": "$.account_id",
@@ -1485,8 +1779,12 @@ private createExecutionTriggerRule(
           "tool_name": "$.tool_name",
           "tool_schema_version": "$.tool_schema_version",
           "registry_version": "$.registry_version",
-          "attempt_count": 1,
-          "started_at": "$.started_at"
+          "attempt_count": "$.attempt_count",
+          "started_at": "$.started_at",
+          "action_intent_id": "$.action_intent_id",
+          "tenant_id": "$.tenant_id",
+          "account_id": "$.account_id",
+          "trace_id": "$.trace_id"
         }
       },
       "End": true
@@ -1495,7 +1793,7 @@ private createExecutionTriggerRule(
       "Type": "Task",
       "Resource": "arn:aws:states:::lambda:invoke",
       "Parameters": {
-        "FunctionName": "cc-native-execution-recorder",
+        "FunctionName": "cc-native-execution-failure-recorder",
         "Payload": {
           "action_intent_id": "$.action_intent_id",
           "tenant_id": "$.tenant_id",
@@ -1529,6 +1827,7 @@ private createExecutionTriggerRule(
 - [ ] Create `src/handlers/phase4/tool-mapper-handler.ts`
 - [ ] Create `src/handlers/phase4/tool-invoker-handler.ts`
 - [ ] Create `src/handlers/phase4/execution-recorder-handler.ts`
+- [ ] Create `src/handlers/phase4/execution-failure-recorder-handler.ts`
 - [ ] Create `src/handlers/phase4/compensation-handler.ts`
 - [ ] Update `src/stacks/constructs/ExecutionInfrastructure.ts` (Phase 4.2 additions - use config for all hardcoded values)
 - [ ] Add Phase 4.2 handlers to CDK construct - use `config.functionNames.*`, `config.defaults.timeout.*`, `config.lambda.retryAttempts`

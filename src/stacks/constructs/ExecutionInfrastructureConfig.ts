@@ -24,6 +24,7 @@ export interface ExecutionInfrastructureConfig {
     readonly toolMapper: string;
     readonly toolInvoker: string;
     readonly executionRecorder: string;
+    readonly executionFailureRecorder: string;
     readonly compensation: string;
     readonly executionStatusApi: string;
   };
@@ -35,6 +36,7 @@ export interface ExecutionInfrastructureConfig {
     readonly toolMapperDlq: string;
     readonly toolInvokerDlq: string;
     readonly executionRecorderDlq: string;
+    readonly executionFailureRecorderDlq: string;
     readonly compensationDlq: string;
   };
   
@@ -106,6 +108,7 @@ export const DEFAULT_EXECUTION_INFRASTRUCTURE_CONFIG: ExecutionInfrastructureCon
     toolMapper: 'cc-native-tool-mapper',
     toolInvoker: 'cc-native-tool-invoker',
     executionRecorder: 'cc-native-execution-recorder',
+    executionFailureRecorder: 'cc-native-execution-failure-recorder',
     compensation: 'cc-native-compensation-handler',
     executionStatusApi: 'cc-native-execution-status-api',
   },
