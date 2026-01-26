@@ -295,79 +295,68 @@ export const handler: Handler = async (event: unknown) => {
   
   logger.info('Tool invoker invoked', { action_intent_id, tool_name, trace_id });
   
-  // No try-catch wrapper - let invokeWithRetry errors bubble up to SFN for retry/catch logic
+  // IMPORTANT: No try-catch wrapper - let ALL errors bubble up to SFN for retry/catch logic
+  // invokeWithRetry throws errors with name='TransientError' or 'PermanentError'
+  // getJwtToken errors will also bubble up (SFN will catch them)
   // Only tool-level business failures (success:false in response) return normally
-    // 1. Get JWT token for Gateway authentication (Cognito)
-    // This is done here (not in ToolMapper) to keep mapping deterministic and auth logic near HTTP caller
-    const jwtToken = await getJwtToken(tenant_id);
-    
-    // 2. Make MCP protocol call to AgentCore Gateway
-    const mcpRequest = {
-      jsonrpc: '2.0',
-      id: `invoke-${Date.now()}`,
-      method: 'tools/call',
-      params: {
-        name: tool_name,
-        arguments: tool_arguments,
-      },
-    };
-    
-    const toolRunRef = `gateway_invocation_${Date.now()}_${Math.random().toString(36).substring(7)}`;
-    
-    // 2. Call Gateway with retry logic
-    const response = await invokeWithRetry(
-      gateway_url,
-      mcpRequest,
-      jwtToken,
-      toolRunRef,
-      action_intent_id
-    );
-    
-    // 3. Parse MCP response
-    const parsedResponse = parseMCPResponse(response);
-    
-    // 4. Extract external object refs (use input tool_name for system inference)
-    const externalObjectRefs = extractExternalObjectRefs(parsedResponse, tool_name);
-    
-    // 5. Check if tool reported a structured failure (tool ran but returned error)
-    // In this case, we return success:false but don't throw (proceed to RecordOutcome)
-    // This is different from HTTP/infrastructure errors which throw for SFN retry/catch
-    if (parsedResponse.success === false) {
-      const errorClassification = classifyError(parsedResponse);
-      return {
-        success: false,
-        external_object_refs: externalObjectRefs,
-        tool_run_ref: toolRunRef,
-        raw_response_artifact_ref: parsedResponse.raw_response_artifact_ref,
-        error_code: errorClassification?.error_code,
-        error_class: errorClassification?.error_class,
-        error_message: errorClassification?.error_message,
-      };
-    }
-    
-    // 6. Tool succeeded - return structured response
+  
+  // 1. Get JWT token for Gateway authentication (Cognito)
+  // This is done here (not in ToolMapper) to keep mapping deterministic and auth logic near HTTP caller
+  // If getJwtToken throws, error bubbles to SFN (will be caught as generic error or we can wrap it)
+  const jwtToken = await getJwtToken(tenant_id);
+  
+  // 2. Make MCP protocol call to AgentCore Gateway
+  const mcpRequest = {
+    jsonrpc: '2.0',
+    id: `invoke-${Date.now()}`,
+    method: 'tools/call',
+    params: {
+      name: tool_name,
+      arguments: tool_arguments,
+    },
+  };
+  
+  const toolRunRef = `gateway_invocation_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+  
+  // 3. Call Gateway with retry logic
+  // invokeWithRetry throws errors with name='TransientError' or 'PermanentError' for SFN
+  const response = await invokeWithRetry(
+    gateway_url,
+    mcpRequest,
+    jwtToken,
+    toolRunRef,
+    action_intent_id
+  );
+  
+  // 4. Parse MCP response
+  const parsedResponse = parseMCPResponse(response);
+  
+  // 5. Extract external object refs (use input tool_name for system inference)
+  const externalObjectRefs = extractExternalObjectRefs(parsedResponse, tool_name);
+  
+  // 6. Check if tool reported a structured failure (tool ran but returned error)
+  // In this case, we return success:false but don't throw (proceed to RecordOutcome)
+  // This is different from HTTP/infrastructure errors which throw for SFN retry/catch
+  if (parsedResponse.success === false) {
+    const errorClassification = classifyError(parsedResponse);
     return {
-      success: true,
+      success: false,
       external_object_refs: externalObjectRefs,
       tool_run_ref: toolRunRef,
       raw_response_artifact_ref: parsedResponse.raw_response_artifact_ref,
+      error_code: errorClassification?.error_code,
+      error_class: errorClassification?.error_class,
+      error_message: errorClassification?.error_message,
     };
-    // Note: invokeWithRetry throws errors with name='TransientError' or 'PermanentError'
-    // These errors bubble up to Step Functions for retry/catch logic
-    // Only tool-level business failures (success:false) return normally
-  } catch (error: any) {
-    // Catch errors from getJwtToken or other setup errors (not from invokeWithRetry)
-    // These should also be classified and thrown for SFN retry/catch
-    logger.error('Tool invocation setup failed', { action_intent_id, tool_name, error });
-    
-    // Classify and throw for SFN
-    // Note: getJwtToken errors are typically auth failures (PermanentError)
-    const isRetryable = error.response?.status >= 500 || error.code === 'ECONNRESET' || error.code === 'ETIMEDOUT';
-    const errorName = isRetryable ? 'TransientError' : 'PermanentError';
-    const sfError = new Error(`${errorName}: ${error.message || 'Unknown error'}`);
-    sfError.name = errorName;
-    throw sfError;
   }
+  
+  // 7. Tool succeeded - return structured response
+  return {
+    success: true,
+    external_object_refs: externalObjectRefs,
+    tool_run_ref: toolRunRef,
+    raw_response_artifact_ref: parsedResponse.raw_response_artifact_ref,
+  };
 };
 
 /**
