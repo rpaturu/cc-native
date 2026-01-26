@@ -1792,7 +1792,7 @@ private createExecutionTriggerRule(
         }
       ]
     },
-      "InvokeTool": {
+    "InvokeTool": {
         "Type": "Task",
         "Resource": "arn:aws:states:::lambda:invoke",
         "Parameters": {
