@@ -220,9 +220,9 @@ Feedback Loop (for future phases)
 
 ---
 
-## EPIC 4.3 — Outcome & Feedback Capture
+## EPIC 4.3 — Outcome Recording & Signal Emission
 
-**Purpose:** Record execution outcomes and feed back into system
+**Purpose:** Record execution outcomes and emit signals for observation (not learning)
 
 ### Story 4.3.1 — Execution Outcome Recording
 
@@ -249,6 +249,7 @@ Feedback Loop (for future phases)
 **Acceptance Criteria:**
 - Execution outcomes generate signals
 - Signals are processed by existing perception layer
+- Signals are observational only (not used for learning/optimization in Phase 4)
 - Execution feedback influences future decisions (Phase 5+)
 
 ---
@@ -333,6 +334,18 @@ Phase 4 is complete when:
 - ✅ At least 2 connector adapters implemented (CRM + one other)
 - ✅ Kill switches operational
 - ✅ Execution status visible via API
+
+## Readiness Checklist
+
+Phase 4 is ready to implement when you can say "yes" to all of these:
+
+- [ ] Every execution can be replayed deterministically
+- [ ] Every external write has a clear compensating action *or* a documented irreversibility
+- [ ] Every failure ends in a visible terminal state
+- [ ] No code path calls an LLM after approval
+- [ ] Kill switches work without redeploy
+
+**Note:** These are design invariants, not implementation tasks. The architecture must support all five.
 
 ---
 

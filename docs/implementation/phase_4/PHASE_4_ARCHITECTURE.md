@@ -13,6 +13,15 @@ Phase 4 implements **bounded execution** of approved `ActionIntentV1` objects th
 **Key Principle:**
 > **Execution never re-decides. It only fulfills.**
 
+**Non-Goals:**
+- Phase 4 does not optimize, rank, or learn from execution outcomes
+- Phase 4 does not auto-adjust based on execution data
+- Phase 4 does not hide failures from users
+- Phase 4 does not introduce new decision-making or LLM judgment
+
+**Design Philosophy:**
+> Execution is **observational and procedural, not adaptive**. We retry for reliability, but we never hide outcomes. Trust beats smoothness.
+
 ---
 
 ## Architecture Overview
@@ -21,7 +30,7 @@ Phase 4 implements **bounded execution** of approved `ActionIntentV1` objects th
 
 ```
 Phase 3: Approved ActionIntent
-  ↓
+  ↓ (idempotent execution key: action_intent_id)
 EventBridge: ACTION_APPROVED
   ↓
 Step Functions: Execution Orchestration
@@ -34,6 +43,11 @@ External System: CRM, Calendar, Internal
   ↓
 Execution Result: Recorded & Audited
 ```
+
+**Idempotency Design:**
+- Execution key: `action_intent_id` (enforced at Step Functions and DynamoDB levels)
+- Adapters do not invent their own execution identity
+- Same intent cannot execute twice, even across retries
 
 ### Core Components
 
@@ -879,6 +893,23 @@ const crmTarget = new bedrockAgentCore.GatewayTarget(this, 'CrmTarget', {
 | Network | Public subnets (initially) | Most SaaS APIs are public HTTPS |
 | Compensation | Automatic (reversible) | Faster recovery, better UX |
 | Kill Switches | DynamoDB + AppConfig | Per-tenant + global controls |
+
+---
+
+## Readiness Checklist
+
+Phase 4 is ready to implement when you can say "yes" to all of these:
+
+- [ ] Every execution can be replayed deterministically
+- [ ] Every external write has a clear compensating action *or* a documented irreversibility
+- [ ] Every failure ends in a visible terminal state
+- [ ] No code path calls an LLM after approval
+- [ ] Kill switches work without redeploy
+
+**Note:** These are design invariants, not implementation tasks. The architecture must support all five.
+
+**Design Philosophy:**
+> Phase 4 should feel **boring, procedural, and conservative**. That's a feature. When this phase is done well, Phase 5 becomes *possible* — not dangerous.
 
 ---
 
