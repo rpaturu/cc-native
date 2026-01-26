@@ -134,6 +134,7 @@ const actionTypeRegistryService = new ActionTypeRegistryService(
  * (trace_id, registry_version, attempt_count, started_at come from execution-starter-handler output)
  * 
  * Step Functions output: { gateway_url, tool_name, tool_arguments, tool_schema_version, registry_version, compensation_strategy, idempotency_key, action_intent_id, tenant_id, account_id, trace_id, attempt_count, started_at }
+ * Note: attempt_count is passed through for ToolInvoker to generate stable tool_run_ref
  * 
  * Note: jwt_token is retrieved in ToolInvoker handler (not in ToolMapper) to keep mapping deterministic.
  * 
@@ -1837,7 +1838,8 @@ private createExecutionTriggerRule(
             "action_intent_id": "$.action_intent_id",
             "tenant_id": "$.tenant_id",
             "account_id": "$.account_id",
-            "trace_id": "$.trace_id"
+            "trace_id": "$.trace_id",
+            "attempt_count": "$.attempt_count"
           }
         },
         "ResultPath": "$.tool_invocation_response",
