@@ -297,32 +297,44 @@ export const handler: Handler<ToolInvocationRequest, ToolInvocationResponse> = a
     // 4. Extract external object refs
     const externalObjectRefs = extractExternalObjectRefs(parsedResponse);
     
-    // 5. Classify errors (if any)
-    const errorClassification = classifyError(parsedResponse);
+    // 5. Check if tool reported a structured failure (tool ran but returned error)
+    // In this case, we return success:false but don't throw (proceed to RecordOutcome)
+    // This is different from HTTP/infrastructure errors which throw for SFN retry/catch
+    if (parsedResponse.success === false) {
+      const errorClassification = classifyError(parsedResponse);
+      return {
+        success: false,
+        external_object_refs: externalObjectRefs,
+        tool_run_ref: toolRunRef,
+        raw_response_artifact_ref: parsedResponse.raw_response_artifact_ref,
+        error_code: errorClassification?.error_code,
+        error_class: errorClassification?.error_class,
+        error_message: errorClassification?.error_message,
+      };
+    }
     
-    // 6. Return structured response
+    // 6. Tool succeeded - return structured response
     return {
-      success: parsedResponse.success,
+      success: true,
       external_object_refs: externalObjectRefs,
       tool_run_ref: toolRunRef,
       raw_response_artifact_ref: parsedResponse.raw_response_artifact_ref,
-      error_code: errorClassification?.error_code,
-      error_class: errorClassification?.error_class,
-      error_message: errorClassification?.error_message,
     };
+    // Note: invokeWithRetry throws errors with name='TransientError' or 'PermanentError'
+    // These errors bubble up to Step Functions for retry/catch logic
+    // Only tool-level business failures (success:false) return normally
   } catch (error: any) {
-    logger.error('Tool invocation failed', { action_intent_id, tool_name, error });
+    // Catch errors from getJwtToken or other setup errors (not from invokeWithRetry)
+    // These should also be classified and thrown for SFN retry/catch
+    logger.error('Tool invocation setup failed', { action_intent_id, tool_name, error });
     
-    // Classify error
-    const errorClassification = classifyErrorFromException(error);
-    
-    return {
-      success: false,
-      tool_run_ref: `gateway_invocation_failed_${Date.now()}`,
-      error_code: errorClassification.error_code,
-      error_class: errorClassification.error_class,
-      error_message: errorClassification.error_message,
-    };
+    // Classify and throw for SFN
+    // Note: getJwtToken errors are typically auth failures (PermanentError)
+    const isRetryable = error.response?.status >= 500 || error.code === 'ECONNRESET' || error.code === 'ETIMEDOUT';
+    const errorName = isRetryable ? 'TransientError' : 'PermanentError';
+    const sfError = new Error(`${errorName}: ${error.message || 'Unknown error'}`);
+    sfError.name = errorName;
+    throw sfError;
   }
 };
 
@@ -1739,43 +1751,59 @@ private createExecutionTriggerRule(
         }
       ]
     },
-    "InvokeTool": {
-      "Type": "Task",
-      "Resource": "arn:aws:states:::lambda:invoke",
-      "Parameters": {
-        "FunctionName": "cc-native-tool-invoker",
-        "Payload": {
-          "gateway_url": "$.gateway_url",
-          "tool_name": "$.tool_name",
-          "tool_arguments": "$.tool_arguments",
-          "idempotency_key": "$.idempotency_key",
-          "action_intent_id": "$.action_intent_id",
-          "tenant_id": "$.tenant_id",
-          "account_id": "$.account_id",
-          "trace_id": "$.trace_id"
-        }
-      },
-      "Retry": [
-        {
-          "ErrorEquals": ["TransientError"],
-          "IntervalSeconds": 2,
-          "MaxAttempts": 3,
-          "BackoffRate": 2.0
-        }
-      ],
-      "Catch": [
-        {
-          "ErrorEquals": ["PermanentError"],
-          "Next": "CompensateAction"
+      "InvokeTool": {
+        "Type": "Task",
+        "Resource": "arn:aws:states:::lambda:invoke",
+        "Parameters": {
+          "FunctionName": "cc-native-tool-invoker",
+          "Payload": {
+            "gateway_url": "$.gateway_url",
+            "tool_name": "$.tool_name",
+            "tool_arguments": "$.tool_arguments",
+            "idempotency_key": "$.idempotency_key",
+            "action_intent_id": "$.action_intent_id",
+            "tenant_id": "$.tenant_id",
+            "account_id": "$.account_id",
+            "trace_id": "$.trace_id"
+          }
         },
-        {
-          "ErrorEquals": ["States.ALL"],
-          "Next": "RecordFailure",
-          "ResultPath": "$.error"
-        }
-      ],
-      "Next": "RecordOutcome"
-    },
+        "ResultPath": "$.tool_invocation_response",
+        "Retry": [
+          {
+            "ErrorEquals": ["TransientError"],
+            "IntervalSeconds": 2,
+            "MaxAttempts": 3,
+            "BackoffRate": 2.0
+          }
+        ],
+        "Catch": [
+          {
+            "ErrorEquals": ["States.ALL"],
+            "Next": "RecordFailure",
+            "ResultPath": "$.error"
+          }
+        ],
+        "Next": "CheckCompensation"
+      },
+      "CheckCompensation": {
+        "Type": "Choice",
+        "Choices": [
+          {
+            "And": [
+              {
+                "Variable": "$.tool_invocation_response.success",
+                "BooleanEquals": false
+              },
+              {
+                "Variable": "$.tool_invocation_response.external_object_refs[0]",
+                "IsPresent": true
+              }
+            ],
+            "Next": "CompensateAction"
+          }
+        ],
+        "Default": "RecordOutcome"
+      },
     "CompensateAction": {
       "Type": "Task",
       "Resource": "arn:aws:states:::lambda:invoke",
