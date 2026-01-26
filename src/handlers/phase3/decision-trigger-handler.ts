@@ -23,7 +23,11 @@ const traceService = new TraceService(logger);
 // Initialize AWS clients
 const region = process.env.AWS_REGION || 'us-west-2';
 const clientConfig = getAWSClientConfig(region);
-const dynamoClient = DynamoDBDocumentClient.from(new DynamoDBClient(clientConfig));
+const dynamoClient = DynamoDBDocumentClient.from(new DynamoDBClient(clientConfig), {
+  marshallOptions: {
+    removeUndefinedValues: true,
+  },
+});
 const eventBridgeClient = new EventBridgeClient(clientConfig);
 
 // Initialize services

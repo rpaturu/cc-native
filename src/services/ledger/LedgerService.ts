@@ -25,7 +25,13 @@ export class LedgerService implements ILedgerService {
     
     const clientConfig = getAWSClientConfig(region);
     const client = new DynamoDBClient(clientConfig);
-    this.dynamoClient = DynamoDBDocumentClient.from(client);
+    // Configure to remove undefined values from nested objects/arrays
+    // This prevents DynamoDB errors when ledger entry data contains undefined fields
+    this.dynamoClient = DynamoDBDocumentClient.from(client, {
+      marshallOptions: {
+        removeUndefinedValues: true,
+      },
+    });
   }
 
   /**

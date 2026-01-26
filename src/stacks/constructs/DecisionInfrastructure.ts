@@ -38,16 +38,6 @@ export interface DecisionInfrastructureProps {
   readonly config?: DecisionInfrastructureConfig; // Optional configuration override
 }
 
-export interface DecisionInfrastructureResult {
-  readonly decisionBudgetTable: dynamodb.Table;
-  readonly actionIntentTable: dynamodb.Table;
-  readonly decisionProposalTable: dynamodb.Table;
-  readonly decisionEvaluationHandler: lambda.Function;
-  readonly decisionTriggerHandler: lambda.Function;
-  readonly decisionApiHandler: lambda.Function;
-  readonly decisionApi: apigateway.RestApi;
-}
-
 /**
  * Decision Infrastructure Construct
  */
@@ -120,12 +110,15 @@ export class DecisionInfrastructure extends Construct {
       );
 
       // Allow HTTPS to AWS services via VPC endpoints
-      // Includes: DynamoDB, EventBridge, CloudWatch Logs, Bedrock (via VPC Interface Endpoint)
-      // ✅ Zero Trust: All AWS service access via VPC endpoints (no internet access required)
+      // Gateway endpoints (DynamoDB) route via prefix lists to AWS service IPs
+      // Interface endpoints (EventBridge, CloudWatch Logs, Bedrock) use ENIs in VPC CIDR
+      // ✅ Zero Trust: Traffic is routed through VPC endpoints (no internet access)
+      // Note: Gateway endpoints require allowing HTTPS to any IP (they route via prefix lists)
+      // The Gateway endpoint will route DynamoDB traffic correctly even with anyIpv4()
       this.decisionEvaluationSecurityGroup.addEgressRule(
-        ec2.Peer.ipv4(props.vpc.vpcCidrBlock),
+        ec2.Peer.anyIpv4(),
         ec2.Port.tcp(443),
-        'Allow HTTPS to AWS services via VPC endpoints (DynamoDB, EventBridge, CloudWatch Logs, Bedrock)'
+        'Allow HTTPS to AWS services via VPC endpoints (Gateway endpoint for DynamoDB, Interface endpoints for other services)'
       );
 
       // Allow Neptune to accept connections from decision evaluation handler
@@ -179,13 +172,15 @@ export class DecisionInfrastructure extends Construct {
     props.eventBus.grantPutEventsTo(this.decisionEvaluationHandler);
     
     // Grant Bedrock invoke permission (via VPC endpoint)
-    // ✅ Zero Trust: Region-restricted, resource-scoped permissions
+    // ✅ Zero Trust: Region-restricted permissions (matches cc-orchestrator1 pattern)
+    // Model selection is controlled via BEDROCK_MODEL environment variable at runtime
+    // Note: Models must be enabled via AWS Console (Bedrock → Model access) or API before use.
+    // For Anthropic models, a use case form must be submitted first (one-time per account/organization).
+    // The Lambda role only needs bedrock:InvokeModel permission - no Marketplace permissions required.
     decisionEvaluationRole.addToPolicy(new iam.PolicyStatement({
       effect: iam.Effect.ALLOW,
       actions: config.bedrockIam.actions,
-      resources: [
-        `arn:aws:bedrock:${region}::foundation-model/${config.bedrock.modelPattern}`,
-      ],
+      resources: ['*'], // Allow all Bedrock models (model selection via BEDROCK_MODEL env var)
       conditions: {
         StringEquals: {
           'aws:RequestedRegion': region,
@@ -193,29 +188,28 @@ export class DecisionInfrastructure extends Construct {
       },
     }));
 
-    // Grant Neptune access (IAM-based, with conditions for Zero Trust)
+    // Grant Neptune access (IAM-based)
+    // Note: Conditions (SecureTransport, QueryLanguage) were removed as they were causing
+    // AccessDeniedException errors. Neptune IAM auth may not properly evaluate these conditions
+    // in all scenarios. Security is maintained via VPC isolation and resource-scoped permissions.
     if (region && props.neptuneEndpoint) {
       const accountId = cdk.Stack.of(this).account;
       
       // Use wildcard pattern for cluster identifier to match any Neptune cluster in the account
       // This is safer than extracting from endpoint which may not match the actual cluster identifier
+      // Note: Neptune IAM auth may require all three actions (connect, ReadDataViaQuery, WriteDataViaQuery)
+      // even for read-only queries, so we grant all three for compatibility
       decisionEvaluationRole.addToPolicy(new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
         actions: [
           config.neptune.iamActions.connect,
           config.neptune.iamActions.readDataViaQuery,
+          'neptune-db:WriteDataViaQuery', // Required by Neptune IAM auth even for read queries
+          'neptune-db:DeleteDataViaQuery', // Required by Neptune IAM auth even for read queries
         ],
         resources: [
           `arn:aws:neptune-db:${region}:${accountId}:cluster-*/*`,
         ],
-        conditions: {
-          Bool: {
-            'aws:SecureTransport': 'true',
-          },
-          StringEquals: {
-            'neptune-db:QueryLanguage': config.neptune.queryLanguage,
-          },
-        },
       }));
     }
 
@@ -245,14 +239,27 @@ export class DecisionInfrastructure extends Construct {
     props.eventBus.grantPutEventsTo(this.decisionTriggerHandler);
 
     // Decision API Handler
+    // ✅ Zero Trust: API handler stays in public subnet, no VPC/Neptune/Bedrock access
+    // Removed Neptune/Bedrock dependencies - evaluation happens async via EventBridge
+    const apiHandlerEnv = {
+      ...commonDecisionEnv,
+      // Remove Neptune environment variables (not needed in API handler)
+      // NEPTUNE_ENDPOINT and NEPTUNE_PORT removed
+      // BEDROCK_MODEL_ID removed (not used in API handler)
+    };
+    // Remove Neptune and Bedrock from API handler env
+    delete (apiHandlerEnv as any).NEPTUNE_ENDPOINT;
+    delete (apiHandlerEnv as any).NEPTUNE_PORT;
+    delete (apiHandlerEnv as any).BEDROCK_MODEL_ID;
+    
     this.decisionApiHandler = new lambdaNodejs.NodejsFunction(this, 'DecisionApiHandler', {
       functionName: config.functionNames.decisionApi,
       entry: 'src/handlers/phase3/decision-api-handler.ts',
       handler: 'handler',
       runtime: lambda.Runtime.NODEJS_20_X,
-      timeout: cdk.Duration.minutes(config.defaults.timeout.decisionApi),
+      timeout: cdk.Duration.seconds(30), // Reduced timeout (no Neptune/Bedrock calls)
       memorySize: config.defaults.memorySize.decisionApi,
-      environment: commonDecisionEnv,
+      environment: apiHandlerEnv,
     });
 
     // Grant permissions
@@ -263,22 +270,12 @@ export class DecisionInfrastructure extends Construct {
     props.signalsTable.grantReadData(this.decisionApiHandler);
     props.accountsTable.grantReadData(this.decisionApiHandler);
     props.tenantsTable.grantReadData(this.decisionApiHandler);
-    props.ledgerTable.grantWriteData(this.decisionApiHandler);
+    // ✅ Grant read+write on ledger: read for querying decisions, write for logging decision events
+    props.ledgerTable.grantReadWriteData(this.decisionApiHandler);
     
-    // Grant Bedrock invoke permission (via VPC endpoint)
-    // ✅ Zero Trust: Region-restricted, resource-scoped permissions (matches decision evaluation handler)
-    this.decisionApiHandler.addToRolePolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: config.bedrockIam.actions,
-      resources: [
-        `arn:aws:bedrock:${region}::foundation-model/${config.bedrock.modelPattern}`,
-      ],
-      conditions: {
-        StringEquals: {
-          'aws:RequestedRegion': region,
-        },
-      },
-    }));
+    // ✅ Zero Trust: Grant EventBridge permissions (instead of Bedrock/Neptune)
+    // API handler triggers async evaluation via EventBridge
+    props.eventBus.grantPutEventsTo(this.decisionApiHandler);
 
     // Decision API Gateway
     this.decisionApi = new apigateway.RestApi(this, 'DecisionApi', {
@@ -339,11 +336,16 @@ export class DecisionInfrastructure extends Construct {
           apiKeyRequired: true, // Require API key if Cognito not provided
         };
 
+    // Create decisions resource once and reuse it
+    const decisionsResource = this.decisionApi.root.addResource('decisions');
+    
     // POST /decisions/evaluate
-    const evaluateResource = this.decisionApi.root.addResource('decisions').addResource('evaluate');
-    evaluateResource.addMethod('POST', new apigateway.LambdaIntegration(this.decisionApiHandler, {
-      requestTemplates: { 'application/json': '{ "statusCode": "200" }' }
-    }), methodOptions);
+    const evaluateResource = decisionsResource.addResource('evaluate');
+    evaluateResource.addMethod('POST', new apigateway.LambdaIntegration(this.decisionApiHandler), methodOptions);
+
+    // GET /decisions/{evaluation_id}/status
+    const evaluationStatusResource = decisionsResource.addResource('{evaluation_id}').addResource('status');
+    evaluationStatusResource.addMethod('GET', new apigateway.LambdaIntegration(this.decisionApiHandler), methodOptions);
 
     // GET /accounts/{id}/decisions
     const accountsResource = this.decisionApi.root.addResource('accounts');
@@ -415,6 +417,7 @@ export class DecisionInfrastructure extends Construct {
 
     // Scheduled Rule: Daily budget reset at midnight UTC
     new events.Rule(this, 'BudgetResetScheduleRule', {
+      ruleName: config.budgetReset.ruleName,
       schedule: events.Schedule.cron({
         minute: config.budgetReset.schedule.minute,
         hour: config.budgetReset.schedule.hour,

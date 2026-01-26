@@ -12,16 +12,6 @@ export interface NeptuneInfrastructureProps {
   readonly region: string;
 }
 
-export interface NeptuneInfrastructureResult {
-  readonly vpc: ec2.Vpc;
-  readonly neptuneCluster: neptune.CfnDBCluster;
-  readonly neptuneSecurityGroup: ec2.SecurityGroup;
-  readonly neptuneAccessRole: iam.Role;
-  readonly graphMaterializerSecurityGroup: ec2.SecurityGroup;
-  readonly synthesisEngineSecurityGroup: ec2.SecurityGroup;
-  readonly neptuneSubnets: string[];
-}
-
 /**
  * Construct for Neptune graph database infrastructure
  * Includes VPC, Neptune cluster, security groups, and VPC endpoints
@@ -294,10 +284,15 @@ export class NeptuneInfrastructure extends Construct {
     // These allow Lambda functions in isolated subnets to access AWS services without internet access
 
     // Add DynamoDB VPC endpoint (gateway endpoint - free and recommended for DynamoDB)
-    // Note: DynamoDB does NOT support private DNS names, so we use Gateway endpoint instead of Interface endpoint
+    // Gateway endpoints work at the route table level and automatically route traffic to DynamoDB
+    // CDK automatically creates route tables for isolated subnets and associates them with the VPC
+    // The Gateway endpoint will automatically add routes to all route tables in the VPC
+    // ✅ Zero Trust: Traffic stays within AWS network, no internet gateway required
     new ec2.GatewayVpcEndpoint(this, 'DynamoDBEndpoint', {
       vpc: this.vpc,
       service: ec2.GatewayVpcEndpointAwsService.DYNAMODB,
+      // Gateway endpoints automatically associate with all route tables in the VPC
+      // No subnet specification needed - they work at the VPC/route table level
     });
 
     // Add EventBridge VPC endpoint (interface endpoint)

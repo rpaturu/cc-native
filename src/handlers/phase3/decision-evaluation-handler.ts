@@ -31,7 +31,11 @@ const traceService = new TraceService(logger);
 // Initialize AWS clients
 const region = process.env.AWS_REGION || 'us-west-2';
 const clientConfig = getAWSClientConfig(region);
-const dynamoClient = DynamoDBDocumentClient.from(new DynamoDBClient(clientConfig));
+const dynamoClient = DynamoDBDocumentClient.from(new DynamoDBClient(clientConfig), {
+  marshallOptions: {
+    removeUndefinedValues: true,
+  },
+});
 const bedrockClient = new BedrockRuntimeClient(clientConfig);
 const eventBridgeClient = new EventBridgeClient(clientConfig);
 
@@ -70,9 +74,12 @@ const decisionContextAssembler = new DecisionContextAssembler(
   tenantService,
   logger
 );
+// Get model ID from environment (set by CDK from config)
+const bedrockModelId = process.env.BEDROCK_MODEL_ID || 'anthropic.claude-3-5-sonnet-20241022-v2:0';
+logger.info('Initializing DecisionSynthesisService', { bedrockModelId });
 const decisionSynthesisService = new DecisionSynthesisService(
   bedrockClient,
-  process.env.BEDROCK_MODEL_ID || 'anthropic.claude-3-5-sonnet-20241022-v2:0',
+  bedrockModelId,
   logger
 );
 const policyGateService = new PolicyGateService(logger);
@@ -95,6 +102,8 @@ interface DecisionEvaluationRequestedDetail {
   tenant_id: string;
   trigger_type: string;
   trigger_event_id?: string;
+  evaluation_id?: string; // Optional: provided by API handler for tracking
+  trace_id?: string; // Optional: provided by API handler for trace continuity
 }
 
 /**
@@ -112,41 +121,63 @@ interface EventBridgeEvent {
  * Decision Evaluation Handler
  */
 export const handler: Handler<EventBridgeEvent> = async (event, context) => {
-  const { account_id, tenant_id, trigger_type } = event.detail;
-  const traceId = traceService.generateTraceId();
+  const { account_id, tenant_id, trigger_type, evaluation_id, trace_id } = event.detail;
+  // Use provided trace_id (from API handler) or generate new one
+  const traceId = trace_id || traceService.generateTraceId();
   
+  const startTime = Date.now();
   logger.info('Decision evaluation handler invoked', {
     accountId: account_id,
     tenantId: tenant_id,
     triggerType: trigger_type,
+    evaluationId: evaluation_id,
     traceId,
   });
   
   try {
     // 1. Assemble context
+    const contextStartTime = Date.now();
     const contextData = await decisionContextAssembler.assembleContext(account_id, tenant_id, traceId);
+    const contextDuration = Date.now() - contextStartTime;
+    logger.info('Context assembly completed', { durationMs: contextDuration });
     
     // 2. Check budget
+    const budgetStartTime = Date.now();
     const budgetResult = await costBudgetService.canEvaluateDecision(account_id, tenant_id);
+    const budgetDuration = Date.now() - budgetStartTime;
+    logger.info('Budget check completed', { durationMs: budgetDuration, allowed: budgetResult.allowed });
     
     if (!budgetResult.allowed) {
       logger.warn('Decision evaluation blocked by budget', { account_id, reason: budgetResult.reason });
       return;
     }
     
-    // 3. Synthesize decision
+    // 3. Synthesize decision (SLOWEST OPERATION - Bedrock LLM call)
+    const synthesisStartTime = Date.now();
     const proposal = await decisionSynthesisService.synthesizeDecision(contextData);
+    const synthesisDuration = Date.now() - synthesisStartTime;
+    logger.info('Decision synthesis completed', { durationMs: synthesisDuration, decisionType: proposal.decision_type });
     
     // 4. Evaluate policy
+    const policyStartTime = Date.now();
     const policyResults = await policyGateService.evaluateDecisionProposal(proposal, contextData.policy_context);
+    const policyDuration = Date.now() - policyStartTime;
+    logger.info('Policy evaluation completed', { durationMs: policyDuration, resultCount: policyResults.length });
     
     // 5. Consume budget
+    const consumeStartTime = Date.now();
     await costBudgetService.consumeBudget(account_id, tenant_id, 1);
+    const consumeDuration = Date.now() - consumeStartTime;
+    logger.info('Budget consumption completed', { durationMs: consumeDuration });
     
     // 6. Store proposal in DecisionProposalTable (authoritative storage for approval/rejection flow)
+    const storeStartTime = Date.now();
     await decisionProposalStore.storeProposal(proposal);
+    const storeDuration = Date.now() - storeStartTime;
+    logger.info('Proposal storage completed', { durationMs: storeDuration });
     
     // 7. Log to ledger
+    const ledgerStartTime = Date.now();
     await ledgerService.append({
       eventType: LedgerEventType.DECISION_PROPOSED,
       tenantId: tenant_id,
@@ -155,11 +186,15 @@ export const handler: Handler<EventBridgeEvent> = async (event, context) => {
       data: {
         decision_id: proposal.decision_id,
         decision_type: proposal.decision_type,
-        action_count: proposal.actions?.length || 0
+        action_count: proposal.actions?.length || 0,
+        evaluation_id: evaluation_id, // Link back to evaluation request
       }
     });
+    const ledgerDuration = Date.now() - ledgerStartTime;
+    logger.info('Ledger append completed', { durationMs: ledgerDuration });
     
     // 8. Log policy evaluations
+    const policyLogStartTime = Date.now();
     for (const result of policyResults) {
       await ledgerService.append({
         eventType: LedgerEventType.POLICY_EVALUATED,
@@ -169,8 +204,11 @@ export const handler: Handler<EventBridgeEvent> = async (event, context) => {
         data: result
       });
     }
+    const policyLogDuration = Date.now() - policyLogStartTime;
+    logger.info('Policy evaluation logging completed', { durationMs: policyLogDuration });
     
     // 9. Emit DECISION_PROPOSED event (for UI/approval flow)
+    const eventStartTime = Date.now();
     await eventBridgeClient.send(new PutEventsCommand({
       Entries: [{
         Source: 'cc-native.decision',
@@ -182,12 +220,27 @@ export const handler: Handler<EventBridgeEvent> = async (event, context) => {
         EventBusName: process.env.EVENT_BUS_NAME || 'cc-native-events'
       }]
     }));
+    const eventDuration = Date.now() - eventStartTime;
+    logger.info('EventBridge event emitted', { durationMs: eventDuration });
     
+    const totalDuration = Date.now() - startTime;
     logger.info('Decision evaluation completed', {
       accountId: account_id,
       tenantId: tenant_id,
       decisionId: proposal.decision_id,
-      actionCount: proposal.actions?.length || 0
+      actionCount: proposal.actions?.length || 0,
+      totalDurationMs: totalDuration,
+      breakdown: {
+        context: contextDuration,
+        budget: budgetDuration,
+        synthesis: synthesisDuration,
+        policy: policyDuration,
+        consume: consumeDuration,
+        store: storeDuration,
+        ledger: ledgerDuration,
+        policyLog: policyLogDuration,
+        event: eventDuration
+      }
     });
   } catch (error) {
     logger.error('Decision evaluation failed', { account_id, tenant_id, error });

@@ -17,7 +17,11 @@ const logger = new Logger('BudgetResetHandler');
 // Initialize AWS clients
 const region = process.env.AWS_REGION || 'us-west-2';
 const clientConfig = getAWSClientConfig(region);
-const dynamoClient = DynamoDBDocumentClient.from(new DynamoDBClient(clientConfig));
+const dynamoClient = DynamoDBDocumentClient.from(new DynamoDBClient(clientConfig), {
+  marshallOptions: {
+    removeUndefinedValues: true,
+  },
+});
 
 const costBudgetService = new CostBudgetService(
   dynamoClient,

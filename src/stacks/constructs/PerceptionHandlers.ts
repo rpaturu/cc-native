@@ -17,15 +17,6 @@ export interface PerceptionHandlersProps {
   readonly ledgerTable: dynamodb.Table;
 }
 
-export interface PerceptionHandlersResult {
-  readonly connectorPollHandler: lambda.Function;
-  readonly signalDetectionHandler: lambda.Function;
-  readonly lifecycleInferenceHandler: lambda.Function;
-  readonly connectorPollDlq: sqs.Queue;
-  readonly signalDetectionDlq: sqs.Queue;
-  readonly lifecycleInferenceDlq: sqs.Queue;
-}
-
 /**
  * Construct for Phase 1 perception handlers
  * Creates Lambda functions, DLQs, and EventBridge rules
@@ -102,7 +93,11 @@ export class PerceptionHandlers extends Construct {
       this.connectorPollDlq
     );
     // Override logical ID to match existing CloudFormation resource
-    (this.connectorPollHandler.node.defaultChild as cdk.CfnResource).overrideLogicalId('ConnectorPollHandler');
+    const connectorPollHandlerCfn = this.connectorPollHandler.node.defaultChild;
+    if (!connectorPollHandlerCfn || !(connectorPollHandlerCfn instanceof cdk.CfnResource)) {
+      throw new Error('Failed to get CfnResource for ConnectorPollHandler');
+    }
+    connectorPollHandlerCfn.overrideLogicalId('ConnectorPollHandler');
 
     // Grant permissions
     props.evidenceLedgerBucket.grantReadWrite(this.connectorPollHandler);
@@ -119,7 +114,11 @@ export class PerceptionHandlers extends Construct {
       this.signalDetectionDlq
     );
     // Override logical ID to match existing CloudFormation resource
-    (this.signalDetectionHandler.node.defaultChild as cdk.CfnResource).overrideLogicalId('SignalDetectionHandler');
+    const signalDetectionHandlerCfn = this.signalDetectionHandler.node.defaultChild;
+    if (!signalDetectionHandlerCfn || !(signalDetectionHandlerCfn instanceof cdk.CfnResource)) {
+      throw new Error('Failed to get CfnResource for SignalDetectionHandler');
+    }
+    signalDetectionHandlerCfn.overrideLogicalId('SignalDetectionHandler');
 
     // Grant permissions
     props.evidenceLedgerBucket.grantRead(this.signalDetectionHandler);
@@ -138,7 +137,11 @@ export class PerceptionHandlers extends Construct {
       this.lifecycleInferenceDlq
     );
     // Override logical ID to match existing CloudFormation resource
-    (this.lifecycleInferenceHandler.node.defaultChild as cdk.CfnResource).overrideLogicalId('LifecycleInferenceHandler');
+    const lifecycleInferenceHandlerCfn = this.lifecycleInferenceHandler.node.defaultChild;
+    if (!lifecycleInferenceHandlerCfn || !(lifecycleInferenceHandlerCfn instanceof cdk.CfnResource)) {
+      throw new Error('Failed to get CfnResource for LifecycleInferenceHandler');
+    }
+    lifecycleInferenceHandlerCfn.overrideLogicalId('LifecycleInferenceHandler');
 
     // Grant permissions
     props.accountsTable.grantReadWriteData(this.lifecycleInferenceHandler);

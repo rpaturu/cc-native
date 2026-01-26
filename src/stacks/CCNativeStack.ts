@@ -16,7 +16,7 @@ import { SecurityMonitoring } from './constructs/SecurityMonitoring';
 import { PerceptionHandlers } from './constructs/PerceptionHandlers';
 import { GraphIntelligenceHandlers } from './constructs/GraphIntelligenceHandlers';
 import { DecisionInfrastructure } from './constructs/DecisionInfrastructure';
-import { DEFAULT_DECISION_INFRASTRUCTURE_CONFIG } from './constructs/DecisionInfrastructureConfig';
+import { createDecisionInfrastructureConfig } from './constructs/DecisionInfrastructureConfig';
 
 export interface CCNativeStackProps extends cdk.StackProps {
   // Add any custom props here
@@ -390,7 +390,26 @@ export class CCNativeStack extends cdk.Stack {
     // NOTE: Phase 3 table definitions are located here in CCNativeStack (not in DecisionInfrastructure construct).
     // This allows the tables to be shared across phases and provides a single source of truth for table definitions.
     // The DecisionInfrastructure construct receives these tables as props.
-    const decisionConfig = DEFAULT_DECISION_INFRASTRUCTURE_CONFIG;
+    
+    // Read CDK context parameters (follows cc-orchestrator1 pattern)
+    const bedrockModel = this.node.tryGetContext('bedrockModel');
+    if (!bedrockModel || typeof bedrockModel !== 'string' || bedrockModel.trim() === '') {
+      throw new Error(
+        'bedrockModel context parameter is required. ' +
+        'Please set BEDROCK_MODEL in .env.local and ensure the deploy script passes it as -c bedrockModel=$BEDROCK_MODEL'
+      );
+    }
+
+    const awsRegion = this.node.tryGetContext('awsRegion');
+    if (!awsRegion || typeof awsRegion !== 'string' || awsRegion.trim() === '') {
+      throw new Error(
+        'awsRegion context parameter is required. ' +
+        'Please set AWS_REGION in .env.local and ensure the deploy script passes it as -c awsRegion=$AWS_REGION'
+      );
+    }
+
+    // Create decision config with context values
+    const decisionConfig = createDecisionInfrastructureConfig(bedrockModel.trim(), awsRegion.trim());
     
     // Decision Budget Table
     this.decisionBudgetTable = new dynamodb.Table(this, 'DecisionBudgetTable', {
@@ -608,6 +627,7 @@ export class CCNativeStack extends cdk.Stack {
       neptuneSecurityGroup: neptuneInfra.neptuneSecurityGroup,
       region: this.region,
       userPool: this.userPool,
+      config: decisionConfig, // Pass config created from CDK context
     });
 
     // Stack Outputs

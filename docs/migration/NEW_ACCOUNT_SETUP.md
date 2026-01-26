@@ -357,7 +357,10 @@ If you want to use least-privilege instead of AdministratorAccess:
         "iam:*",
         "logs:*",
         "ssm:*",
-        "sts:GetCallerIdentity"
+        "sts:GetCallerIdentity",
+        "bedrock:*",
+        "aws-marketplace:ViewSubscriptions",
+        "aws-marketplace:Subscribe"
       ],
       "Resource": "*"
     }
@@ -365,7 +368,119 @@ If you want to use least-privilege instead of AdministratorAccess:
 }
 ```
 
+**Bedrock Permissions Explained:**
+- `bedrock:*` - Full Bedrock access (for model management and invocation)
+- `aws-marketplace:ViewSubscriptions` - View Marketplace subscriptions (needed for first-time model enablement)
+- `aws-marketplace:Subscribe` - Subscribe to Marketplace products (needed for first-time model enablement)
+
+**Note:** Marketplace permissions are only needed for the IAM user to enable models. Lambda execution roles only need `bedrock:InvokeModel` (which is already configured in the CDK stack).
+
 **Note:** For development, `AdministratorAccess` is simpler and acceptable. Use least-privilege for production.
+
+---
+
+## Step 9: Enable Bedrock Model Access (Required for Phase 3)
+
+**⚠️ Important:** Before using Bedrock models (Phase 3), you must enable model access in your AWS account.
+
+### 9.1 Grant Bedrock Permissions to IAM User
+
+The IAM user needs permissions to view and enable Bedrock models:
+
+**Option A: If using AdministratorAccess**
+- ✅ Already has all Bedrock permissions - skip to Step 9.2
+
+**Option B: If using Custom Policy (Least Privilege)**
+- Add the following permissions to your custom IAM policy:
+
+```json
+{
+  "Effect": "Allow",
+  "Action": [
+    "bedrock:ListFoundationModels",
+    "bedrock:GetFoundationModel",
+    "bedrock:GetFoundationModelAvailability",
+    "bedrock:CreateFoundationModelAgreement",
+    "bedrock:PutUseCaseForModelAccess",
+    "bedrock:ListFoundationModelAgreementOffers",
+    "aws-marketplace:ViewSubscriptions",
+    "aws-marketplace:Subscribe"
+  ],
+  "Resource": "*"
+}
+```
+
+**Note:** Marketplace permissions are only needed for first-time model enablement. Once enabled, only `bedrock:InvokeModel` is needed (which Lambda roles already have).
+
+### 9.2 Enable Models in AWS Console
+
+1. **Sign in to AWS Console** with your `cc-native-account` profile
+2. **Navigate to:** Amazon Bedrock → **Model access**
+3. **For Anthropic models (first time only):**
+   - Select an Anthropic model (e.g., Claude 3.5 Sonnet)
+   - Click **"Submit use case details"**
+   - Fill out the form:
+     - Company name
+     - Company website
+     - Intended users (Internal/External/Both)
+     - Industry
+     - Use cases
+   - Click **"Submit form"**
+   - Wait for approval (usually immediate)
+
+4. **Enable your model:**
+   - Find `anthropic.claude-3-5-sonnet-20240620-v1:0` (or your chosen model)
+   - Check the box to enable it
+   - Click **"Save changes"**
+   - Wait 2-3 minutes for propagation
+
+### 9.3 Verify Model Access (Optional)
+
+```bash
+# Check if model is available
+aws bedrock get-foundation-model-availability \
+  --model-id anthropic.claude-3-5-sonnet-20240620-v1:0 \
+  --profile cc-native-account \
+  --region us-west-2 \
+  --no-cli-pager
+
+# Should return:
+# {
+#   "modelId": "anthropic.claude-3-5-sonnet-20240620-v1:0",
+#   "agreementAvailability": {
+#     "status": "AVAILABLE"
+#   },
+#   "authorizationStatus": "AUTHORIZED",
+#   "entitlementAvailability": "AVAILABLE",
+#   "regionAvailability": "AVAILABLE"
+# }
+```
+
+### 9.4 Alternative: Enable via CLI (Programmatic)
+
+If you prefer CLI over Console:
+
+```bash
+# 1. List available agreement offers
+aws bedrock list-foundation-model-agreement-offers \
+  --model-id anthropic.claude-3-5-sonnet-20240620-v1:0 \
+  --profile cc-native-account \
+  --region us-west-2 \
+  --no-cli-pager
+
+# 2. For Anthropic models: Submit use case (one-time, base64 encoded JSON)
+# See AWS docs for form data format
+
+# 3. Create foundation model agreement
+aws bedrock create-foundation-model-agreement \
+  --model-id anthropic.claude-3-5-sonnet-20240620-v1:0 \
+  --offer-token <OFFER_TOKEN_FROM_STEP_1> \
+  --profile cc-native-account \
+  --region us-west-2 \
+  --no-cli-pager
+```
+
+**Note:** Console method is recommended for first-time setup as it's simpler.
 
 ---
 
@@ -419,7 +534,9 @@ aws cloudformation describe-stacks --stack-name CCNativeStack --profile cc-nativ
 - [ ] Built project (`npm run build`)
 - [ ] Deployed stack (`./deploy`)
 - [ ] Verified deployment (checked resources)
-- [ ] Ready for Phase 2 implementation
+- [ ] Enabled Bedrock model access (Console or CLI)
+- [ ] Verified model availability (optional CLI check)
+- [ ] Ready for Phase 2/3 implementation
 
 ---
 

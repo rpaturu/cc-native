@@ -34,10 +34,44 @@ export class GraphService implements IGraphService {
   }
 
   /**
-   * Get Gremlin traversal source
+   * Check if error is a Neptune signature expiration error
    */
-  private async getG(): Promise<GraphTraversalSource> {
-    return await this.connection.getTraversal();
+  private isSignatureExpiredError(error: any): boolean {
+    if (!error) return false;
+    
+    const errorMessage = error.message || error.toString() || '';
+    const errorCode = error.code || error.name || '';
+    
+    // Check for signature expiration patterns
+    if (errorMessage.includes('Signature expired') || 
+        errorMessage.includes('signature expired') ||
+        (errorCode === 'AccessDeniedException' && errorMessage.includes('Signature'))) {
+      return true;
+    }
+    
+    return false;
+  }
+
+  /**
+   * Get Gremlin traversal source with automatic reconnection on signature expiration
+   */
+  private async getG(retryCount: number = 0): Promise<GraphTraversalSource> {
+    try {
+      return await this.connection.getTraversal();
+    } catch (error) {
+      // If signature expired, reset connection and retry once
+      if (this.isSignatureExpiredError(error) && retryCount === 0) {
+        logger.warn('Neptune signature expired, reconnecting...', { error });
+        try {
+          await this.connection.reset();
+          return await this.connection.getTraversal();
+        } catch (retryError) {
+          logger.error('Failed to reconnect after signature expiration', { retryError });
+          throw retryError;
+        }
+      }
+      throw error;
+    }
   }
 
   /**
@@ -369,20 +403,25 @@ export class GraphService implements IGraphService {
    * Each vertex includes depth information (1 = immediate neighbors, 2 = neighbors of neighbors, etc.)
    * Bounded: maximum limit results total.
    */
-  async getNeighbors(
+  /**
+   * Get neighbors with retry on signature expiration
+   */
+  private async getNeighborsInternal(
     vertexId: string,
-    options?: { maxDepth?: number; limit?: number }
+    options?: { maxDepth?: number; limit?: number },
+    retryCount: number = 0
   ): Promise<Vertex[]> {
-    try {
-      const g = await this.getG();
-      const maxDepth = options?.maxDepth || 2;
-      const limit = options?.limit || 100;
+    const maxDepth = options?.maxDepth || 2;
+    const limit = options?.limit || 100;
 
-      // Use repeat() to traverse up to maxDepth, then collect all vertices with their depth
-      // Pattern: g.V(vertexId).repeat(__.out()).times(maxDepth).emit().dedup().limit(limit)
-      const results: Array<{ vertex: any; depth: number }> = [];
-      const visited = new Set<string>();
-      
+    // Use repeat() to traverse up to maxDepth, then collect all vertices with their depth
+    // Pattern: g.V(vertexId).repeat(__.out()).times(maxDepth).emit().dedup().limit(limit)
+    const results: Array<{ vertex: any; depth: number }> = [];
+    const visited = new Set<string>();
+    
+    const g = await this.getG();
+    
+    try {
       // Start from source vertex
       const sourceVertex = await g.V(vertexId).next();
       if (!sourceVertex.value) {
@@ -401,44 +440,73 @@ export class GraphService implements IGraphService {
         }
 
         const depthResults = await traversal.limit(limit - results.length).toList();
-        
-        for (const vertexResult of depthResults) {
-          // Gremlin toList() returns vertices directly (not wrapped in .value)
-          const vertex: any = vertexResult;
-          const vertexIdStr = String(vertex.id);
-          if (!visited.has(vertexIdStr)) {
-            visited.add(vertexIdStr);
-            
-            const properties: Record<string, any> = {};
-            if (vertex.properties) {
-              for (const [key, value] of Object.entries(vertex.properties)) {
-                if (Array.isArray(value) && value.length > 0) {
-                  properties[key] = value[0].value;
-                } else {
-                  properties[key] = value;
-                }
+      
+      for (const vertexResult of depthResults) {
+        // Gremlin toList() returns vertices directly (not wrapped in .value)
+        const vertex: any = vertexResult;
+        const vertexIdStr = String(vertex.id);
+        if (!visited.has(vertexIdStr)) {
+          visited.add(vertexIdStr);
+          
+          const properties: Record<string, any> = {};
+          if (vertex.properties) {
+            for (const [key, value] of Object.entries(vertex.properties)) {
+              if (Array.isArray(value) && value.length > 0) {
+                properties[key] = value[0].value;
+              } else {
+                properties[key] = value;
               }
             }
+          }
 
-            results.push({
-              vertex: {
-                id: vertexIdStr,
-                label: vertex.label,
-                properties,
-                depth,
-              },
+          results.push({
+            vertex: {
+              id: vertexIdStr,
+              label: vertex.label,
+              properties,
               depth,
-            });
+            },
+            depth,
+          });
 
-            if (results.length >= limit) {
-              break;
-            }
+          if (results.length >= limit) {
+            break;
           }
         }
       }
+      } // Close depth loop
 
       return results.map(r => r.vertex);
+    } catch (queryError) {
+      // Re-throw signature expiration errors to be handled by caller
+      if (this.isSignatureExpiredError(queryError)) {
+        throw queryError;
+      }
+      // Re-throw other errors
+      throw queryError;
+    }
+  }
+
+  async getNeighbors(
+    vertexId: string,
+    options?: { maxDepth?: number; limit?: number }
+  ): Promise<Vertex[]> {
+    try {
+      return await this.getNeighborsInternal(vertexId, options);
     } catch (error) {
+      // If signature expired, retry with fresh connection (once)
+      if (this.isSignatureExpiredError(error) && !(error as any).__retried) {
+        logger.warn('Neptune signature expired during getNeighbors, reconnecting and retrying...', { vertexId, error });
+        try {
+          await this.connection.reset();
+          // Mark error as retried to prevent infinite loops
+          (error as any).__retried = true;
+          return await this.getNeighborsInternal(vertexId, options);
+        } catch (retryError) {
+          logger.error('Failed to reconnect and retry getNeighbors', { vertexId, retryError });
+          throw retryError;
+        }
+      }
       logger.error('Failed to get neighbors', { vertexId, error });
       throw error;
     }

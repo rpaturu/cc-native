@@ -47,6 +47,12 @@ echo "Using AWS Profile: $CDK_PROFILE"
 echo "Using AWS Region: $AWS_REGION"
 echo "Using Environment: $DEPLOYMENT_ENV"
 
+# Validate required Bedrock configuration
+if [ -z "$BEDROCK_MODEL" ]; then
+  echo "Error: BEDROCK_MODEL is required in .env.local"
+  exit 1
+fi
+
 # Build and deploy infrastructure
 echo "Building and deploying infrastructure..."
 # Skip npm ci if node_modules exists and build works (faster, avoids permission issues)
@@ -63,6 +69,12 @@ CDK_CONTEXT_PARAMS="$CDK_CONTEXT_PARAMS -c nodeEnv=$DEPLOYMENT_ENV"
 # Set logging level (default to info)
 LOG_LEVEL=${LOG_LEVEL:-info}
 CDK_CONTEXT_PARAMS="$CDK_CONTEXT_PARAMS -c logLevel=$LOG_LEVEL"
+
+# Pass Bedrock and AWS configuration as CDK context parameters
+CDK_CONTEXT_PARAMS="$CDK_CONTEXT_PARAMS -c bedrockModel=$BEDROCK_MODEL"
+CDK_CONTEXT_PARAMS="$CDK_CONTEXT_PARAMS -c awsRegion=$AWS_REGION"
+
+echo "Using Bedrock Model: $BEDROCK_MODEL"
 
 # Set defaults for S3 Buckets (optional - from .env.local)
 EVIDENCE_LEDGER_BUCKET=${EVIDENCE_LEDGER_BUCKET:-}

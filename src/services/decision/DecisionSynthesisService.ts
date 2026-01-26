@@ -22,7 +22,7 @@ export class DecisionSynthesisService {
 
   /**
    * Synthesize decision proposal from context
-   * Calls Bedrock with strict schema output (JSON mode)
+   * Calls Bedrock following cc-orchestrator1 pattern (no response_format for compatibility)
    */
   async synthesizeDecision(
     context: DecisionContextV1
@@ -30,39 +30,69 @@ export class DecisionSynthesisService {
     // Build prompt with context
     const prompt = this.buildPrompt(context);
     
-    // Call Bedrock with JSON mode (strict schema)
-    const response = await this.bedrockClient.send(new InvokeModelCommand({
+    // Log model ID for debugging
+    this.logger.debug('Invoking Bedrock model', {
       modelId: this.modelId,
-      body: JSON.stringify({
-        anthropic_version: 'bedrock-2023-05-31',
-        max_tokens: 4096,
-        system: this.getSystemPrompt(),
-        messages: [
-          {
-            role: 'user',
-            content: prompt
-          }
-        ],
-        response_format: {
-          type: 'json_schema',
-          json_schema: {
-            name: 'DecisionProposalV1',
-            schema: this.getDecisionProposalSchema(),
-            strict: true
-          }
-        }
-      }),
-      contentType: 'application/json',
-      accept: 'application/json'
-    }));
+      promptLength: prompt.length,
+    });
     
-    // Parse Bedrock response (model-specific structure)
-    // Note: Bedrock responses may wrap content; parse the correct field based on model
-    // For Claude models: response.body is JSON with 'content' array
-    const rawResponse = JSON.parse(new TextDecoder().decode(response.body));
-    const responseBody = rawResponse.content?.[0]?.text 
-      ? JSON.parse(rawResponse.content[0].text) 
-      : rawResponse; // Fallback for direct JSON mode
+    // Call Bedrock following cc-orchestrator1 pattern (no response_format for compatibility)
+    // Note: response_format with json_schema is not supported by all Claude models (e.g., Claude 3.5 Haiku)
+    let responseBody: any;
+    try {
+      const response = await this.bedrockClient.send(new InvokeModelCommand({
+        modelId: this.modelId,
+        body: JSON.stringify({
+          anthropic_version: 'bedrock-2023-05-31',
+          max_tokens: 4096,
+          system: this.getSystemPrompt(),
+          messages: [
+            {
+              role: 'user',
+              content: prompt
+            }
+          ]
+        }),
+        contentType: 'application/json',
+        accept: 'application/json'
+      }));
+    
+      // Parse Bedrock response (following cc-orchestrator1 pattern)
+      // For Claude models: response.body is JSON with 'content' array containing text
+      const rawResponse = JSON.parse(new TextDecoder().decode(response.body));
+      const responseText = rawResponse.content?.[0]?.text || '';
+      
+      // Extract JSON from response text (may be wrapped in markdown code blocks)
+      try {
+        // Try to parse as-is first
+        responseBody = JSON.parse(responseText);
+      } catch {
+        // If that fails, try to extract JSON from markdown code blocks
+        const jsonMatch = responseText.match(/```(?:json)?\s*(\{[\s\S]*\})\s*```/) || 
+                         responseText.match(/(\{[\s\S]*\})/);
+        if (jsonMatch) {
+          responseBody = JSON.parse(jsonMatch[1]);
+        } else {
+          throw new Error(`Failed to parse JSON from Bedrock response: ${responseText.substring(0, 200)}`);
+        }
+      }
+    } catch (error) {
+      // Enhanced error logging for Bedrock failures
+      this.logger.error('Bedrock invocation failed', {
+        modelId: this.modelId,
+        error: error instanceof Error ? error.message : String(error),
+        errorName: error instanceof Error ? error.name : 'Unknown',
+        errorCode: (error as any)?.$metadata?.httpStatusCode,
+      });
+      
+      // Re-throw with more context
+      if (error instanceof Error) {
+        if (error.name === 'ResourceNotFoundException' || (error as any)?.$metadata?.httpStatusCode === 404) {
+          throw new Error(`Bedrock model not found: ${this.modelId}. Please verify the model ID is correct and available in your region.`);
+        }
+      }
+      throw error;
+    }
     
     // Validate LLM output (proposal body only, no IDs)
     const proposalBody = DecisionProposalBodyV1Schema.parse(responseBody);
@@ -105,6 +135,7 @@ export class DecisionSynthesisService {
   
   /**
    * Build prompt from decision context
+   * Note: Explicitly requests JSON output since we're not using structured output mode
    */
   private buildPrompt(context: DecisionContextV1): string {
     return `You are a decision synthesis engine for a revenue intelligence system.
@@ -140,14 +171,29 @@ Synthesize what actions should be taken next for this account. Consider:
 3. Blocking unknowns (if any)
 4. Policy constraints
 
-Output a DecisionProposalV1 with:
-- decision_type: PROPOSE_ACTIONS, NO_ACTION_RECOMMENDED, or BLOCKED_BY_UNKNOWNS
-- decision_reason_codes: Normalized reason codes (e.g., RENEWAL_WINDOW_ENTERED, USAGE_TREND_DOWN)
-- actions: Array of action proposals (if PROPOSE_ACTIONS)
-- Each action must include: action_type, why[], confidence, risk_level, llm_suggests_human_review, parameters, target
+CRITICAL: You must output ONLY valid JSON matching the DecisionProposalV1 schema. Do not include markdown code blocks or any other formatting. Return a JSON object with:
+- decision_type: "PROPOSE_ACTIONS", "NO_ACTION_RECOMMENDED", or "BLOCKED_BY_UNKNOWNS"
+- decision_reason_codes: Array of normalized reason codes (e.g., ["RENEWAL_WINDOW_ENTERED", "USAGE_TREND_DOWN"])
+- actions: Array of action proposals (if PROPOSE_ACTIONS, otherwise empty array)
+- summary: Brief summary string (max 280 characters)
+- decision_version: "v1"
+- schema_version: "v1"
+- confidence: Number between 0 and 1
+- blocking_unknowns: Array of strings (if BLOCKED_BY_UNKNOWNS, otherwise empty array)
 
-If no action is appropriate, set decision_type to NO_ACTION_RECOMMENDED.
-If blocking unknowns prevent decision, set decision_type to BLOCKED_BY_UNKNOWNS.`;
+Each action must include:
+- action_type: One of the available action types
+- why: Array of strings explaining the rationale
+- confidence: Number between 0 and 1
+- risk_level: "MINIMAL", "LOW", "MEDIUM", or "HIGH"
+- llm_suggests_human_review: Boolean
+- parameters: Object with action-specific parameters
+- target: Object with entity_type and entity_id
+
+If no action is appropriate, set decision_type to "NO_ACTION_RECOMMENDED" and actions to [].
+If blocking unknowns prevent decision, set decision_type to "BLOCKED_BY_UNKNOWNS" and blocking_unknowns to the list of unknowns.
+
+Output only the JSON object, nothing else.`;
   }
   
   /**
@@ -161,7 +207,7 @@ If blocking unknowns prevent decision, set decision_type to BLOCKED_BY_UNKNOWNS.
 4. Never execute actions or make autonomous decisions
 5. Always respect policy constraints and human approval requirements
 
-You must output valid DecisionProposalV1 JSON schema.`;
+You must output valid JSON matching the DecisionProposalV1 schema. Return only the JSON object, no markdown formatting.`;
   }
   
   /**
