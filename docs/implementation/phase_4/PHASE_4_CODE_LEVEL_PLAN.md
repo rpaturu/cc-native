@@ -9,7 +9,7 @@
 
 ## Overview
 
-This document provides a detailed, file-by-file implementation plan for Phase 4: Bounded Execution & AI-Native Action Fulfillment. It follows the architectural refinements from `PHASE_4_ARCHITECTURE.md` and maintains consistency with Phase 3 patterns.
+This document provides a high-level overview and cross-reference for Phase 4: Bounded Execution & AI-Native Action Fulfillment. **Detailed implementation plans are split into sub-phase documents for easier review and updates.**
 
 **Key Architectural Refinements:**
 1. ExecutionAttempt record (exactly-once guarantee)
@@ -18,6 +18,19 @@ This document provides a detailed, file-by-file implementation plan for Phase 4:
 4. Split validation (preflight + runtime guards)
 5. Structured ActionOutcomeV1 contract
 6. ToolInvoker Lambda (MCP Gateway client)
+
+---
+
+## Sub-Phase Documents
+
+For detailed implementation plans, see:
+- **Phase 4.1:** `PHASE_4_1_CODE_LEVEL_PLAN.md` - Foundation (Type definitions, Services, Initial handlers)
+- **Phase 4.2:** `PHASE_4_2_CODE_LEVEL_PLAN.md` - Orchestration (Step Functions, Tool handlers, Compensation)
+- **Phase 4.3:** `PHASE_4_3_CODE_LEVEL_PLAN.md` - Connectors (Adapter interface, Internal/CRM adapters, Gateway setup)
+- **Phase 4.4:** `PHASE_4_4_CODE_LEVEL_PLAN.md` - Safety & Outcomes (Signal emission, Status API, Alarms)
+- **Phase 4.5:** `PHASE_4_5_CODE_LEVEL_PLAN.md` - Testing & Polish (Unit/Integration/E2E tests, Documentation)
+
+**Note:** This main document serves as a reference and overview. All detailed code-level plans are in the sub-phase documents above.
 
 ---
 
@@ -54,6 +67,55 @@ This document provides a detailed, file-by-file implementation plan for Phase 4:
 20. Integration tests
 21. End-to-end tests
 22. Documentation
+
+---
+
+## Quick Reference: Component Locations
+
+### Type Definitions
+**Location:** `PHASE_4_1_CODE_LEVEL_PLAN.md` - Section 1
+- `src/types/ExecutionTypes.ts`
+- `src/types/MCPTypes.ts`
+- `src/types/LedgerTypes.ts` (updates)
+
+### Service Layer
+**Location:** `PHASE_4_1_CODE_LEVEL_PLAN.md` - Section 2
+- `src/services/execution/ExecutionAttemptService.ts`
+- `src/services/execution/ActionTypeRegistryService.ts`
+- `src/services/execution/IdempotencyService.ts`
+- `src/services/execution/ExecutionOutcomeService.ts`
+- `src/services/execution/KillSwitchService.ts`
+
+### Lambda Handlers
+**Location:** 
+- Phase 4.1: `PHASE_4_1_CODE_LEVEL_PLAN.md` - Section 3 (execution-starter, execution-validator)
+- Phase 4.2: `PHASE_4_2_CODE_LEVEL_PLAN.md` - Section 1 (tool-mapper, tool-invoker, execution-recorder, compensation)
+- Phase 4.4: `PHASE_4_4_CODE_LEVEL_PLAN.md` - Section 2 (execution-status-api)
+
+### CDK Infrastructure
+**Location:**
+- Phase 4.1: `PHASE_4_1_CODE_LEVEL_PLAN.md` - Section 4 (Tables, Phase 4.1 handlers)
+- Phase 4.2: `PHASE_4_2_CODE_LEVEL_PLAN.md` - Section 2 (Step Functions, EventBridge, Phase 4.2 handlers)
+- Phase 4.3: `PHASE_4_3_CODE_LEVEL_PLAN.md` - Section 4 (AgentCore Gateway)
+- Phase 4.4: `PHASE_4_4_CODE_LEVEL_PLAN.md` - Section 3 (CloudWatch alarms, API Gateway)
+
+### Connector Adapters
+**Location:** `PHASE_4_3_CODE_LEVEL_PLAN.md` - Sections 1-3
+- `src/adapters/IConnectorAdapter.ts`
+- `src/adapters/internal/InternalConnectorAdapter.ts`
+- `src/adapters/crm/CrmConnectorAdapter.ts`
+
+### Testing
+**Location:** `PHASE_4_5_CODE_LEVEL_PLAN.md` - Sections 1-3
+- Unit tests
+- Integration tests
+- End-to-end tests
+
+---
+
+## Detailed Implementation Plans
+
+**Note:** The following sections provide a complete reference. For focused implementation, use the sub-phase documents listed above.
 
 ---
 
