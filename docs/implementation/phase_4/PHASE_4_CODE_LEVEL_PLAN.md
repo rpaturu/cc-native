@@ -1,8 +1,9 @@
 # Phase 4 — Code-Level Implementation Plan
 
-**Status:** 🟡 **PLANNING**  
+**Status:** 🟡 **PLANNING** (Corrected)  
 **Created:** 2026-01-26  
-**Last Updated:** 2026-01-26
+**Last Updated:** 2026-01-26  
+**Review:** See `PHASE_4_CODE_LEVEL_PLAN_REVIEW.md` for all corrections applied
 
 ---
 
@@ -255,6 +256,94 @@ export interface KillSwitchConfig {
 }
 ```
 
+### File: `src/types/MCPTypes.ts`
+
+**Purpose:** MCP (Model Context Protocol) type definitions for tool invocation
+
+**Types to Define:**
+
+```typescript
+/**
+ * MCP (Model Context Protocol) Types
+ * JSON-RPC 2.0 based protocol for tool invocation
+ */
+
+/**
+ * MCP Tool Invocation (Gateway → Lambda Adapter)
+ */
+export interface MCPToolInvocation {
+  jsonrpc: '2.0';
+  id: string;
+  method: 'tools/call';
+  params: {
+    name: string; // Tool name (e.g., "crm.create_task")
+    arguments: Record<string, any>; // Tool parameters
+  };
+  identity?: {
+    accessToken: string; // OAuth token from AgentCore Identity
+    tenantId: string;
+    userId?: string;
+  };
+}
+
+/**
+ * MCP Tool Response (Lambda Adapter → Gateway)
+ */
+export interface MCPResponse {
+  jsonrpc: '2.0';
+  id: string;
+  result?: {
+    content: Array<{
+      type: 'text';
+      text: string; // JSON stringified result
+    }>;
+  };
+  error?: {
+    code: number;
+    message: string;
+    data?: any;
+  };
+}
+
+/**
+ * MCP Tools List Response
+ */
+export interface MCPToolsListResponse {
+  jsonrpc: '2.0';
+  id: string;
+  result: {
+    tools: Array<{
+      name: string;
+      description: string;
+      inputSchema: Record<string, any>; // JSON Schema
+    }>;
+  };
+}
+```
+
+**Note:** These types are used by connector adapters to receive MCP invocations from AgentCore Gateway and return MCP responses.
+
+---
+
+### File: `src/types/LedgerTypes.ts` (Update)
+
+**Purpose:** Add missing LedgerEventType values for Phase 4
+
+**Add to existing enum:**
+
+```typescript
+export enum LedgerEventType {
+  // ... existing values ...
+  EXECUTION_STARTED = 'EXECUTION_STARTED',
+  ACTION_EXECUTED = 'ACTION_EXECUTED',
+  ACTION_FAILED = 'ACTION_FAILED',
+}
+```
+
+**Note:** These new event types are used by execution handlers to record execution lifecycle events in the ledger.
+
+---
+
 **Validation Schemas (Zod):**
 
 ```typescript
@@ -317,6 +406,8 @@ export const ActionOutcomeV1Schema = z.object({
 **Methods:**
 
 ```typescript
+import { DynamoDBDocumentClient, PutCommand, GetCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+
 export class ExecutionAttemptService {
   constructor(
     private dynamoClient: DynamoDBDocumentClient,
@@ -327,6 +418,8 @@ export class ExecutionAttemptService {
   /**
    * Start execution attempt (conditional write for idempotency)
    * Returns attempt if created, throws if already exists
+   * 
+   * Note: DynamoDB doesn't support OR in ConditionExpression, so we check existing state first
    */
   async startAttempt(
     actionIntentId: string,
@@ -339,9 +432,23 @@ export class ExecutionAttemptService {
     const startedAt = new Date().toISOString();
     const ttl = Math.floor(Date.now() / 1000) + 3600; // 1 hour TTL
     
+    const pk = `TENANT#${tenantId}#ACCOUNT#${accountId}`;
+    const sk = `EXECUTION#${actionIntentId}`;
+    
+    // First, check if execution already exists
+    const existing = await this.getAttempt(actionIntentId, tenantId, accountId);
+    
+    if (existing) {
+      // Check if status is terminal
+      if (!['SUCCEEDED', 'FAILED', 'CANCELLED'].includes(existing.status)) {
+        throw new Error(`Execution already in progress for action_intent_id: ${actionIntentId}`);
+      }
+      // If terminal, allow new attempt (or update existing with new attempt_id)
+    }
+    
     const attempt: ExecutionAttempt = {
-      pk: `TENANT#${tenantId}#ACCOUNT#${accountId}`,
-      sk: `EXECUTION#${actionIntentId}`,
+      pk,
+      sk,
       action_intent_id: actionIntentId,
       attempt_id: attemptId,
       status: 'RUNNING',
@@ -354,23 +461,17 @@ export class ExecutionAttemptService {
     };
     
     try {
-      // Conditional write: only succeed if execution doesn't exist OR is terminal
+      // Conditional write: only succeed if execution doesn't exist
       await this.dynamoClient.send(new PutCommand({
         TableName: this.tableName,
         Item: attempt,
-        ConditionExpression: 
-          'attribute_not_exists(action_intent_id) OR status IN (:succeeded, :failed, :cancelled)',
-        ExpressionAttributeValues: {
-          ':succeeded': 'SUCCEEDED',
-          ':failed': 'FAILED',
-          ':cancelled': 'CANCELLED',
-        },
+        ConditionExpression: 'attribute_not_exists(pk) AND attribute_not_exists(sk)',
       }));
       
       return attempt;
     } catch (error: any) {
       if (error.name === 'ConditionalCheckFailedException') {
-        // Execution already exists and is RUNNING
+        // Race condition: another execution started between check and put
         throw new Error(`Execution already in progress for action_intent_id: ${actionIntentId}`);
       }
       throw error;
@@ -440,6 +541,8 @@ export class ActionTypeRegistryService {
   /**
    * Get tool mapping for action type and schema version
    * Falls back to latest version if schema_version not specified
+   * 
+   * Note: Requires GSI with created_at as sort key for latest version lookup
    */
   async getToolMapping(
     actionType: string,
@@ -457,14 +560,15 @@ export class ActionTypeRegistryService {
       
       return result.Item as ActionTypeRegistry | null;
     } else {
-      // Get latest version (query by action_type, sort by created_at desc)
+      // Get latest version (query GSI by created_at desc)
       const result = await this.dynamoClient.send(new QueryCommand({
         TableName: this.tableName,
+        IndexName: 'created-at-index', // GSI with created_at as sort key
         KeyConditionExpression: 'pk = :pk',
         ExpressionAttributeValues: {
           ':pk': `ACTION_TYPE#${actionType}`,
         },
-        ScanIndexForward: false, // Descending order
+        ScanIndexForward: false, // Descending order (newest first)
         Limit: 1,
       }));
       
@@ -539,6 +643,7 @@ export class ActionTypeRegistryService {
 
 ```typescript
 import { createHash } from 'crypto';
+import { DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 
 export class IdempotencyService {
   /**
@@ -564,6 +669,7 @@ export class IdempotencyService {
 
   /**
    * Check if external write already happened (adapter-level idempotency)
+   * Uses fixed SK pattern 'LATEST' for idempotency key lookup
    */
   async checkExternalWriteDedupe(
     dynamoClient: DynamoDBDocumentClient,
@@ -574,7 +680,7 @@ export class IdempotencyService {
       TableName: tableName,
       Key: {
         pk: `IDEMPOTENCY_KEY#${idempotencyKey}`,
-        sk: `TIMESTAMP#${Date.now()}`, // Use current timestamp for SK (query latest)
+        sk: 'LATEST', // Fixed SK pattern (overwrites previous)
       },
     }));
     
@@ -587,6 +693,7 @@ export class IdempotencyService {
 
   /**
    * Record external write dedupe (adapter-level idempotency)
+   * Uses fixed SK pattern 'LATEST' to overwrite previous entries
    */
   async recordExternalWriteDedupe(
     dynamoClient: DynamoDBDocumentClient,
@@ -601,7 +708,7 @@ export class IdempotencyService {
     
     const dedupe: ExternalWriteDedupe = {
       pk: `IDEMPOTENCY_KEY#${idempotencyKey}`,
-      sk: `TIMESTAMP#${Date.now()}`,
+      sk: 'LATEST', // Fixed SK pattern (overwrites previous)
       idempotency_key: idempotencyKey,
       external_object_id: externalObjectId,
       action_intent_id: actionIntentId,
@@ -625,6 +732,8 @@ export class IdempotencyService {
 **Methods:**
 
 ```typescript
+import { DynamoDBDocumentClient, PutCommand, GetCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
+
 export class ExecutionOutcomeService {
   constructor(
     private dynamoClient: DynamoDBDocumentClient,
@@ -703,10 +812,12 @@ export class ExecutionOutcomeService {
 **Methods:**
 
 ```typescript
+import { DynamoDBDocumentClient, GetCommand } from '@aws-sdk/lib-dynamodb';
+
 export class KillSwitchService {
   constructor(
     private dynamoClient: DynamoDBDocumentClient,
-    private configTableName: string, // Tenant config table
+    private configTableName: string, // Tenant config table (tenants table)
     private logger: Logger
   ) {}
 
@@ -739,18 +850,26 @@ export class KillSwitchService {
 
   /**
    * Get kill switch config for tenant
+   * Note: Tenants table uses tenantId as partition key directly (not composite key)
    */
   async getKillSwitchConfig(tenantId: string): Promise<KillSwitchConfig> {
     const result = await this.dynamoClient.send(new GetCommand({
       TableName: this.configTableName,
       Key: {
-        pk: `TENANT#${tenantId}`,
-        sk: 'KILL_SWITCH_CONFIG',
+        tenantId: tenantId, // Tenants table uses tenantId as PK directly
       },
     }));
     
     if (result.Item) {
-      return result.Item as KillSwitchConfig;
+      // Extract kill switch config from tenant item
+      // Option A: Store as attributes in tenant item
+      const config: KillSwitchConfig = {
+        tenant_id: tenantId,
+        execution_enabled: result.Item.execution_enabled ?? true,
+        disabled_action_types: result.Item.disabled_action_types ?? [],
+        global_emergency_stop: process.env.GLOBAL_EXECUTION_STOP === 'true',
+      };
+      return config;
     }
     
     // Default: execution enabled, no disabled action types
@@ -758,6 +877,7 @@ export class KillSwitchService {
       tenant_id: tenantId,
       execution_enabled: true,
       disabled_action_types: [],
+      global_emergency_stop: process.env.GLOBAL_EXECUTION_STOP === 'true',
     };
   }
 }
@@ -827,6 +947,9 @@ const ledgerService = new LedgerService(
 /**
  * Step Functions input: { action_intent_id }
  * Step Functions output: { action_intent_id, idempotency_key, tenant_id, account_id, trace_id }
+ * 
+ * Note: ActionIntentService.getIntent() must be public (not private) for this handler to work.
+ * Update ActionIntentService.ts to make getIntent() public.
  */
 export const handler: Handler = async (event: { action_intent_id: string }) => {
   const { action_intent_id } = event;
@@ -836,6 +959,8 @@ export const handler: Handler = async (event: { action_intent_id: string }) => {
   
   try {
     // 1. Fetch ActionIntentV1
+    // Note: getIntent() must be public in ActionIntentService
+    // If it's private, either make it public or add a public wrapper method
     const intent = await actionIntentService.getIntent(
       action_intent_id,
       event.tenant_id || '', // Will be populated from intent
@@ -1126,20 +1251,12 @@ import { Handler } from 'aws-lambda';
 import { Logger } from '../../services/core/Logger';
 import { TraceService } from '../../services/core/TraceService';
 import { ToolInvocationRequest, ToolInvocationResponse } from '../../types/ExecutionTypes';
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
-import { getAWSClientConfig } from '../../utils/aws-client-config';
 import axios, { AxiosError } from 'axios';
 
 const logger = new Logger('ToolInvokerHandler');
 const traceService = new TraceService(logger);
 
-// Initialize AWS clients
-const region = process.env.AWS_REGION || 'us-west-2';
-const clientConfig = getAWSClientConfig(region);
-const dynamoClient = DynamoDBDocumentClient.from(new DynamoDBClient(clientConfig), {
-  marshallOptions: { removeUndefinedValues: true },
-});
+// Note: No DynamoDB client needed - this handler only calls Gateway via HTTP
 
 /**
  * Step Functions input: ToolInvocationRequest
@@ -1241,7 +1358,11 @@ async function invokeWithRetry(
       
       // Check if error is retryable
       if (!isRetryableError(error) || attempt === maxRetries) {
-        throw error;
+        // Throw with Step Functions-compatible error type
+        if (error.response?.status >= 400 && error.response?.status < 500) {
+          throw new Error('PermanentError: ' + error.message);
+        }
+        throw new Error('TransientError: ' + error.message);
       }
       
       // Exponential backoff
@@ -1257,7 +1378,11 @@ async function invokeWithRetry(
     }
   }
   
-  throw lastError;
+  // Throw with appropriate error type for Step Functions
+  if (lastError.response?.status >= 400 && lastError.response?.status < 500) {
+    throw new Error('PermanentError: ' + lastError.message);
+  }
+  throw new Error('TransientError: ' + lastError.message);
 }
 
 /**
@@ -1553,13 +1678,180 @@ export const handler: Handler = async (event: {
       },
     });
     
+    // 4. Emit signal for Phase 1 perception layer
+    // Note: SignalService initialization should be added to handler
+    // import { SignalService } from '../../services/perception/SignalService';
+    // import { SignalType } from '../../types/SignalTypes';
+    // 
+    // const signalService = new SignalService({
+    //   logger,
+    //   signalsTableName: process.env.SIGNALS_TABLE_NAME || 'cc-native-signals',
+    //   accountsTableName: process.env.ACCOUNTS_TABLE_NAME || 'cc-native-accounts',
+    //   // ... other dependencies
+    // });
+    // 
+    // await signalService.createSignal({
+    //   signalType: status === 'SUCCEEDED' ? SignalType.ACTION_EXECUTED : SignalType.ACTION_FAILED,
+    //   accountId: account_id,
+    //   tenantId: tenant_id,
+    //   data: {
+    //     action_intent_id,
+    //     status,
+    //     external_object_refs: outcome.external_object_refs,
+    //   },
+    // });
+    
     // 4. Return outcome
     return {
       outcome,
     };
   } catch (error: any) {
     logger.error('Execution recording failed', { action_intent_id, error });
-    throw error;
+    
+    // Return structured error for Step Functions
+    throw new Error(JSON.stringify({
+      errorType: error.name || 'Error',
+      errorMessage: error.message,
+      action_intent_id,
+    }));
+  }
+};
+```
+
+### File: `src/handlers/phase4/compensation-handler.ts`
+
+**Purpose:** Handle compensation (rollback) for failed executions
+
+**Handler:**
+
+```typescript
+import { Handler } from 'aws-lambda';
+import { Logger } from '../../services/core/Logger';
+import { TraceService } from '../../services/core/TraceService';
+import { ActionIntentService } from '../../services/decision/ActionIntentService';
+import { ActionTypeRegistryService } from '../../services/execution/ActionTypeRegistryService';
+import { ExecutionOutcomeService } from '../../services/execution/ExecutionOutcomeService';
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
+import { getAWSClientConfig } from '../../utils/aws-client-config';
+
+const logger = new Logger('CompensationHandler');
+const traceService = new TraceService(logger);
+
+// Initialize AWS clients
+const region = process.env.AWS_REGION || 'us-west-2';
+const clientConfig = getAWSClientConfig(region);
+const dynamoClient = DynamoDBDocumentClient.from(new DynamoDBClient(clientConfig), {
+  marshallOptions: { removeUndefinedValues: true },
+});
+
+// Initialize services
+const actionIntentService = new ActionIntentService(
+  dynamoClient,
+  process.env.ACTION_INTENT_TABLE_NAME || 'cc-native-action-intents',
+  logger
+);
+
+const actionTypeRegistryService = new ActionTypeRegistryService(
+  dynamoClient,
+  process.env.ACTION_TYPE_REGISTRY_TABLE_NAME || 'cc-native-action-type-registry',
+  logger
+);
+
+const executionOutcomeService = new ExecutionOutcomeService(
+  dynamoClient,
+  process.env.EXECUTION_OUTCOMES_TABLE_NAME || 'cc-native-execution-outcomes',
+  logger
+);
+
+/**
+ * Step Functions input: {
+ *   action_intent_id,
+ *   tenant_id,
+ *   account_id,
+ *   execution_result: ToolInvocationResponse
+ * }
+ */
+export const handler: Handler = async (event: {
+  action_intent_id: string;
+  tenant_id: string;
+  account_id: string;
+  execution_result: any;
+}) => {
+  const { action_intent_id, tenant_id, account_id, execution_result } = event;
+  const traceId = traceService.generateTraceId();
+  
+  logger.info('Compensation handler invoked', { action_intent_id, traceId });
+  
+  try {
+    // 1. Fetch ActionIntentV1
+    const intent = await actionIntentService.getIntent(action_intent_id, tenant_id, account_id);
+    
+    if (!intent) {
+      throw new Error(`ActionIntent not found: ${action_intent_id}`);
+    }
+    
+    // 2. Get tool mapping to determine compensation strategy
+    const toolMapping = await actionTypeRegistryService.getToolMapping(
+      intent.action_type,
+      intent.parameters_schema_version
+    );
+    
+    if (!toolMapping) {
+      throw new Error(`Tool mapping not found for action_type: ${intent.action_type}`);
+    }
+    
+    // 3. Check if compensation is supported
+    if (toolMapping.compensation_strategy === 'NONE') {
+      logger.warn('Compensation not supported for this action type', {
+        action_intent_id,
+        action_type: intent.action_type,
+      });
+      return {
+        compensation_status: 'NONE',
+        reason: 'Compensation not supported for this action type',
+      };
+    }
+    
+    // 4. Get external object refs from execution result
+    const externalObjectRefs = execution_result.external_object_refs || [];
+    
+    if (externalObjectRefs.length === 0) {
+      logger.info('No external objects to compensate', { action_intent_id });
+      return {
+        compensation_status: 'COMPLETED',
+        reason: 'No external objects created',
+      };
+    }
+    
+    // 5. Call compensation tool via Gateway (if automatic)
+    // TODO: Implement compensation tool invocation via Gateway
+    // For now, mark as pending manual compensation
+    if (toolMapping.compensation_strategy === 'AUTOMATIC') {
+      // TODO: Invoke compensation tool via Gateway
+      logger.info('Automatic compensation not yet implemented', {
+        action_intent_id,
+        external_object_refs: externalObjectRefs,
+      });
+      
+      return {
+        compensation_status: 'PENDING',
+        reason: 'Automatic compensation not yet implemented',
+      };
+    }
+    
+    // Manual compensation
+    return {
+      compensation_status: 'PENDING',
+      reason: 'Requires manual compensation',
+    };
+  } catch (error: any) {
+    logger.error('Compensation failed', { action_intent_id, error });
+    
+    return {
+      compensation_status: 'FAILED',
+      compensation_error: error.message,
+    };
   }
 };
 ```
@@ -1585,6 +1877,9 @@ import * as stepfunctions from 'aws-cdk-lib/aws-stepfunctions';
 import * as stepfunctionsTasks from 'aws-cdk-lib/aws-stepfunctions-tasks';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as cognito from 'aws-cdk-lib/aws-cognito';
+import * as s3 from 'aws-cdk-lib/aws-s3';
+import * as sqs from 'aws-cdk-lib/aws-sqs';
+import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import { Construct } from 'constructs';
 
 export interface ExecutionInfrastructureProps {
@@ -1594,6 +1889,7 @@ export interface ExecutionInfrastructureProps {
   readonly tenantsTable: dynamodb.Table;
   readonly userPool?: cognito.IUserPool; // For JWT auth
   readonly region?: string;
+  readonly artifactsBucket?: s3.IBucket; // For raw response artifacts (optional, can reuse existing)
 }
 
 export class ExecutionInfrastructure extends Construct {
@@ -1609,12 +1905,24 @@ export class ExecutionInfrastructure extends Construct {
   public readonly toolMapperHandler: lambda.Function;
   public readonly toolInvokerHandler: lambda.Function;
   public readonly executionRecorderHandler: lambda.Function;
+  public readonly compensationHandler: lambda.Function;
+  
+  // Dead Letter Queues
+  public readonly executionStarterDlq: sqs.Queue;
+  public readonly executionValidatorDlq: sqs.Queue;
+  public readonly toolMapperDlq: sqs.Queue;
+  public readonly toolInvokerDlq: sqs.Queue;
+  public readonly executionRecorderDlq: sqs.Queue;
+  public readonly compensationDlq: sqs.Queue;
   
   // Step Functions
   public readonly executionStateMachine: stepfunctions.StateMachine;
   
   // EventBridge Rule
   public readonly executionTriggerRule: events.Rule;
+  
+  // S3 Bucket (for raw response artifacts)
+  public readonly executionArtifactsBucket?: s3.IBucket;
 
   constructor(scope: Construct, id: string, props: ExecutionInfrastructureProps) {
     super(scope, id);
@@ -1625,18 +1933,48 @@ export class ExecutionInfrastructure extends Construct {
     this.actionTypeRegistryTable = this.createActionTypeRegistryTable();
     this.externalWriteDedupeTable = this.createExternalWriteDedupeTable();
     
-    // 2. Create Lambda Functions
+    // 2. Create Dead Letter Queues
+    this.executionStarterDlq = this.createDlq('ExecutionStarterDlq', 'cc-native-execution-starter-handler-dlq');
+    this.executionValidatorDlq = this.createDlq('ExecutionValidatorDlq', 'cc-native-execution-validator-handler-dlq');
+    this.toolMapperDlq = this.createDlq('ToolMapperDlq', 'cc-native-tool-mapper-handler-dlq');
+    this.toolInvokerDlq = this.createDlq('ToolInvokerDlq', 'cc-native-tool-invoker-handler-dlq');
+    this.executionRecorderDlq = this.createDlq('ExecutionRecorderDlq', 'cc-native-execution-recorder-handler-dlq');
+    this.compensationDlq = this.createDlq('CompensationDlq', 'cc-native-compensation-handler-dlq');
+    
+    // 3. Create Lambda Functions
     this.executionStarterHandler = this.createExecutionStarterHandler(props);
     this.executionValidatorHandler = this.createExecutionValidatorHandler(props);
     this.toolMapperHandler = this.createToolMapperHandler(props);
     this.toolInvokerHandler = this.createToolInvokerHandler(props);
     this.executionRecorderHandler = this.createExecutionRecorderHandler(props);
+    this.compensationHandler = this.createCompensationHandler(props);
     
-    // 3. Create Step Functions State Machine
+    // 4. Create S3 Bucket (if not provided)
+    if (!props.artifactsBucket) {
+      this.executionArtifactsBucket = new s3.Bucket(this, 'ExecutionArtifactsBucket', {
+        bucketName: `cc-native-execution-artifacts-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}`,
+        versioned: true,
+        encryption: s3.BucketEncryption.S3_MANAGED,
+      });
+    } else {
+      this.executionArtifactsBucket = props.artifactsBucket;
+    }
+    
+    // 5. Create Step Functions State Machine
     this.executionStateMachine = this.createExecutionStateMachine();
     
-    // 4. Create EventBridge Rule (ACTION_APPROVED → Step Functions)
+    // 6. Create EventBridge Rule (ACTION_APPROVED → Step Functions)
     this.executionTriggerRule = this.createExecutionTriggerRule(props);
+    
+    // 7. Create CloudWatch alarms
+    this.createCloudWatchAlarms();
+  }
+
+  private createDlq(id: string, queueName: string): sqs.Queue {
+    return new sqs.Queue(this, id, {
+      queueName,
+      retentionPeriod: cdk.Duration.days(14),
+    });
   }
 
   private createExecutionAttemptsTable(): dynamodb.Table {
@@ -1675,7 +2013,7 @@ export class ExecutionInfrastructure extends Construct {
   }
 
   private createActionTypeRegistryTable(): dynamodb.Table {
-    return new dynamodb.Table(this, 'ActionTypeRegistryTable', {
+    const table = new dynamodb.Table(this, 'ActionTypeRegistryTable', {
       tableName: 'cc-native-action-type-registry',
       partitionKey: { name: 'pk', type: dynamodb.AttributeType.STRING },
       sortKey: { name: 'sk', type: dynamodb.AttributeType.STRING },
@@ -1684,6 +2022,15 @@ export class ExecutionInfrastructure extends Construct {
         pointInTimeRecoveryEnabled: true,
       },
     });
+    
+    // Add GSI for querying latest version by created_at
+    table.addGlobalSecondaryIndex({
+      indexName: 'created-at-index',
+      partitionKey: { name: 'pk', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'created_at', type: dynamodb.AttributeType.STRING },
+    });
+    
+    return table;
   }
 
   private createExternalWriteDedupeTable(): dynamodb.Table {
@@ -1710,6 +2057,9 @@ export class ExecutionInfrastructure extends Construct {
         LEDGER_TABLE_NAME: props.ledgerTable.tableName,
         AWS_REGION: props.region || 'us-west-2',
       },
+      deadLetterQueue: this.executionStarterDlq,
+      deadLetterQueueEnabled: true,
+      retryAttempts: 2,
     });
     
     // Grant permissions
@@ -1733,6 +2083,9 @@ export class ExecutionInfrastructure extends Construct {
         TENANTS_TABLE_NAME: props.tenantsTable.tableName,
         AWS_REGION: props.region || 'us-west-2',
       },
+      deadLetterQueue: this.executionValidatorDlq,
+      deadLetterQueueEnabled: true,
+      retryAttempts: 2,
     });
     
     // Grant permissions
@@ -1755,6 +2108,9 @@ export class ExecutionInfrastructure extends Construct {
         AGENTCORE_GATEWAY_URL: process.env.AGENTCORE_GATEWAY_URL || '', // TODO: Get from Gateway construct
         AWS_REGION: props.region || 'us-west-2',
       },
+      deadLetterQueue: this.toolMapperDlq,
+      deadLetterQueueEnabled: true,
+      retryAttempts: 2,
     });
     
     // Grant permissions
@@ -1781,12 +2137,21 @@ export class ExecutionInfrastructure extends Construct {
       runtime: lambda.Runtime.NODEJS_20_X,
       timeout: cdk.Duration.seconds(60), // Longer timeout for external calls
       environment: {
+        EXECUTION_ARTIFACTS_BUCKET: this.executionArtifactsBucket?.bucketName || '',
         AWS_REGION: props.region || 'us-west-2',
       },
+      deadLetterQueue: this.toolInvokerDlq,
+      deadLetterQueueEnabled: true,
+      retryAttempts: 2,
     });
     
-    // Grant VPC permissions (if Gateway requires VPC)
     // Grant S3 permissions (for raw response artifacts)
+    if (this.executionArtifactsBucket) {
+      this.executionArtifactsBucket.grantWrite(handler);
+    }
+    
+    // Grant VPC permissions (if Gateway requires VPC)
+    // Note: Add VPC configuration if Gateway is in VPC
     
     return handler;
   }
@@ -1802,16 +2167,72 @@ export class ExecutionInfrastructure extends Construct {
         EXECUTION_OUTCOMES_TABLE_NAME: this.executionOutcomesTable.tableName,
         EXECUTION_ATTEMPTS_TABLE_NAME: this.executionAttemptsTable.tableName,
         LEDGER_TABLE_NAME: props.ledgerTable.tableName,
+        SIGNALS_TABLE_NAME: process.env.SIGNALS_TABLE_NAME || 'cc-native-signals',
+        ACCOUNTS_TABLE_NAME: process.env.ACCOUNTS_TABLE_NAME || 'cc-native-accounts',
+        EVENT_BUS_NAME: props.eventBus.eventBusName,
         AWS_REGION: props.region || 'us-west-2',
       },
+      deadLetterQueue: this.executionRecorderDlq,
+      deadLetterQueueEnabled: true,
+      retryAttempts: 2,
     });
     
     // Grant permissions
     this.executionOutcomesTable.grantWriteData(handler);
     this.executionAttemptsTable.grantWriteData(handler);
     props.ledgerTable.grantWriteData(handler);
+    props.eventBus.grantPutEventsTo(handler);
     
     return handler;
+  }
+
+  private createCompensationHandler(props: ExecutionInfrastructureProps): lambda.Function {
+    const handler = new lambdaNodejs.NodejsFunction(this, 'CompensationHandler', {
+      functionName: 'cc-native-compensation-handler',
+      entry: 'src/handlers/phase4/compensation-handler.ts',
+      handler: 'handler',
+      runtime: lambda.Runtime.NODEJS_20_X,
+      timeout: cdk.Duration.seconds(60),
+      environment: {
+        ACTION_INTENT_TABLE_NAME: props.actionIntentTable.tableName,
+        ACTION_TYPE_REGISTRY_TABLE_NAME: this.actionTypeRegistryTable.tableName,
+        EXECUTION_OUTCOMES_TABLE_NAME: this.executionOutcomesTable.tableName,
+        EXTERNAL_WRITE_DEDUPE_TABLE_NAME: this.externalWriteDedupeTable.tableName,
+        AWS_REGION: props.region || 'us-west-2',
+      },
+      deadLetterQueue: this.compensationDlq,
+      deadLetterQueueEnabled: true,
+      retryAttempts: 2,
+    });
+    
+    // Grant permissions
+    props.actionIntentTable.grantReadData(handler);
+    this.actionTypeRegistryTable.grantReadData(handler);
+    this.executionOutcomesTable.grantReadWriteData(handler);
+    this.externalWriteDedupeTable.grantReadData(handler);
+    
+    return handler;
+  }
+
+  /**
+   * Create CloudWatch alarms for execution monitoring
+   */
+  private createCloudWatchAlarms(): void {
+    // Alarm for execution failures
+    new cloudwatch.Alarm(this, 'ExecutionFailureAlarm', {
+      metric: this.executionStateMachine.metricFailed(),
+      threshold: 5,
+      evaluationPeriods: 1,
+      alarmDescription: 'Alert when execution failures exceed threshold',
+    });
+    
+    // Alarm for execution duration
+    new cloudwatch.Alarm(this, 'ExecutionDurationAlarm', {
+      metric: this.executionStateMachine.metricExecutionTime(),
+      threshold: 300000, // 5 minutes
+      evaluationPeriods: 1,
+      alarmDescription: 'Alert when execution duration exceeds threshold',
+    });
   }
 
   private createExecutionStateMachine(): stepfunctions.StateMachine {
@@ -1850,16 +2271,54 @@ export class ExecutionInfrastructure extends Construct {
       outputPath: '$',
       retryOnServiceExceptions: true,
     }).addRetry({
-      errors: ['States.TaskFailed'],
+      errors: ['TransientError'],
       interval: cdk.Duration.seconds(2),
       maxAttempts: 3,
       backoffRate: 2.0,
+    });
+    
+    // COMPENSATE_ACTION (for permanent errors)
+    const compensateAction = new stepfunctionsTasks.LambdaInvoke(this, 'CompensateAction', {
+      lambdaFunction: this.compensationHandler,
+      outputPath: '$',
     });
     
     // RECORD_OUTCOME
     const recordOutcome = new stepfunctionsTasks.LambdaInvoke(this, 'RecordOutcome', {
       lambdaFunction: this.executionRecorderHandler,
       outputPath: '$',
+    });
+    
+    // RECORD_FAILURE (for errors in early states)
+    const recordFailure = new stepfunctionsTasks.LambdaInvoke(this, 'RecordFailure', {
+      lambdaFunction: this.executionRecorderHandler,
+      outputPath: '$',
+    });
+    
+    // Add error handling
+    startExecution.addCatch(recordFailure, {
+      errors: ['States.ALL'],
+      resultPath: '$.error',
+    });
+    
+    validatePreflight.addCatch(recordFailure, {
+      errors: ['States.ALL'],
+      resultPath: '$.error',
+    });
+    
+    mapActionToTool.addCatch(recordFailure, {
+      errors: ['States.ALL'],
+      resultPath: '$.error',
+    });
+    
+    invokeTool.addCatch(compensateAction, {
+      errors: ['PermanentError'],
+      resultPath: '$.error',
+    });
+    
+    invokeTool.addCatch(recordFailure, {
+      errors: ['States.ALL'],
+      resultPath: '$.error',
     });
     
     // Build chain
@@ -1880,6 +2339,7 @@ export class ExecutionInfrastructure extends Construct {
     });
     
     // Trigger Step Functions with action_intent_id
+    // Note: Execution name uses action_intent_id for idempotency (Step Functions enforces uniqueness)
     rule.addTarget(new eventsTargets.SfnStateMachine(this.executionStateMachine, {
       input: events.RuleTargetInput.fromObject({
         action_intent_id: events.EventField.fromPath('$.detail.data.action_intent_id'),
@@ -1887,6 +2347,9 @@ export class ExecutionInfrastructure extends Construct {
         account_id: events.EventField.fromPath('$.detail.data.account_id'),
       }),
     }));
+    
+    // Grant Step Functions permission to be invoked by EventBridge
+    this.executionStateMachine.grantStartExecution(new iam.ServicePrincipal('events.amazonaws.com'));
     
     return rule;
   }
@@ -2074,6 +2537,8 @@ export class ExecutionInfrastructure extends Construct {
 ```typescript
 import { MCPToolInvocation, MCPResponse } from '../../types/MCPTypes';
 
+// Note: MCPTypes.ts must be created first (see Type Definitions section)
+
 /**
  * Connector Adapter Interface
  * All adapters must implement this interface
@@ -2121,14 +2586,14 @@ export class InternalConnectorAdapter implements IConnectorAdapter {
   ) {}
 
   async execute(invocation: MCPToolInvocation): Promise<MCPResponse> {
-    const { name, arguments: args } = invocation.params;
+    const { name, arguments: args, id } = invocation.params;
     
     if (name === 'internal.create_note') {
-      return await this.createNote(args);
+      return await this.createNote(args, id);
     }
     
     if (name === 'internal.create_task') {
-      return await this.createTask(args);
+      return await this.createTask(args, id);
     }
     
     throw new Error(`Unknown tool: ${name}`);
@@ -2139,7 +2604,7 @@ export class InternalConnectorAdapter implements IConnectorAdapter {
     return { valid: true };
   }
 
-  private async createNote(args: Record<string, any>): Promise<MCPResponse> {
+  private async createNote(args: Record<string, any>, invocationId: string): Promise<MCPResponse> {
     // Create internal note in DynamoDB
     const noteId = `note_${Date.now()}_${Math.random().toString(36).substring(7)}`;
     
@@ -2147,7 +2612,7 @@ export class InternalConnectorAdapter implements IConnectorAdapter {
     
     return {
       jsonrpc: '2.0',
-      id: invocation.id,
+      id: invocationId, // Use parameter instead of invocation.id (fix scope issue)
       result: {
         content: [{
           type: 'text',
@@ -2161,9 +2626,26 @@ export class InternalConnectorAdapter implements IConnectorAdapter {
     };
   }
 
-  private async createTask(args: Record<string, any>): Promise<MCPResponse> {
+  private async createTask(args: Record<string, any>, invocationId: string): Promise<MCPResponse> {
     // Similar to createNote
-    // ...
+    const taskId = `task_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+    
+    // TODO: Write to internal tasks table
+    
+    return {
+      jsonrpc: '2.0',
+      id: invocationId,
+      result: {
+        content: [{
+          type: 'text',
+          text: JSON.stringify({
+            success: true,
+            external_object_id: taskId,
+            object_type: 'Task',
+          }),
+        }],
+      },
+    };
   }
 }
 ```
@@ -2332,6 +2814,9 @@ export class CrmConnectorAdapter implements IConnectorAdapter {
 
 ### Phase 4.1: Foundation
 - [ ] Create `src/types/ExecutionTypes.ts`
+- [ ] Create `src/types/MCPTypes.ts` (MCP protocol types)
+- [ ] Update `src/types/LedgerTypes.ts` (add EXECUTION_STARTED, ACTION_EXECUTED, ACTION_FAILED)
+- [ ] Update `src/services/decision/ActionIntentService.ts` (make getIntent() public)
 - [ ] Create `src/services/execution/ExecutionAttemptService.ts`
 - [ ] Create `src/services/execution/ActionTypeRegistryService.ts`
 - [ ] Create `src/services/execution/IdempotencyService.ts`
@@ -2339,30 +2824,34 @@ export class CrmConnectorAdapter implements IConnectorAdapter {
 - [ ] Create `src/services/execution/KillSwitchService.ts`
 - [ ] Create `src/handlers/phase4/execution-starter-handler.ts`
 - [ ] Create `src/handlers/phase4/execution-validator-handler.ts`
-- [ ] Create DynamoDB tables in CDK
+- [ ] Create DynamoDB tables in CDK (with GSI for ActionTypeRegistry)
 - [ ] Unit tests for services
 
 ### Phase 4.2: Orchestration
 - [ ] Create `src/handlers/phase4/tool-mapper-handler.ts`
 - [ ] Create `src/handlers/phase4/tool-invoker-handler.ts`
 - [ ] Create `src/handlers/phase4/execution-recorder-handler.ts`
-- [ ] Create Step Functions state machine in CDK
+- [ ] Create `src/handlers/phase4/compensation-handler.ts`
+- [ ] Create Step Functions state machine in CDK (with error handling)
 - [ ] Create EventBridge rule (ACTION_APPROVED → Step Functions)
+- [ ] Add DLQs for all Lambda functions
 - [ ] Integration tests for orchestration
 
 ### Phase 4.3: Connectors
 - [ ] Create `src/adapters/IConnectorAdapter.ts`
 - [ ] Create `src/adapters/internal/InternalConnectorAdapter.ts`
 - [ ] Create `src/adapters/crm/CrmConnectorAdapter.ts`
-- [ ] Set up AgentCore Gateway (CDK)
+- [ ] Set up AgentCore Gateway (CDK or L1 construct)
 - [ ] Register adapters as Gateway targets
+- [ ] Seed initial ActionTypeRegistry entries
 - [ ] Integration tests for connectors
 
 ### Phase 4.4: Safety & Outcomes
 - [ ] Implement kill switch checks
-- [ ] Implement signal emission
-- [ ] Create execution status API handler
-- [ ] Add CloudWatch alarms
+- [ ] Implement signal emission (in execution-recorder-handler)
+- [ ] Create execution status API handler (`src/handlers/phase4/execution-status-api-handler.ts`)
+- [ ] Add CloudWatch alarms (in CDK)
+- [ ] Add S3 bucket for raw response artifacts
 - [ ] End-to-end tests
 
 ### Phase 4.5: Testing & Polish
