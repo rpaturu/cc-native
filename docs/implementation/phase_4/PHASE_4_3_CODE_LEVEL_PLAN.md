@@ -211,7 +211,7 @@ export class CrmConnectorAdapter implements IConnectorAdapter {
   ) {}
 
   async execute(invocation: MCPToolInvocation): Promise<MCPResponse> {
-    const { name, arguments: args } = invocation.params;
+    const { name, arguments: args, id } = invocation.params;
     const idempotencyKey = args.idempotency_key;
     
     // Check external write dedupe (adapter-level idempotency)
@@ -226,7 +226,7 @@ export class CrmConnectorAdapter implements IConnectorAdapter {
       // Already executed, return existing result
       return {
         jsonrpc: '2.0',
-        id: invocation.id,
+        id: id, // Use parameter from invocation.params
         result: {
           content: [{
             type: 'text',
@@ -241,7 +241,7 @@ export class CrmConnectorAdapter implements IConnectorAdapter {
     }
     
     if (name === 'crm.create_task') {
-      return await this.createTask(args, idempotencyKey, invocation.id);
+      return await this.createTask(args, idempotencyKey, id);
     }
     
     throw new Error(`Unknown tool: ${name}`);
@@ -295,7 +295,7 @@ export class CrmConnectorAdapter implements IConnectorAdapter {
     
     return {
       jsonrpc: '2.0',
-      id: invocationId,
+      id: invocationId, // Use parameter instead of invocation.id
       result: {
         content: [{
           type: 'text',
