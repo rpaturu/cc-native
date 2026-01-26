@@ -1709,9 +1709,11 @@ private createExecutionTriggerRule(
 
 **File:** `src/stacks/constructs/ExecutionInfrastructure.ts` (in `buildStateMachineDefinition` method)
 
-**Note:** The Step Functions state machine is built programmatically in CDK using `stepfunctionsTasks.LambdaInvoke` with Lambda function references. Function names come from `config.functionNames.*`. The JSON below is for reference only - the actual implementation uses CDK constructs.
+**Note:** The Step Functions state machine is built programmatically in CDK using `stepfunctionsTasks.LambdaInvoke` with Lambda function references. Function names come from `config.functionNames.*`. 
 
-**State Machine JSON (for reference only - actual implementation uses CDK):**
+**IMPORTANT:** The CDK code above (`buildStateMachineDefinition()`) is the canonical definition. The JSON below is for reference only to show the equivalent Step Functions JSON structure. Always refer to the CDK code for the actual implementation.
+
+**State Machine JSON (for reference only - matches CDK implementation above):**
 
 ```json
 {
