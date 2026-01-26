@@ -178,7 +178,14 @@ export const handler: Handler = async (event: unknown) => {
     const intent = await actionIntentService.getIntent(action_intent_id, tenant_id, account_id);
     
     if (!intent) {
-      throw new Error(`ActionIntent not found: ${action_intent_id}`);
+      // Use typed error for SFN-friendly classification
+      const error = new Error(
+        `ActionIntent not found: ${action_intent_id}. ` +
+        `This may indicate the intent was deleted or the tenant/account combination is invalid. ` +
+        `Check ActionIntent table for ACTION_INTENT#${action_intent_id} with tenant_id=${tenant_id}, account_id=${account_id}.`
+      );
+      error.name = 'ValidationError'; // SFN will route to failure recorder, not retry
+      throw error;
     }
     
     // 2. Get tool mapping from registry using registry_version (from starter handler output)
@@ -1313,7 +1320,14 @@ export const handler: Handler = async (event: {
     const intent = await actionIntentService.getIntent(action_intent_id, tenant_id, account_id);
     
     if (!intent) {
-      throw new Error(`ActionIntent not found: ${action_intent_id}`);
+      // Use typed error for SFN-friendly classification
+      const error = new Error(
+        `ActionIntent not found: ${action_intent_id}. ` +
+        `This may indicate the intent was deleted or the tenant/account combination is invalid. ` +
+        `Check ActionIntent table for ACTION_INTENT#${action_intent_id} with tenant_id=${tenant_id}, account_id=${account_id}.`
+      );
+      error.name = 'ValidationError'; // SFN will route to failure recorder, not retry
+      throw error;
     }
     
     // 2. Get tool mapping to determine compensation strategy
