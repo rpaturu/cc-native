@@ -291,6 +291,7 @@ export class CrmConnectorAdapter implements IConnectorAdapter {
     // Check external write dedupe (adapter-level idempotency)
     // Note: checkExternalWriteDedupe currently returns string (external_object_id)
     // Future enhancement: Return external_object_refs[] array for consistency
+    // ✅ IdempotencyService has no constructor parameters (static utility methods)
     const idempotencyService = new IdempotencyService();
     const existingObjectId = await idempotencyService.checkExternalWriteDedupe(
       this.dynamoClient,
@@ -395,11 +396,13 @@ export class CrmConnectorAdapter implements IConnectorAdapter {
           // ... other fields
         },
         {
-          headers: {
-            'Authorization': `Bearer ${oauthToken}`,
-            'Content-Type': 'application/json',
-            'Idempotency-Key': idempotencyKey, // If Salesforce supports it
-          },
+        headers: {
+          'Authorization': `Bearer ${oauthToken}`,
+          'Content-Type': 'application/json',
+          // ✅ Note: Idempotency-Key header is best-effort (Salesforce may or may not support it)
+          // Dedupe in DynamoDB (external_write_dedupe table) is authoritative - do not rely on Salesforce idempotency
+          'Idempotency-Key': idempotencyKey,
+        },
         }
       );
     } catch (error: any) {
@@ -426,6 +429,7 @@ export class CrmConnectorAdapter implements IConnectorAdapter {
     }
     
     // Record external write dedupe
+    // ✅ IdempotencyService has no constructor parameters (static utility methods)
     const idempotencyService = new IdempotencyService();
     await idempotencyService.recordExternalWriteDedupe(
       this.dynamoClient,
@@ -500,38 +504,17 @@ private createAgentCoreGateway(props: ExecutionInfrastructureProps): void {
     description: 'Role for AgentCore Gateway execution',
   });
 
-  // ✅ MUST-FIX: Use single deterministic approach (AwsCustomResource)
-  // CloudFormation resource type may not be available in all regions/accounts
-  // AwsCustomResource is more reliable and consistent across regions
+  // ✅ MUST-FIX: Use single deterministic approach (AwsCustomResource-only)
+  // Option A (Recommended): Use AwsCustomResource with built-in provider
+  // AwsCustomResource provisions its own provider Lambda internally - no need for cr.Provider
   // 
-  // Note: If AWS::BedrockAgentCore::Gateway CFN resource is confirmed available in your region,
-  // you can use L1 CfnResource instead, but AwsCustomResource is the safer default.
-
-  const gatewayProvider = new cr.Provider(this, 'GatewayProvider', {
-    onEventHandler: new lambdaNodejs.NodejsFunction(this, 'GatewayHandler', {
-      runtime: lambda.Runtime.NODEJS_20_X,
-      entry: 'src/lambdas/gateway-setup-handler.ts', // Custom Lambda for Gateway setup
-      timeout: cdk.Duration.minutes(5),
-    }),
-  });
-
-  // Grant permissions to create Gateway
-  gatewayProvider.onEventHandler.addToRolePolicy(
-    new iam.PolicyStatement({
-      actions: [
-        'bedrock-agentcore:CreateGateway',
-        'bedrock-agentcore:GetGateway',
-        'bedrock-agentcore:UpdateGateway',
-        'bedrock-agentcore:DeleteGateway',
-      ],
-      resources: ['*'],
-    })
-  );
-
+  // Note: Verify service/action names against AWS SDK v3 client for @aws-sdk/client-bedrock-agentcore
+  // If service name doesn't match, use Option B (custom provider Lambda) instead
+  
   const gatewayCustomResource = new customResources.AwsCustomResource(this, 'ExecutionGateway', {
     onCreate: {
-      service: 'BedrockAgentCore',
-      action: 'createGateway',
+      service: 'BedrockAgentCore', // ⚠️ Verify this matches AWS SDK v3 service name
+      action: 'createGateway',     // ⚠️ Verify this matches AWS SDK v3 action name
       parameters: {
         Name: 'cc-native-execution-gateway',
         ProtocolType: 'MCP',
@@ -564,12 +547,52 @@ private createAgentCoreGateway(props: ExecutionInfrastructureProps): void {
     policy: cr.AwsCustomResourcePolicy.fromSdkCalls({
       resources: cr.AwsCustomResourcePolicy.ANY_RESOURCE,
     }),
-    provider: gatewayProvider,
+    // ✅ No provider parameter - AwsCustomResource uses its own built-in provider
   });
 
   this.executionGateway = gatewayCustomResource;
   // Get Gateway URL from custom resource response
   this.gatewayUrl = gatewayCustomResource.getResponseField('GatewayUrl').toString();
+
+  // Alternative Option B: If AwsCustomResource service name doesn't match AWS SDK, use custom provider:
+  /*
+  const gatewayProvider = new cr.Provider(this, 'GatewayProvider', {
+    onEventHandler: new lambdaNodejs.NodejsFunction(this, 'GatewayHandler', {
+      runtime: lambda.Runtime.NODEJS_20_X,
+      entry: 'src/lambdas/gateway-setup-handler.ts', // Custom Lambda that calls AWS SDK directly
+      timeout: cdk.Duration.minutes(5),
+      environment: {
+        USER_POOL_CLIENT_ID: props.userPool?.userPoolClientId || '',
+        USER_POOL_PROVIDER_URL: props.userPool?.userPoolProviderUrl || '',
+        GATEWAY_ROLE_ARN: gatewayRole.roleArn,
+      },
+    }),
+  });
+
+  gatewayProvider.onEventHandler.addToRolePolicy(
+    new iam.PolicyStatement({
+      actions: [
+        'bedrock-agentcore:CreateGateway',
+        'bedrock-agentcore:GetGateway',
+        'bedrock-agentcore:UpdateGateway',
+        'bedrock-agentcore:DeleteGateway',
+      ],
+      resources: ['*'],
+    })
+  );
+
+  const gatewayCustomResource = new cr.CustomResource(this, 'ExecutionGateway', {
+    serviceToken: gatewayProvider.serviceToken,
+    properties: {
+      Name: 'cc-native-execution-gateway',
+      ProtocolType: 'MCP',
+      AuthorizerType: 'CUSTOM_JWT',
+    },
+  });
+
+  this.executionGateway = gatewayCustomResource;
+  this.gatewayUrl = gatewayCustomResource.getAtt('GatewayUrl').toString();
+  */
 
   // Alternative: If CloudFormation resource type is confirmed available in your region, use L1 construct:
   /*
@@ -605,38 +628,14 @@ private registerGatewayTarget(
     ? this.executionGateway.getAtt('GatewayId').toString()
     : (this.executionGateway as customResources.AwsCustomResource).getResponseField('GatewayId');
 
-  // Use AwsCustomResource to register target (Gateway target registration via SDK)
-  const targetProvider = new cr.Provider(this, `GatewayTargetProvider-${toolName}`, {
-    onEventHandler: new lambdaNodejs.NodejsFunction(this, `GatewayTargetHandler-${toolName}`, {
-      runtime: lambda.Runtime.NODEJS_20_X,
-      entry: 'src/lambdas/gateway-target-handler.ts', // Custom Lambda for target registration
-      timeout: cdk.Duration.minutes(2),
-      environment: {
-        GATEWAY_ID: gatewayId,
-        LAMBDA_ARN: adapterLambda.functionArn,
-        TOOL_NAME: toolName,
-        TOOL_SCHEMA: JSON.stringify(toolSchema),
-      },
-    }),
-  });
-
-  // Grant permissions
-  targetProvider.onEventHandler.addToRolePolicy(
-    new iam.PolicyStatement({
-      actions: [
-        'bedrock-agentcore:CreateGatewayTarget',
-        'bedrock-agentcore:UpdateGatewayTarget',
-        'bedrock-agentcore:DeleteGatewayTarget',
-      ],
-      resources: ['*'],
-    })
-  );
-  adapterLambda.grantInvoke(targetProvider.onEventHandler);
-
+  // ✅ MUST-FIX: Use AwsCustomResource-only approach (no separate Provider)
+  // AwsCustomResource provisions its own provider Lambda internally
+  // Note: Verify service/action names against AWS SDK v3 client for @aws-sdk/client-bedrock-agentcore
+  
   new customResources.AwsCustomResource(this, `GatewayTarget-${toolName}`, {
     onCreate: {
-      service: 'BedrockAgentCore',
-      action: 'createGatewayTarget',
+      service: 'BedrockAgentCore', // ⚠️ Verify this matches AWS SDK v3 service name
+      action: 'createGatewayTarget', // ⚠️ Verify this matches AWS SDK v3 action name
       parameters: {
         GatewayId: gatewayId,
         TargetConfiguration: {
@@ -668,7 +667,13 @@ private registerGatewayTarget(
     policy: cr.AwsCustomResourcePolicy.fromSdkCalls({
       resources: cr.AwsCustomResourcePolicy.ANY_RESOURCE,
     }),
-    provider: targetProvider,
+    // ✅ No provider parameter - AwsCustomResource uses its own built-in provider
+  });
+
+  // Grant Lambda invoke permission to Gateway (if needed)
+  adapterLambda.addPermission('AllowGatewayInvoke', {
+    principal: new iam.ServicePrincipal('bedrock.amazonaws.com'),
+    sourceArn: `arn:aws:bedrock-agentcore:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:gateway/${gatewayId}/*`,
   });
 }
 ```
@@ -694,7 +699,11 @@ constructor(scope: Construct, id: string, props: ExecutionInfrastructureProps) {
 
 **Note:** Gateway creation and target registration are fully automated via CDK. No manual setup required.
 
-**Approach:** Uses `AwsCustomResource` as the canonical approach (more reliable across regions). If `AWS::BedrockAgentCore::Gateway` CloudFormation resource type is confirmed available in your region, you can use L1 `CfnResource` instead (commented alternative above).
+**Approach:** Uses `AwsCustomResource` as the canonical approach (more reliable across regions). 
+
+**⚠️ Important:** Verify service/action names (`BedrockAgentCore`, `createGateway`, etc.) match AWS SDK v3 client for `@aws-sdk/client-bedrock-agentcore`. If service names don't match, use Option B (custom provider Lambda) instead. See `amazon-bedrock-agentcore-samples` in parent folder for reference examples.
+
+**Alternative:** If `AWS::BedrockAgentCore::Gateway` CloudFormation resource type is confirmed available in your region, you can use L1 `CfnResource` instead (commented alternative above).
 
 ---
 
@@ -842,9 +851,22 @@ const connectorsVpc = new ec2.Vpc(this, 'ConnectorsVpc', {
 });
 
 // VPC endpoints for AWS services
-new ec2.InterfaceVpcEndpoint(this, 'DynamoDBEndpoint', {
+// ✅ MUST-FIX: DynamoDB uses Gateway endpoint (not Interface endpoint)
+new ec2.GatewayVpcEndpoint(this, 'DynamoDBEndpoint', {
   vpc: connectorsVpc,
-  service: ec2.InterfaceVpcEndpointAwsService.DYNAMODB,
+  service: ec2.GatewayVpcEndpointAwsService.DYNAMODB,
+});
+
+// S3 also uses Gateway endpoint
+new ec2.GatewayVpcEndpoint(this, 'S3Endpoint', {
+  vpc: connectorsVpc,
+  service: ec2.GatewayVpcEndpointAwsService.S3,
+});
+
+// Interface endpoints for other services (Secrets Manager, KMS, CloudWatch Logs, STS)
+new ec2.InterfaceVpcEndpoint(this, 'SecretsManagerEndpoint', {
+  vpc: connectorsVpc,
+  service: ec2.InterfaceVpcEndpointAwsService.SECRETS_MANAGER,
 });
 
 // Security group per connector
@@ -943,6 +965,9 @@ export class ConnectorConfigService {
    * Strategy:
    * 1. Check DynamoDB connector config table (non-sensitive config like instanceUrl)
    * 2. Check Secrets Manager for sensitive config (API keys, OAuth secrets)
+   * 
+   * ✅ MUST-FIX: Secret naming includes accountId to prevent cross-account config sharing
+   * Secret ID format: tenant/{tenantId}/account/{accountId}/connector/{connectorType}
    */
   async getConnectorConfig(
     tenantId: string,
@@ -964,18 +989,31 @@ export class ConnectorConfigService {
       // ... other non-sensitive fields
     } : {};
 
-    // Get sensitive config from Secrets Manager
+    // ✅ MUST-FIX: Get sensitive config from Secrets Manager (include accountId for account-specific config)
+    // Secret naming: tenant/{tenantId}/account/{accountId}/connector/{connectorType}
+    // This prevents accidental config sharing across accounts within the same tenant
     try {
       const secretResult = await this.secretsClient.send(new GetSecretValueCommand({
-        SecretId: `tenant/${tenantId}/connector/${connectorType}`,
+        SecretId: `tenant/${tenantId}/account/${accountId}/connector/${connectorType}`,
       }));
       const secretData = JSON.parse(secretResult.SecretString || '{}');
       config.apiKey = secretData.apiKey;
       // ... other sensitive fields
     } catch (error: any) {
       if (error.name !== 'ResourceNotFoundException') {
-        this.logger.warn('Failed to retrieve connector secret', { tenantId, connectorType, error: error.message });
+        this.logger.warn('Failed to retrieve connector secret', { tenantId, accountId, connectorType, error: error.message });
       }
+      // If account-specific secret not found, try tenant-global fallback (optional)
+      // Only if connector config is intentionally tenant-global, not account-specific
+      // try {
+      //   const tenantSecret = await this.secretsClient.send(new GetSecretValueCommand({
+      //     SecretId: `tenant/${tenantId}/connector/${connectorType}`,
+      //   }));
+      //   const tenantData = JSON.parse(tenantSecret.SecretString || '{}');
+      //   config.apiKey = tenantData.apiKey;
+      // } catch (fallbackError) {
+      //   // No fallback secret found
+      // }
     }
 
     return Object.keys(config).length > 0 ? config : null;
