@@ -3,6 +3,7 @@
 **Status:** 🟡 **PLANNING**  
 **Created:** 2026-01-26  
 **Last Updated:** 2026-01-26  
+**Reviewed & Updated:** 2026-01-26 (aligned with Phase 4.1/4.2 implementation)  
 **Parent Document:** `PHASE_4_CODE_LEVEL_PLAN.md`  
 **Prerequisites:** Phase 4.1 and 4.2 complete
 
@@ -30,7 +31,10 @@ Phase 4.3 implements connector adapters for external system integration:
 3. CRM adapter (initial)
 4. AgentCore Gateway setup (CDK)
 5. Register adapters as Gateway targets
-6. Seed initial ActionTypeRegistry entries
+6. Update ToolMapper handler to pass `action_intent_id` in tool arguments
+7. Seed initial ActionTypeRegistry entries
+
+**Note:** Task 6 (ToolMapper update) is required for adapters to record external write dedupe. The ToolMapper handler should add `action_intent_id` to `tool_arguments` before passing to ToolInvoker. See Phase 4.2 ToolMapper handler for current implementation.
 
 ---
 
@@ -45,7 +49,7 @@ Phase 4.3 implements connector adapters for external system integration:
 ```typescript
 import { MCPToolInvocation, MCPResponse } from '../../types/MCPTypes';
 
-// Note: MCPTypes.ts must be created first (see Phase 4.1 Type Definitions)
+// Note: MCPTypes.ts was created in Phase 4.1 (see Phase 4.1 Type Definitions)
 
 /**
  * Connector Adapter Interface
@@ -98,14 +102,15 @@ export class InternalConnectorAdapter implements IConnectorAdapter {
   ) {}
 
   async execute(invocation: MCPToolInvocation): Promise<MCPResponse> {
-    const { name, arguments: args, id } = invocation.params;
+    const { name, arguments: args } = invocation.params;
+    const invocationId = invocation.id; // ✅ id is at top level, not in params
     
     if (name === 'internal.create_note') {
-      return await this.createNote(args, id);
+      return await this.createNote(args, invocationId);
     }
     
     if (name === 'internal.create_task') {
-      return await this.createTask(args, id);
+      return await this.createTask(args, invocationId);
     }
     
     throw new Error(`Unknown tool: ${name}`);
@@ -135,14 +140,19 @@ export class InternalConnectorAdapter implements IConnectorAdapter {
     
     return {
       jsonrpc: '2.0',
-      id: invocationId, // Use parameter instead of invocation.id (fix scope issue)
+      id: invocationId,
       result: {
         content: [{
           type: 'text',
           text: JSON.stringify({
             success: true,
-            external_object_id: noteId,
-            object_type: 'Note',
+            external_object_refs: [  // ✅ Preferred: array format per Phase 4.2 contract
+              {
+                system: 'INTERNAL',
+                object_type: 'Note',
+                object_id: noteId,
+              },
+            ],
           }),
         }],
       },
@@ -175,8 +185,13 @@ export class InternalConnectorAdapter implements IConnectorAdapter {
           type: 'text',
           text: JSON.stringify({
             success: true,
-            external_object_id: taskId,
-            object_type: 'Task',
+            external_object_refs: [  // ✅ Preferred: array format per Phase 4.2 contract
+              {
+                system: 'INTERNAL',
+                object_type: 'Task',
+                object_id: taskId,
+              },
+            ],
           }),
         }],
       },
@@ -211,7 +226,8 @@ export class CrmConnectorAdapter implements IConnectorAdapter {
   ) {}
 
   async execute(invocation: MCPToolInvocation): Promise<MCPResponse> {
-    const { name, arguments: args, id } = invocation.params;
+    const { name, arguments: args } = invocation.params;
+    const invocationId = invocation.id; // ✅ id is at top level, not in params
     const idempotencyKey = args.idempotency_key;
     
     // Check external write dedupe (adapter-level idempotency)
@@ -226,14 +242,19 @@ export class CrmConnectorAdapter implements IConnectorAdapter {
       // Already executed, return existing result
       return {
         jsonrpc: '2.0',
-        id: id, // Use parameter from invocation.params
+        id: invocationId,
         result: {
           content: [{
             type: 'text',
             text: JSON.stringify({
               success: true,
-              external_object_id: existingObjectId,
-              object_type: 'Task',
+              external_object_refs: [  // ✅ Preferred: array format per Phase 4.2 contract
+                {
+                  system: 'CRM',
+                  object_type: 'Task',
+                  object_id: existingObjectId,
+                },
+              ],
             }),
           }],
         },
@@ -241,7 +262,7 @@ export class CrmConnectorAdapter implements IConnectorAdapter {
     }
     
     if (name === 'crm.create_task') {
-      return await this.createTask(args, idempotencyKey, id);
+      return await this.createTask(invocation, args, idempotencyKey, invocationId);
     }
     
     throw new Error(`Unknown tool: ${name}`);
@@ -255,13 +276,17 @@ export class CrmConnectorAdapter implements IConnectorAdapter {
   }
 
   private async createTask(
+    invocation: MCPToolInvocation,
     args: Record<string, any>, 
     idempotencyKey: string,
     invocationId: string
   ): Promise<MCPResponse> {
-    // Get OAuth token (from Gateway context)
+    // Get OAuth token (from Gateway identity)
     // Note: Gateway provides OAuth token via invocation.identity.accessToken
-    const oauthToken = args.oauth_token; // Provided by Gateway
+    const oauthToken = invocation.identity?.accessToken;
+    if (!oauthToken) {
+      throw new Error('OAuth token missing from Gateway identity. Ensure Gateway is configured with JWT authorizer.');
+    }
     
     // Call Salesforce REST API
     const response = await axios.post(
@@ -283,27 +308,41 @@ export class CrmConnectorAdapter implements IConnectorAdapter {
     const taskId = response.data.Id;
     
     // Record external write dedupe
+    // Note: action_intent_id should be passed in tool arguments from ToolMapper handler
+    const actionIntentId = args.action_intent_id;
+    if (!actionIntentId) {
+      this.logger.warn('action_intent_id missing from tool arguments', {
+        tool_name: 'crm.create_task',
+        idempotency_key: idempotencyKey,
+      });
+    }
+    
     const idempotencyService = new IdempotencyService();
     await idempotencyService.recordExternalWriteDedupe(
       this.dynamoClient,
       this.dedupeTableName,
       idempotencyKey,
       taskId,
-      args.action_intent_id,
+      actionIntentId || 'unknown', // Fallback if missing
       'crm.create_task'
     );
     
     return {
       jsonrpc: '2.0',
-      id: invocationId, // Use parameter instead of invocation.id
+      id: invocationId,
       result: {
         content: [{
           type: 'text',
           text: JSON.stringify({
             success: true,
-            external_object_id: taskId,
-            object_type: 'Task',
-            object_url: `https://your-instance.salesforce.com/${taskId}`,
+            external_object_refs: [  // ✅ Preferred: array format per Phase 4.2 contract
+              {
+                system: 'CRM',
+                object_type: 'Task',
+                object_id: taskId,
+                object_url: `https://your-instance.salesforce.com/${taskId}`,
+              },
+            ],
           }),
         }],
       },
@@ -332,6 +371,7 @@ export interface ExecutionInfrastructureProps {
 // Add to ExecutionInfrastructure class
 // Note: AgentCore Gateway CDK construct may not exist yet
 // If not available, use L1 CfnResource or AWS SDK calls
+// This is expected - Gateway setup will be finalized when CDK constructs are available
 
 /**
  * Create AgentCore Gateway (if CDK construct exists)
@@ -387,81 +427,94 @@ private registerGatewayTarget(
 
 ## 5. ActionTypeRegistry Seed Data
 
-### File: `scripts/phase_4/seed-action-type-registry.sh`
+### File: `src/scripts/seed-action-type-registry.ts`
 
-**Purpose:** Seed initial ActionTypeRegistry entries
+**Purpose:** Seed initial ActionTypeRegistry entries using TypeScript service
+
+**Note:** Use `ActionTypeRegistryService.registerMapping()` method instead of raw DynamoDB commands to ensure:
+- Correct key structure (`sk: "REGISTRY_VERSION#1"` not `"VERSION#v1.0"`)
+- Auto-incremented `registry_version` (numeric, not string)
+- Consistency with actual service implementation
 
 **Script:**
 
+```typescript
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
+import { ActionTypeRegistryService } from '../services/execution/ActionTypeRegistryService';
+import { Logger } from '../services/core/Logger';
+import { getAWSClientConfig } from '../utils/aws-client-config';
+
+const logger = new Logger('SeedActionTypeRegistry');
+const region = process.env.AWS_REGION || 'us-west-2';
+const clientConfig = getAWSClientConfig(region);
+const dynamoClient = DynamoDBDocumentClient.from(new DynamoDBClient(clientConfig), {
+  marshallOptions: { removeUndefinedValues: true },
+});
+
+const service = new ActionTypeRegistryService(
+  dynamoClient,
+  process.env.ACTION_TYPE_REGISTRY_TABLE_NAME || 'cc-native-action-type-registry',
+  logger
+);
+
+async function seed() {
+  // CREATE_CRM_TASK → crm.create_task
+  await service.registerMapping({
+    action_type: 'CREATE_CRM_TASK',
+    tool_name: 'crm.create_task',
+    tool_schema_version: 'v1.0',
+    required_scopes: ['salesforce_api'],
+    risk_class: 'LOW',
+    compensation_strategy: 'AUTOMATIC',
+    parameter_mapping: {
+      title: {
+        toolParam: 'title',
+        transform: 'PASSTHROUGH',
+        required: true,
+      },
+      priority: {
+        toolParam: 'priority',
+        transform: 'UPPERCASE',
+        required: false,
+      },
+    },
+  });
+
+  // CREATE_INTERNAL_NOTE → internal.create_note
+  await service.registerMapping({
+    action_type: 'CREATE_INTERNAL_NOTE',
+    tool_name: 'internal.create_note',
+    tool_schema_version: 'v1.0',
+    required_scopes: [],
+    risk_class: 'MINIMAL',
+    compensation_strategy: 'AUTOMATIC',
+    parameter_mapping: {
+      content: {
+        toolParam: 'content',
+        transform: 'PASSTHROUGH',
+        required: true,
+      },
+    },
+  });
+
+  logger.info('ActionTypeRegistry seeded successfully');
+}
+
+seed().catch((error) => {
+  logger.error('Failed to seed ActionTypeRegistry', { error });
+  process.exit(1);
+});
+```
+
+**Usage:**
 ```bash
-#!/bin/bash
-# Seed initial ActionTypeRegistry entries
+# Set environment variables
+export AWS_REGION=us-west-2
+export ACTION_TYPE_REGISTRY_TABLE_NAME=cc-native-action-type-registry
 
-REGION=${AWS_REGION:-us-west-2}
-TABLE_NAME="cc-native-action-type-registry"
-
-# Example: CREATE_CRM_TASK → crm.create_task
-aws dynamodb put-item \
-  --region $REGION \
-  --table-name $TABLE_NAME \
-  --item '{
-    "pk": {"S": "ACTION_TYPE#CREATE_CRM_TASK"},
-    "sk": {"S": "VERSION#v1.0"},
-    "action_type": {"S": "CREATE_CRM_TASK"},
-    "tool_name": {"S": "crm.create_task"},
-    "tool_schema_version": {"S": "v1.0"},
-    "required_scopes": {"SS": ["salesforce_api"]},
-    "risk_class": {"S": "LOW"},
-    "compensation_strategy": {"S": "AUTOMATIC"},
-    "parameter_mapping": {
-      "M": {
-        "title": {
-          "M": {
-            "toolParam": {"S": "title"},
-            "transform": {"S": "PASSTHROUGH"},
-            "required": {"BOOL": true}
-          }
-        },
-        "priority": {
-          "M": {
-            "toolParam": {"S": "priority"},
-            "transform": {"S": "UPPERCASE"},
-            "required": {"BOOL": false}
-          }
-        }
-      }
-    },
-    "created_at": {"S": "'$(date -u +%Y-%m-%dT%H:%M:%SZ)'"}
-  }'
-
-# Example: CREATE_INTERNAL_NOTE → internal.create_note
-aws dynamodb put-item \
-  --region $REGION \
-  --table-name $TABLE_NAME \
-  --item '{
-    "pk": {"S": "ACTION_TYPE#CREATE_INTERNAL_NOTE"},
-    "sk": {"S": "VERSION#v1.0"},
-    "action_type": {"S": "CREATE_INTERNAL_NOTE"},
-    "tool_name": {"S": "internal.create_note"},
-    "tool_schema_version": {"S": "v1.0"},
-    "required_scopes": {"SS": []},
-    "risk_class": {"S": "MINIMAL"},
-    "compensation_strategy": {"S": "AUTOMATIC"},
-    "parameter_mapping": {
-      "M": {
-        "content": {
-          "M": {
-            "toolParam": {"S": "content"},
-            "transform": {"S": "PASSTHROUGH"},
-            "required": {"BOOL": true}
-          }
-        }
-      }
-    },
-    "created_at": {"S": "'$(date -u +%Y-%m-%dT%H:%M:%SZ)'"}
-  }'
-
-echo "ActionTypeRegistry seeded successfully"
+# Run seed script
+npx ts-node src/scripts/seed-action-type-registry.ts
 ```
 
 ---
@@ -520,8 +573,15 @@ echo "Gateway target registered: $TOOL_NAME"
 - [ ] Set up AgentCore Gateway (CDK or L1 construct)
 - [ ] Create Lambda functions for adapters (registered as Gateway targets)
 - [ ] Register adapters as Gateway targets
-- [ ] Seed initial ActionTypeRegistry entries
+- [ ] Update ToolMapper handler to pass `action_intent_id` in tool arguments (see note in Phase 4.3 plan)
+- [ ] Seed initial ActionTypeRegistry entries using TypeScript service
 - [ ] Integration tests for connectors
+
+**Note:** Ensure adapters:
+- Use `invocation.id` (not `invocation.params.id`)
+- Use `invocation.identity?.accessToken` for OAuth token
+- Return `external_object_refs` array format (preferred per Phase 4.2 contract)
+- Include `action_intent_id` in tool arguments for idempotency recording
 
 ---
 
