@@ -357,71 +357,232 @@ export class CrmConnectorAdapter implements IConnectorAdapter {
 
 ### File: `src/stacks/constructs/ExecutionInfrastructure.ts` (Phase 4.3 Additions)
 
-**Purpose:** Add AgentCore Gateway configuration
+**Purpose:** Add AgentCore Gateway configuration (fully automated via CDK)
+
+**Approach:** Use CDK L1 construct (`CfnResource`) or `AwsCustomResource` to automate Gateway creation and target registration. No manual setup required.
 
 **Phase 4.3 Additions:**
 
 ```typescript
-// Add to ExecutionInfrastructureProps
+import * as customResources from 'aws-cdk-lib/custom-resources';
+import * as cr from 'aws-cdk-lib/custom-resources';
+
+// Add to ExecutionInfrastructureProps (already exists)
 export interface ExecutionInfrastructureProps {
   // ... existing props ...
-  readonly userPool?: cognito.IUserPool; // For JWT auth
+  readonly userPool?: cognito.IUserPool; // For JWT auth (already exists)
 }
 
 // Add to ExecutionInfrastructure class
-// Note: AgentCore Gateway CDK construct may not exist yet
-// If not available, use L1 CfnResource or AWS SDK calls
-// This is expected - Gateway setup will be finalized when CDK constructs are available
+public readonly executionGateway: cdk.CfnResource | customResources.AwsCustomResource;
+public readonly gatewayUrl: string; // Output: Gateway URL for ToolMapper handler
 
 /**
- * Create AgentCore Gateway (if CDK construct exists)
- * Otherwise, use L1 construct or manual API calls
+ * Create AgentCore Gateway (automated via CDK)
+ * 
+ * Strategy: Try L1 CfnResource first (if CloudFormation supports it),
+ * otherwise use AwsCustomResource (Lambda-backed) to call AWS SDK APIs.
  */
 private createAgentCoreGateway(props: ExecutionInfrastructureProps): void {
-  // Option 1: If CDK construct exists
-  // import * as bedrockAgentCore from '@aws-cdk/aws-bedrock-agentcore-alpha';
-  // 
-  // const executionGateway = new bedrockAgentCore.Gateway(this, 'ExecutionGateway', {
-  //   name: 'cc-native-execution-gateway',
-  //   protocolType: 'MCP',
-  //   authorizerType: 'CUSTOM_JWT',
-  //   authorizerConfiguration: {
-  //     customJWTAuthorizer: {
-  //       allowedClients: [props.userPool?.userPoolClientId || ''],
-  //       discoveryUrl: props.userPool?.userPoolProviderUrl || '',
-  //     },
-  //   },
-  //   roleArn: executionGatewayRole.roleArn,
-  // });
+  // Create IAM role for Gateway (if needed)
+  const gatewayRole = new iam.Role(this, 'ExecutionGatewayRole', {
+    assumedBy: new iam.ServicePrincipal('bedrock.amazonaws.com'),
+    description: 'Role for AgentCore Gateway execution',
+  });
 
-  // Option 2: Use L1 CfnResource (if construct doesn't exist)
-  // const gateway = new cdk.CfnResource(this, 'ExecutionGateway', {
-  //   type: 'AWS::Bedrock::AgentCore::Gateway',
-  //   properties: {
-  //     Name: 'cc-native-execution-gateway',
-  //     ProtocolType: 'MCP',
-  //     AuthorizerType: 'CUSTOM_JWT',
-  //     // ... other properties
-  //   },
-  // });
+  // Option 1: Use L1 CfnResource (CloudFormation resource type exists)
+  // AWS::BedrockAgentCore::Gateway is a valid CloudFormation resource type
+  this.executionGateway = new cdk.CfnResource(this, 'ExecutionGateway', {
+    type: 'AWS::BedrockAgentCore::Gateway',
+    properties: {
+      Name: 'cc-native-execution-gateway',
+      ProtocolType: 'MCP',
+      AuthorizerType: 'CUSTOM_JWT',
+      AuthorizerConfiguration: {
+        CustomJWTAuthorizer: {
+          AllowedClients: props.userPool ? [props.userPool.userPoolClientId] : [],
+          DiscoveryUrl: props.userPool?.userPoolProviderUrl || '',
+        },
+      },
+      RoleArn: gatewayRole.roleArn,
+    },
+  });
 
-  // Option 3: Manual setup via AWS SDK (post-deployment script)
-  // See: scripts/phase_4/setup-agentcore-gateway.sh
+  // Get Gateway URL from CloudFormation output
+  this.gatewayUrl = this.executionGateway.getAtt('GatewayUrl').toString();
+
+  // Note: If L1 construct doesn't work (e.g., resource type not available in your region),
+  // fall back to AwsCustomResource approach (commented out below):
+  /*
+  if (false) { // Set to true if L1 construct fails
+    // Option 2: Use AwsCustomResource (Lambda-backed) if L1 construct doesn't exist
+    // This calls AWS SDK APIs directly via Lambda function
+    const gatewayProvider = new cr.Provider(this, 'GatewayProvider', {
+      onEventHandler: new lambdaNodejs.NodejsFunction(this, 'GatewayHandler', {
+        runtime: lambda.Runtime.NODEJS_20_X,
+        entry: 'src/lambdas/gateway-setup-handler.ts', // Custom Lambda for Gateway setup
+        timeout: cdk.Duration.minutes(5),
+      }),
+    });
+
+    // Grant permissions to create Gateway
+    gatewayProvider.onEventHandler.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: [
+          'bedrock-agentcore:CreateGateway',
+          'bedrock-agentcore:GetGateway',
+          'bedrock-agentcore:UpdateGateway',
+          'bedrock-agentcore:DeleteGateway',
+        ],
+        resources: ['*'],
+      })
+    );
+
+    const gatewayCustomResource = new customResources.AwsCustomResource(this, 'ExecutionGateway', {
+      onCreate: {
+        service: 'BedrockAgentCore',
+        action: 'createGateway',
+        parameters: {
+          Name: 'cc-native-execution-gateway',
+          ProtocolType: 'MCP',
+          AuthorizerType: 'CUSTOM_JWT',
+          AuthorizerConfiguration: {
+            CustomJWTAuthorizer: {
+              AllowedClients: props.userPool ? [props.userPool.userPoolClientId] : [],
+              DiscoveryUrl: props.userPool?.userPoolProviderUrl || '',
+            },
+          },
+          RoleArn: gatewayRole.roleArn,
+        },
+        physicalResourceId: cr.PhysicalResourceId.fromResponse('GatewayId'),
+      },
+      onUpdate: {
+        service: 'BedrockAgentCore',
+        action: 'updateGateway',
+        parameters: {
+          GatewayId: cr.PhysicalResourceId.fromResponse('GatewayId'),
+          // ... update parameters
+        },
+      },
+      onDelete: {
+        service: 'BedrockAgentCore',
+        action: 'deleteGateway',
+        parameters: {
+          GatewayId: cr.PhysicalResourceId.fromResponse('GatewayId'),
+        },
+      },
+      policy: cr.AwsCustomResourcePolicy.fromSdkCalls({
+        resources: cr.AwsCustomResourcePolicy.ANY_RESOURCE,
+      }),
+    });
+
+    this.executionGateway = gatewayCustomResource;
+    // Get Gateway URL from custom resource response
+    this.gatewayUrl = gatewayCustomResource.getResponseField('GatewayUrl');
+  }
+  */
 }
 
 /**
- * Register Lambda adapter as Gateway target
+ * Register Lambda adapter as Gateway target (automated via CDK)
  */
 private registerGatewayTarget(
-  gatewayId: string,
   adapterLambda: lambda.Function,
   toolName: string,
   toolSchema: Record<string, any>
 ): void {
-  // Use AWS SDK or CDK custom resource to register target
-  // See: scripts/phase_4/register-gateway-target.sh
+  const gatewayId = this.executionGateway.getAtt('GatewayId').toString();
+
+  // Use AwsCustomResource to register target (Gateway target registration via SDK)
+  const targetProvider = new cr.Provider(this, `GatewayTargetProvider-${toolName}`, {
+    onEventHandler: new lambdaNodejs.NodejsFunction(this, `GatewayTargetHandler-${toolName}`, {
+      runtime: lambda.Runtime.NODEJS_20_X,
+      entry: 'src/lambdas/gateway-target-handler.ts', // Custom Lambda for target registration
+      timeout: cdk.Duration.minutes(2),
+      environment: {
+        GATEWAY_ID: gatewayId,
+        LAMBDA_ARN: adapterLambda.functionArn,
+        TOOL_NAME: toolName,
+        TOOL_SCHEMA: JSON.stringify(toolSchema),
+      },
+    }),
+  });
+
+  // Grant permissions
+  targetProvider.onEventHandler.addToRolePolicy(
+    new iam.PolicyStatement({
+      actions: [
+        'bedrock-agentcore:CreateGatewayTarget',
+        'bedrock-agentcore:UpdateGatewayTarget',
+        'bedrock-agentcore:DeleteGatewayTarget',
+      ],
+      resources: ['*'],
+    })
+  );
+  adapterLambda.grantInvoke(targetProvider.onEventHandler);
+
+  new customResources.AwsCustomResource(this, `GatewayTarget-${toolName}`, {
+    onCreate: {
+      service: 'BedrockAgentCore',
+      action: 'createGatewayTarget',
+      parameters: {
+        GatewayId: gatewayId,
+        TargetConfiguration: {
+          Lambda: {
+            FunctionArn: adapterLambda.functionArn,
+          },
+        },
+        ToolSchema: toolSchema,
+      },
+      physicalResourceId: cr.PhysicalResourceId.fromResponse('TargetId'),
+    },
+    onUpdate: {
+      service: 'BedrockAgentCore',
+      action: 'updateGatewayTarget',
+      parameters: {
+        GatewayId: gatewayId,
+        TargetId: cr.PhysicalResourceId.fromResponse('TargetId'),
+        ToolSchema: toolSchema,
+      },
+    },
+    onDelete: {
+      service: 'BedrockAgentCore',
+      action: 'deleteGatewayTarget',
+      parameters: {
+        GatewayId: gatewayId,
+        TargetId: cr.PhysicalResourceId.fromResponse('TargetId'),
+      },
+    },
+    policy: cr.AwsCustomResourcePolicy.fromSdkCalls({
+      resources: cr.AwsCustomResourcePolicy.ANY_RESOURCE,
+    }),
+    provider: targetProvider,
+  });
 }
 ```
+
+**Usage in Constructor:**
+
+```typescript
+constructor(scope: Construct, id: string, props: ExecutionInfrastructureProps) {
+  // ... existing code ...
+
+  // Phase 4.3: Create Gateway (automated)
+  this.createAgentCoreGateway(props);
+  
+  // Update ToolMapper handler to use Gateway URL from construct
+  // Instead of props.gatewayUrl, use this.gatewayUrl
+  // ... update createToolMapperHandler to use this.gatewayUrl ...
+  
+  // Phase 4.3: Register adapter Lambdas as Gateway targets
+  // this.registerGatewayTarget(internalAdapterLambda, 'internal.create_note', toolSchema);
+  // this.registerGatewayTarget(crmAdapterLambda, 'crm.create_task', toolSchema);
+}
+```
+
+**Note:** Gateway creation and target registration are fully automated via CDK. No manual setup required.
+
+**CloudFormation Resource:** `AWS::BedrockAgentCore::Gateway` is a valid CloudFormation resource type, so we use L1 `CfnResource` directly. If the resource type is not available in your region or account, fall back to `AwsCustomResource` (commented code above) to call AWS SDK APIs via Lambda.
 
 ---
 
@@ -521,37 +682,11 @@ npx ts-node src/scripts/seed-action-type-registry.ts
 
 ## 6. Gateway Target Registration
 
-### File: `scripts/phase_4/register-gateway-target.sh`
+**Status:** ✅ **AUTOMATED** - Handled in `createAgentCoreGateway()` method above
 
-**Purpose:** Register Lambda adapters as Gateway targets
+**Note:** Gateway target registration is now fully automated via CDK `AwsCustomResource`. The `registerGatewayTarget()` method in Section 4 handles this automatically when adapter Lambdas are created.
 
-**Script:**
-
-```bash
-#!/bin/bash
-# Register Lambda adapter as AgentCore Gateway target
-
-GATEWAY_ID=${AGENTCORE_GATEWAY_ID}
-LAMBDA_ARN=${LAMBDA_FUNCTION_ARN}
-TOOL_NAME=${TOOL_NAME}  # e.g., "crm.create_task"
-
-# Use AWS SDK to register target
-# Note: Actual API calls depend on AgentCore Gateway API availability
-aws bedrock-agentcore create-gateway-target \
-  --gateway-id $GATEWAY_ID \
-  --target-configuration '{
-    "lambda": {
-      "functionArn": "'$LAMBDA_ARN'"
-    }
-  }' \
-  --tool-schema '{
-    "name": "'$TOOL_NAME'",
-    "description": "...",
-    "inputSchema": {...}
-  }'
-
-echo "Gateway target registered: $TOOL_NAME"
-```
+**No manual scripts needed** - target registration happens during CDK deployment.
 
 ---
 
@@ -570,9 +705,9 @@ echo "Gateway target registered: $TOOL_NAME"
 - [ ] Create `src/adapters/IConnectorAdapter.ts`
 - [ ] Create `src/adapters/internal/InternalConnectorAdapter.ts`
 - [ ] Create `src/adapters/crm/CrmConnectorAdapter.ts`
-- [ ] Set up AgentCore Gateway (CDK or L1 construct)
-- [ ] Create Lambda functions for adapters (registered as Gateway targets)
-- [ ] Register adapters as Gateway targets
+- [ ] Set up AgentCore Gateway (automated via CDK L1 construct or AwsCustomResource)
+- [ ] Create Lambda functions for adapters
+- [ ] Register adapters as Gateway targets (automated via CDK AwsCustomResource)
 - [ ] Update ToolMapper handler to pass `action_intent_id` in tool arguments (see note in Phase 4.3 plan)
 - [ ] Seed initial ActionTypeRegistry entries using TypeScript service
 - [ ] Integration tests for connectors

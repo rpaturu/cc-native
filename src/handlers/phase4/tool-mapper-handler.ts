@@ -139,8 +139,9 @@ export const handler: Handler = async (event: unknown) => {
       intent.parameters
     );
     
-    // 4. Add idempotency_key to tool arguments (for adapter-level idempotency)
+    // 4. Add execution metadata to tool arguments (for adapter-level idempotency and audit)
     toolArguments.idempotency_key = idempotency_key;
+    toolArguments.action_intent_id = action_intent_id; // Required for recordExternalWriteDedupe()
     
     // 5. Return for Step Functions (JWT token retrieval moved to ToolInvoker)
     // Note: trace_id is execution_trace_id (from starter handler), not decision_trace_id
