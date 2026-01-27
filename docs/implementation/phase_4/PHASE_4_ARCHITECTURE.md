@@ -804,9 +804,31 @@ interface MCPToolResponse {
 
 ### Network Isolation
 
-- **Initial:** Public subnets (most SaaS APIs are public HTTPS)
-- **Future:** VPC endpoints if specific connectors require it
+**Phase A (Initial - <5 connectors):**
+- **Public subnets** (most SaaS APIs are public HTTPS)
+- **Security via IAM:** Per-connector IAM roles, least privilege, per-connector secrets
 - **Zero Trust:** All traffic encrypted (TLS), authenticated, audited
+- **Egress logging:** CloudWatch Logs for all outbound requests (by connector)
+
+**Phase B (5+ connectors):**
+- **Shared Tools VPC** with private subnets
+- **NAT Gateway** for outbound internet access
+- **AWS Network Firewall** or HTTP proxy for egress allow-listing
+  - Allow-list: `*.salesforce.com`, `graph.microsoft.com`, Google APIs, etc.
+  - Block unknown destinations (SSRF protection)
+- **VPC Endpoints** for AWS services (DynamoDB, Secrets Manager, CloudWatch Logs, S3, STS, KMS)
+- **Per-connector security groups** (network segmentation)
+- **VPC Flow Logs** for network visibility
+
+**Phase C (High-risk connectors):**
+- **Isolated VPC or account** for:
+  - Outbound email connectors
+  - Web scraping/browsing tools
+  - High-PII connectors
+  - Anything that can hit arbitrary hosts
+
+**Security Philosophy:**
+> VPC placement is about **egress governance**, not "hiding" tools. The real risks are credential misuse, cross-tenant data leakage, and SSRF—not network exposure. VPC helps with egress allow-listing and blast radius containment, but IAM, secrets isolation, and request validation are the primary security controls.
 
 ---
 

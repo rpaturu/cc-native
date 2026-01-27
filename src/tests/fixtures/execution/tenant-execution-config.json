@@ -1,0 +1,5 @@
+{
+  "tenantId": "tenant_test_1",
+  "execution_enabled": true,
+  "disabled_action_types": []
+}

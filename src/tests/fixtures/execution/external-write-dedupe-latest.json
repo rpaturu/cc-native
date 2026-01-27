@@ -1,0 +1,11 @@
+{
+  "pk": "IDEMPOTENCY_KEY#hash_123",
+  "sk": "LATEST",
+  "idempotency_key": "hash_123",
+  "external_object_id": "task_12345",
+  "action_intent_id": "ai_test_123",
+  "tool_name": "crm.create_task",
+  "created_at": "2026-01-26T12:00:00.000Z",
+  "latest_sk": "CREATED_AT#1737892800000",
+  "ttl": 1738497600
+}

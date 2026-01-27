@@ -40,7 +40,7 @@ export class ActionTypeRegistryService {
         },
       }));
       
-      return result.Item as ActionTypeRegistry | null;
+      return result.Item ? (result.Item as ActionTypeRegistry) : null;
     } else {
       // Get latest version: query all versions, sort by registry_version (monotonic, deterministic)
       // "Latest" means highest registry_version, NOT newest created_at timestamp

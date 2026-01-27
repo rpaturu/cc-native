@@ -281,6 +281,6 @@ export class ExecutionAttemptService {
       },
     }));
     
-    return result.Item as ExecutionAttempt | null;
+    return result.Item ? (result.Item as ExecutionAttempt) : null;
   }
 }

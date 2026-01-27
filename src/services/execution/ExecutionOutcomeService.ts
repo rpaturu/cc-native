@@ -91,7 +91,7 @@ export class ExecutionOutcomeService {
       },
     }));
     
-    return result.Item as ActionOutcomeV1 | null;
+    return result.Item ? (result.Item as ActionOutcomeV1) : null;
   }
 
   /**

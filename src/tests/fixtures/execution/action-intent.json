@@ -1,0 +1,14 @@
+{
+  "action_intent_id": "ai_test_123",
+  "tenant_id": "tenant_test_1",
+  "account_id": "account_test_1",
+  "action_type": "CREATE_CRM_TASK",
+  "parameters": {
+    "title": "Test Task",
+    "priority": "HIGH"
+  },
+  "registry_version": 1,
+  "trace_id": "decision_trace_123",
+  "expires_at_epoch": 1737849600,
+  "status": "APPROVED"
+}

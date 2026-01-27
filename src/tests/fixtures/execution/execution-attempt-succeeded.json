@@ -1,0 +1,18 @@
+{
+  "pk": "TENANT#tenant_test_1#ACCOUNT#account_test_1",
+  "sk": "EXECUTION#ai_test_123",
+  "gsi1pk": "ACTION_INTENT#ai_test_123",
+  "gsi1sk": "UPDATED_AT#2026-01-26T12:05:00.000Z",
+  "gsi2pk": "TENANT#tenant_test_1",
+  "gsi2sk": "UPDATED_AT#2026-01-26T12:05:00.000Z",
+  "action_intent_id": "ai_test_123",
+  "attempt_count": 1,
+  "last_attempt_id": "attempt_1737892800000_abc123",
+  "status": "SUCCEEDED",
+  "idempotency_key": "hash_tenant_test_1_ai_test_123_crm.create_task_params_v1",
+  "started_at": "2026-01-26T12:00:00.000Z",
+  "updated_at": "2026-01-26T12:05:00.000Z",
+  "tenant_id": "tenant_test_1",
+  "account_id": "account_test_1",
+  "trace_id": "execution_trace_123"
+}

@@ -1,0 +1,29 @@
+{
+  "pk": "ACTION_TYPE#CREATE_CRM_TASK",
+  "sk": "REGISTRY_VERSION#2",
+  "action_type": "CREATE_CRM_TASK",
+  "registry_version": 2,
+  "tool_name": "crm.create_task",
+  "tool_schema_version": "v1.1",
+  "required_scopes": ["salesforce_api"],
+  "risk_class": "LOW",
+  "compensation_strategy": "AUTOMATIC",
+  "parameter_mapping": {
+    "title": {
+      "toolParam": "title",
+      "transform": "PASSTHROUGH",
+      "required": true
+    },
+    "priority": {
+      "toolParam": "priority",
+      "transform": "UPPERCASE",
+      "required": false
+    },
+    "description": {
+      "toolParam": "description",
+      "transform": "PASSTHROUGH",
+      "required": false
+    }
+  },
+  "created_at": "2026-01-26T11:00:00.000Z"
+}
