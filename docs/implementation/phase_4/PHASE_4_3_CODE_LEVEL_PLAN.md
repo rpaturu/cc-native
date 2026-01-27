@@ -27,14 +27,16 @@ Phase 4.3 implements connector adapters for external system integration:
 ## Implementation Tasks
 
 1. Connector adapter interface
-2. Internal systems adapter
-3. CRM adapter (initial)
-4. AgentCore Gateway setup (CDK)
-5. Register adapters as Gateway targets
-6. Update ToolMapper handler to pass `action_intent_id` in tool arguments
-7. Seed initial ActionTypeRegistry entries
+2. Internal systems adapter (with persistence)
+3. CRM adapter (initial, with tenant-scoped config)
+4. Connector configuration service (tenant-scoped config retrieval)
+5. AgentCore Gateway setup (CDK - automated)
+6. Register adapters as Gateway targets (CDK - automated)
+7. ✅ ToolMapper handler updated to pass `action_intent_id` in tool arguments (already fixed)
+8. Seed initial ActionTypeRegistry entries (with MANUAL_ONLY compensation for CRM)
+9. Security controls (VPC isolation, per-connector IAM, tenant binding)
 
-**Note:** Task 6 (ToolMapper update) is required for adapters to record external write dedupe. The ToolMapper handler should add `action_intent_id` to `tool_arguments` before passing to ToolInvoker. See Phase 4.2 ToolMapper handler for current implementation.
+**Note:** Task 7 (ToolMapper update) is already complete - `action_intent_id` is now included in `tool_arguments`. See Phase 4.2 ToolMapper handler for implementation.
 
 ---
 
@@ -92,8 +94,9 @@ export interface IConnectorAdapter {
 ```typescript
 import { IConnectorAdapter } from '../IConnectorAdapter';
 import { MCPToolInvocation, MCPResponse } from '../../../types/MCPTypes';
-import { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, PutCommand } from '@aws-sdk/lib-dynamodb';
 import { Logger } from '../../services/core/Logger';
+import { ValidationError } from '../../../types/ExecutionErrors';
 
 export class InternalConnectorAdapter implements IConnectorAdapter {
   constructor(
@@ -122,21 +125,28 @@ export class InternalConnectorAdapter implements IConnectorAdapter {
   }
 
   private async createNote(args: Record<string, any>, invocationId: string): Promise<MCPResponse> {
+    // Validate required fields
+    if (!args.tenant_id || !args.account_id) {
+      const error = new Error('Missing required fields: tenant_id and account_id must be present in tool arguments');
+      error.name = 'ValidationError';
+      throw error;
+    }
+
     // Create internal note in DynamoDB
     const noteId = `note_${Date.now()}_${Math.random().toString(36).substring(7)}`;
     
-    // TODO: Write to internal notes table
-    // Example:
-    // await this.dynamoClient.send(new PutCommand({
-    //   TableName: process.env.INTERNAL_NOTES_TABLE_NAME || 'cc-native-internal-notes',
-    //   Item: {
-    //     note_id: noteId,
-    //     content: args.content,
-    //     account_id: args.account_id,
-    //     tenant_id: args.tenant_id,
-    //     created_at: new Date().toISOString(),
-    //   },
-    // }));
+    // ✅ MUST persist before returning success (per review feedback)
+    // Do not return success unless data is actually persisted
+    await this.dynamoClient.send(new PutCommand({
+      TableName: process.env.INTERNAL_NOTES_TABLE_NAME || 'cc-native-internal-notes',
+      Item: {
+        note_id: noteId,
+        content: args.content,
+        account_id: args.account_id,
+        tenant_id: args.tenant_id,
+        created_at: new Date().toISOString(),
+      },
+    }));
     
     return {
       jsonrpc: '2.0',
@@ -160,22 +170,29 @@ export class InternalConnectorAdapter implements IConnectorAdapter {
   }
 
   private async createTask(args: Record<string, any>, invocationId: string): Promise<MCPResponse> {
+    // Validate required fields
+    if (!args.tenant_id || !args.account_id) {
+      const error = new Error('Missing required fields: tenant_id and account_id must be present in tool arguments');
+      error.name = 'ValidationError';
+      throw error;
+    }
+
     // Similar to createNote
     const taskId = `task_${Date.now()}_${Math.random().toString(36).substring(7)}`;
     
-    // TODO: Write to internal tasks table
-    // Example:
-    // await this.dynamoClient.send(new PutCommand({
-    //   TableName: process.env.INTERNAL_TASKS_TABLE_NAME || 'cc-native-internal-tasks',
-    //   Item: {
-    //     task_id: taskId,
-    //     title: args.title,
-    //     description: args.description,
-    //     account_id: args.account_id,
-    //     tenant_id: args.tenant_id,
-    //     created_at: new Date().toISOString(),
-    //   },
-    // }));
+    // ✅ MUST persist before returning success (per review feedback)
+    // Do not return success unless data is actually persisted
+    await this.dynamoClient.send(new PutCommand({
+      TableName: process.env.INTERNAL_TASKS_TABLE_NAME || 'cc-native-internal-tasks',
+      Item: {
+        task_id: taskId,
+        title: args.title,
+        description: args.description,
+        account_id: args.account_id,
+        tenant_id: args.tenant_id,
+        created_at: new Date().toISOString(),
+      },
+    }));
     
     return {
       jsonrpc: '2.0',
@@ -214,23 +231,66 @@ export class InternalConnectorAdapter implements IConnectorAdapter {
 import { IConnectorAdapter } from '../IConnectorAdapter';
 import { MCPToolInvocation, MCPResponse } from '../../../types/MCPTypes';
 import { IdempotencyService } from '../../services/execution/IdempotencyService';
+import { ConnectorConfigService } from '../../services/execution/ConnectorConfigService';
 import { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
+import { SecretsManagerClient } from '@aws-sdk/client-secrets-manager';
 import { Logger } from '../../services/core/Logger';
+import { ValidationError, ConfigurationError } from '../../../types/ExecutionErrors';
 import axios from 'axios';
 
 export class CrmConnectorAdapter implements IConnectorAdapter {
+  private configService: ConnectorConfigService;
+
   constructor(
     private dynamoClient: DynamoDBDocumentClient,
     private dedupeTableName: string,
+    private configTableName: string,
+    private secretsClient: SecretsManagerClient,
     private logger: Logger
-  ) {}
+  ) {
+    this.configService = new ConnectorConfigService(
+      dynamoClient,
+      configTableName,
+      secretsClient,
+      logger
+    );
+  }
 
   async execute(invocation: MCPToolInvocation): Promise<MCPResponse> {
     const { name, arguments: args } = invocation.params;
     const invocationId = invocation.id; // ✅ id is at top level, not in params
+    
+    // ✅ MUST-FIX: Validate idempotency_key presence (contract violation if missing)
     const idempotencyKey = args.idempotency_key;
+    if (!idempotencyKey) {
+      throw new ValidationError(
+        'Missing required parameter: idempotency_key. ' +
+        'This is a contract violation - ToolMapper handler must include idempotency_key in tool_arguments. ' +
+        'Without idempotency_key, adapter-level dedupe cannot function and retries may cause double-writes.',
+        'IDEMPOTENCY_KEY_MISSING'
+      );
+    }
+
+    // ✅ MUST-FIX: Validate tenant_id and account_id (security: prevent cross-tenant calls)
+    if (!args.tenant_id || !args.account_id) {
+      throw new ValidationError(
+        'Missing required parameters: tenant_id and account_id must be present in tool arguments. ' +
+        'This is required for tenant binding and security enforcement.'
+      );
+    }
+
+    // ✅ MUST-FIX: Validate tenant binding (if identity carries tenant claims)
+    // Note: Gateway identity should include tenant_id claim - validate it matches args.tenant_id
+    if (invocation.identity?.tenantId && invocation.identity.tenantId !== args.tenant_id) {
+      throw new ValidationError(
+        `Tenant mismatch: identity tenant_id (${invocation.identity.tenantId}) does not match tool argument tenant_id (${args.tenant_id}). ` +
+        'This may indicate a security issue or misconfiguration.'
+      );
+    }
     
     // Check external write dedupe (adapter-level idempotency)
+    // Note: checkExternalWriteDedupe currently returns string (external_object_id)
+    // Future enhancement: Return external_object_refs[] array for consistency
     const idempotencyService = new IdempotencyService();
     const existingObjectId = await idempotencyService.checkExternalWriteDedupe(
       this.dynamoClient,
@@ -240,6 +300,8 @@ export class CrmConnectorAdapter implements IConnectorAdapter {
     
     if (existingObjectId) {
       // Already executed, return existing result
+      // Note: We reconstruct external_object_refs from single object_id
+      // Future: Dedupe service should return full external_object_refs[] array
       return {
         jsonrpc: '2.0',
         id: invocationId,
@@ -281,49 +343,96 @@ export class CrmConnectorAdapter implements IConnectorAdapter {
     idempotencyKey: string,
     invocationId: string
   ): Promise<MCPResponse> {
-    // Get OAuth token (from Gateway identity)
-    // Note: Gateway provides OAuth token via invocation.identity.accessToken
+    // ✅ MUST-FIX: Validate action_intent_id presence (required for dedupe recording)
+    const actionIntentId = args.action_intent_id;
+    if (!actionIntentId) {
+      throw new ValidationError(
+        'Missing required parameter: action_intent_id. ' +
+        'ToolMapper handler must include action_intent_id in tool_arguments for external write dedupe recording.'
+      );
+    }
+
+    // ✅ MUST-FIX: Get OAuth token with proper validation
+    // Gateway uses AgentCore Identity (or equivalent) to mint/attach OAuth accessToken
+    // This is OUTBOUND OAuth (adapter → Salesforce), not inbound JWT authorizer
+    // Contract: Gateway provides OAuth accessToken via invocation.identity.accessToken
+    // Token should be bound to tenant_id/account_id claims for security
     const oauthToken = invocation.identity?.accessToken;
     if (!oauthToken) {
-      throw new Error('OAuth token missing from Gateway identity. Ensure Gateway is configured with JWT authorizer.');
+      throw new ValidationError(
+        'OAuth token missing from Gateway identity. ' +
+        'Gateway must be configured with AgentCore Identity to provide OAuth accessToken for outbound API calls. ' +
+        'The token should be bound to tenant_id/account_id claims for security.',
+        'OAUTH_TOKEN_MISSING'
+      );
+    }
+
+    // ✅ MUST-FIX: Get Salesforce instance URL from tenant-scoped config (NOT hardcoded)
+    // Security: Hardcoded instance URL is an anti-pattern - wrong tenant host = data leak
+    // Must come from tenant-scoped connector config store (DynamoDB/Secrets Manager)
+    const config = await this.configService.getConnectorConfig(
+      args.tenant_id,
+      args.account_id,
+      'salesforce'
+    );
+    const salesforceInstanceUrl = config?.instanceUrl;
+    if (!salesforceInstanceUrl) {
+      throw new ConfigurationError(
+        `Salesforce instance URL not found for tenant_id: ${args.tenant_id}, account_id: ${args.account_id}. ` +
+        'Connector configuration must be stored in tenant-scoped config store (DynamoDB/Secrets Manager).'
+      );
     }
     
     // Call Salesforce REST API
-    const response = await axios.post(
-      'https://your-instance.salesforce.com/services/data/v58.0/sobjects/Task/',
-      {
-        Subject: args.title,
-        Priority: args.priority || 'Normal',
-        // ... other fields
-      },
-      {
-        headers: {
-          'Authorization': `Bearer ${oauthToken}`,
-          'Content-Type': 'application/json',
-          'Idempotency-Key': idempotencyKey, // If Salesforce supports it
+    const apiUrl = `${salesforceInstanceUrl}/services/data/v58.0/sobjects/Task/`;
+    let response;
+    try {
+      response = await axios.post(
+        apiUrl,
+        {
+          Subject: args.title,
+          Priority: args.priority || 'Normal',
+          // ... other fields
         },
+        {
+          headers: {
+            'Authorization': `Bearer ${oauthToken}`,
+            'Content-Type': 'application/json',
+            'Idempotency-Key': idempotencyKey, // If Salesforce supports it
+          },
+        }
+      );
+    } catch (error: any) {
+      // Handle Salesforce API errors
+      if (error.response?.status === 401 || error.response?.status === 403) {
+        throw new ValidationError(
+          `Salesforce authentication failed: ${error.response?.data?.message || error.message}`,
+          'SALESFORCE_AUTH_FAILED'
+        );
       }
-    );
-    
-    const taskId = response.data.Id;
-    
-    // Record external write dedupe
-    // Note: action_intent_id should be passed in tool arguments from ToolMapper handler
-    const actionIntentId = args.action_intent_id;
-    if (!actionIntentId) {
-      this.logger.warn('action_intent_id missing from tool arguments', {
-        tool_name: 'crm.create_task',
-        idempotency_key: idempotencyKey,
-      });
+      throw error; // Re-throw for retry logic in ToolInvoker (may be transient)
     }
     
+    // ✅ MUST-FIX: Handle Salesforce response shape correctly (Id vs id)
+    // Salesforce create responses may return 'id' (lowercase) or 'Id' (uppercase) depending on endpoint
+    // Validate presence and handle both cases
+    const taskId = response.data.id || response.data.Id;
+    if (!taskId) {
+      throw new ValidationError(
+        `Invalid Salesforce response: missing task ID. Response: ${JSON.stringify(response.data)}. ` +
+        'Salesforce create responses must include either "id" or "Id" field.',
+        'INVALID_CONNECTOR_RESPONSE'
+      );
+    }
+    
+    // Record external write dedupe
     const idempotencyService = new IdempotencyService();
     await idempotencyService.recordExternalWriteDedupe(
       this.dynamoClient,
       this.dedupeTableName,
       idempotencyKey,
       taskId,
-      actionIntentId || 'unknown', // Fallback if missing
+      actionIntentId,
       'crm.create_task'
     );
     
@@ -340,7 +449,7 @@ export class CrmConnectorAdapter implements IConnectorAdapter {
                 system: 'CRM',
                 object_type: 'Task',
                 object_id: taskId,
-                object_url: `https://your-instance.salesforce.com/${taskId}`,
+                object_url: `${salesforceInstanceUrl}/${taskId}`,
               },
             ],
           }),
@@ -348,6 +457,7 @@ export class CrmConnectorAdapter implements IConnectorAdapter {
       },
     };
   }
+
 }
 ```
 
@@ -390,9 +500,80 @@ private createAgentCoreGateway(props: ExecutionInfrastructureProps): void {
     description: 'Role for AgentCore Gateway execution',
   });
 
-  // Option 1: Use L1 CfnResource (CloudFormation resource type exists)
-  // AWS::BedrockAgentCore::Gateway is a valid CloudFormation resource type
-  this.executionGateway = new cdk.CfnResource(this, 'ExecutionGateway', {
+  // ✅ MUST-FIX: Use single deterministic approach (AwsCustomResource)
+  // CloudFormation resource type may not be available in all regions/accounts
+  // AwsCustomResource is more reliable and consistent across regions
+  // 
+  // Note: If AWS::BedrockAgentCore::Gateway CFN resource is confirmed available in your region,
+  // you can use L1 CfnResource instead, but AwsCustomResource is the safer default.
+
+  const gatewayProvider = new cr.Provider(this, 'GatewayProvider', {
+    onEventHandler: new lambdaNodejs.NodejsFunction(this, 'GatewayHandler', {
+      runtime: lambda.Runtime.NODEJS_20_X,
+      entry: 'src/lambdas/gateway-setup-handler.ts', // Custom Lambda for Gateway setup
+      timeout: cdk.Duration.minutes(5),
+    }),
+  });
+
+  // Grant permissions to create Gateway
+  gatewayProvider.onEventHandler.addToRolePolicy(
+    new iam.PolicyStatement({
+      actions: [
+        'bedrock-agentcore:CreateGateway',
+        'bedrock-agentcore:GetGateway',
+        'bedrock-agentcore:UpdateGateway',
+        'bedrock-agentcore:DeleteGateway',
+      ],
+      resources: ['*'],
+    })
+  );
+
+  const gatewayCustomResource = new customResources.AwsCustomResource(this, 'ExecutionGateway', {
+    onCreate: {
+      service: 'BedrockAgentCore',
+      action: 'createGateway',
+      parameters: {
+        Name: 'cc-native-execution-gateway',
+        ProtocolType: 'MCP',
+        AuthorizerType: 'CUSTOM_JWT',
+        AuthorizerConfiguration: {
+          CustomJWTAuthorizer: {
+            AllowedClients: props.userPool ? [props.userPool.userPoolClientId] : [],
+            DiscoveryUrl: props.userPool?.userPoolProviderUrl || '',
+          },
+        },
+        RoleArn: gatewayRole.roleArn,
+      },
+      physicalResourceId: cr.PhysicalResourceId.fromResponse('GatewayId'),
+    },
+    onUpdate: {
+      service: 'BedrockAgentCore',
+      action: 'updateGateway',
+      parameters: {
+        GatewayId: cr.PhysicalResourceId.fromResponse('GatewayId'),
+        // ... update parameters (name, authorizer config, etc.)
+      },
+    },
+    onDelete: {
+      service: 'BedrockAgentCore',
+      action: 'deleteGateway',
+      parameters: {
+        GatewayId: cr.PhysicalResourceId.fromResponse('GatewayId'),
+      },
+    },
+    policy: cr.AwsCustomResourcePolicy.fromSdkCalls({
+      resources: cr.AwsCustomResourcePolicy.ANY_RESOURCE,
+    }),
+    provider: gatewayProvider,
+  });
+
+  this.executionGateway = gatewayCustomResource;
+  // Get Gateway URL from custom resource response
+  this.gatewayUrl = gatewayCustomResource.getResponseField('GatewayUrl').toString();
+
+  // Alternative: If CloudFormation resource type is confirmed available in your region, use L1 construct:
+  /*
+  this.executionGateway = new cdk.CfnResource(this, 'ExecutionGatewayL1', {
     type: 'AWS::BedrockAgentCore::Gateway',
     properties: {
       Name: 'cc-native-execution-gateway',
@@ -407,79 +588,7 @@ private createAgentCoreGateway(props: ExecutionInfrastructureProps): void {
       RoleArn: gatewayRole.roleArn,
     },
   });
-
-  // Get Gateway URL from CloudFormation output
   this.gatewayUrl = this.executionGateway.getAtt('GatewayUrl').toString();
-
-  // Note: If L1 construct doesn't work (e.g., resource type not available in your region),
-  // fall back to AwsCustomResource approach (commented out below):
-  /*
-  if (false) { // Set to true if L1 construct fails
-    // Option 2: Use AwsCustomResource (Lambda-backed) if L1 construct doesn't exist
-    // This calls AWS SDK APIs directly via Lambda function
-    const gatewayProvider = new cr.Provider(this, 'GatewayProvider', {
-      onEventHandler: new lambdaNodejs.NodejsFunction(this, 'GatewayHandler', {
-        runtime: lambda.Runtime.NODEJS_20_X,
-        entry: 'src/lambdas/gateway-setup-handler.ts', // Custom Lambda for Gateway setup
-        timeout: cdk.Duration.minutes(5),
-      }),
-    });
-
-    // Grant permissions to create Gateway
-    gatewayProvider.onEventHandler.addToRolePolicy(
-      new iam.PolicyStatement({
-        actions: [
-          'bedrock-agentcore:CreateGateway',
-          'bedrock-agentcore:GetGateway',
-          'bedrock-agentcore:UpdateGateway',
-          'bedrock-agentcore:DeleteGateway',
-        ],
-        resources: ['*'],
-      })
-    );
-
-    const gatewayCustomResource = new customResources.AwsCustomResource(this, 'ExecutionGateway', {
-      onCreate: {
-        service: 'BedrockAgentCore',
-        action: 'createGateway',
-        parameters: {
-          Name: 'cc-native-execution-gateway',
-          ProtocolType: 'MCP',
-          AuthorizerType: 'CUSTOM_JWT',
-          AuthorizerConfiguration: {
-            CustomJWTAuthorizer: {
-              AllowedClients: props.userPool ? [props.userPool.userPoolClientId] : [],
-              DiscoveryUrl: props.userPool?.userPoolProviderUrl || '',
-            },
-          },
-          RoleArn: gatewayRole.roleArn,
-        },
-        physicalResourceId: cr.PhysicalResourceId.fromResponse('GatewayId'),
-      },
-      onUpdate: {
-        service: 'BedrockAgentCore',
-        action: 'updateGateway',
-        parameters: {
-          GatewayId: cr.PhysicalResourceId.fromResponse('GatewayId'),
-          // ... update parameters
-        },
-      },
-      onDelete: {
-        service: 'BedrockAgentCore',
-        action: 'deleteGateway',
-        parameters: {
-          GatewayId: cr.PhysicalResourceId.fromResponse('GatewayId'),
-        },
-      },
-      policy: cr.AwsCustomResourcePolicy.fromSdkCalls({
-        resources: cr.AwsCustomResourcePolicy.ANY_RESOURCE,
-      }),
-    });
-
-    this.executionGateway = gatewayCustomResource;
-    // Get Gateway URL from custom resource response
-    this.gatewayUrl = gatewayCustomResource.getResponseField('GatewayUrl');
-  }
   */
 }
 
@@ -491,7 +600,10 @@ private registerGatewayTarget(
   toolName: string,
   toolSchema: Record<string, any>
 ): void {
-  const gatewayId = this.executionGateway.getAtt('GatewayId').toString();
+  // Get Gateway ID (works for both CfnResource and AwsCustomResource)
+  const gatewayId = this.executionGateway instanceof cdk.CfnResource
+    ? this.executionGateway.getAtt('GatewayId').toString()
+    : (this.executionGateway as customResources.AwsCustomResource).getResponseField('GatewayId');
 
   // Use AwsCustomResource to register target (Gateway target registration via SDK)
   const targetProvider = new cr.Provider(this, `GatewayTargetProvider-${toolName}`, {
@@ -582,7 +694,7 @@ constructor(scope: Construct, id: string, props: ExecutionInfrastructureProps) {
 
 **Note:** Gateway creation and target registration are fully automated via CDK. No manual setup required.
 
-**CloudFormation Resource:** `AWS::BedrockAgentCore::Gateway` is a valid CloudFormation resource type, so we use L1 `CfnResource` directly. If the resource type is not available in your region or account, fall back to `AwsCustomResource` (commented code above) to call AWS SDK APIs via Lambda.
+**Approach:** Uses `AwsCustomResource` as the canonical approach (more reliable across regions). If `AWS::BedrockAgentCore::Gateway` CloudFormation resource type is confirmed available in your region, you can use L1 `CfnResource` instead (commented alternative above).
 
 ---
 
@@ -627,7 +739,7 @@ async function seed() {
     tool_schema_version: 'v1.0',
     required_scopes: ['salesforce_api'],
     risk_class: 'LOW',
-    compensation_strategy: 'AUTOMATIC',
+    compensation_strategy: 'MANUAL_ONLY', // ✅ MUST-FIX: Set to MANUAL_ONLY until rollback implemented
     parameter_mapping: {
       title: {
         toolParam: 'title',
@@ -700,27 +812,235 @@ npx ts-node src/scripts/seed-action-type-registry.ts
 
 ---
 
-## 8. Implementation Checklist
+## 8. Security & Zero Trust Controls
 
-- [ ] Create `src/adapters/IConnectorAdapter.ts`
-- [ ] Create `src/adapters/internal/InternalConnectorAdapter.ts`
-- [ ] Create `src/adapters/crm/CrmConnectorAdapter.ts`
-- [ ] Set up AgentCore Gateway (automated via CDK L1 construct or AwsCustomResource)
-- [ ] Create Lambda functions for adapters
-- [ ] Register adapters as Gateway targets (automated via CDK AwsCustomResource)
-- [ ] Update ToolMapper handler to pass `action_intent_id` in tool arguments (see note in Phase 4.3 plan)
-- [ ] Seed initial ActionTypeRegistry entries using TypeScript service
-- [ ] Integration tests for connectors
+### A. Per-Tool Egress Control (VPC Isolation)
 
-**Note:** Ensure adapters:
-- Use `invocation.id` (not `invocation.params.id`)
-- Use `invocation.identity?.accessToken` for OAuth token
-- Return `external_object_refs` array format (preferred per Phase 4.2 contract)
-- Include `action_intent_id` in tool arguments for idempotency recording
+**Purpose:** Adapters are the only components touching public internet (SaaS APIs). Isolate them in dedicated VPC with egress controls.
+
+**Implementation:**
+- Create "Connectors VPC" with private subnets
+- VPC endpoints for AWS services (DynamoDB, Secrets Manager, KMS)
+- NAT Gateway for outbound internet access
+- AWS Network Firewall or proxy for egress allow-listing
+- Per-connector security groups
+- VPC Flow Logs for audit
+
+**CDK Pattern:**
+```typescript
+// In ExecutionInfrastructure or separate ConnectorInfrastructure construct
+const connectorsVpc = new ec2.Vpc(this, 'ConnectorsVpc', {
+  maxAzs: 2,
+  natGateways: 1,
+  subnetConfiguration: [
+    {
+      cidrMask: 24,
+      name: 'ConnectorPrivate',
+      subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+    },
+  ],
+});
+
+// VPC endpoints for AWS services
+new ec2.InterfaceVpcEndpoint(this, 'DynamoDBEndpoint', {
+  vpc: connectorsVpc,
+  service: ec2.InterfaceVpcEndpointAwsService.DYNAMODB,
+});
+
+// Security group per connector
+const crmAdapterSecurityGroup = new ec2.SecurityGroup(this, 'CrmAdapterSecurityGroup', {
+  vpc: connectorsVpc,
+  description: 'Security group for CRM adapter',
+  allowAllOutbound: false, // Explicit egress control
+});
+```
+
+**Note:** See `PHASE_4_ARCHITECTURE.md` for phased VPC strategy (Phase A: public, Phase B: shared VPC, Phase C: isolated VPC).
+
+### B. Per-Tool IAM Role + Least Privilege
+
+**Purpose:** Each adapter Lambda should have minimal permissions - only what it needs.
+
+**Implementation:**
+- Separate IAM role per adapter
+- Grant only required DynamoDB tables (dedupe + internal tables)
+- No cross-connector permissions
+- KMS decrypt only for connector-specific secrets
+- No ability to invoke other Lambdas (unless explicitly needed)
+
+**CDK Pattern:**
+```typescript
+const crmAdapterRole = new iam.Role(this, 'CrmAdapterRole', {
+  assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
+});
+
+// Grant only required tables
+this.externalWriteDedupeTable.grantReadWriteData(crmAdapterRole);
+// Do NOT grant access to other connector tables
+
+// Grant Secrets Manager access (connector-specific secret)
+crmAdapterRole.addToPolicy(new iam.PolicyStatement({
+  actions: ['secretsmanager:GetSecretValue'],
+  resources: [`arn:aws:secretsmanager:*:*:secret:tenant/*/connector/salesforce-*`],
+}));
+```
+
+### C. Tenant Binding Enforcement
+
+**Purpose:** Prevent cross-tenant calls even if tool is invoked incorrectly.
+
+**Implementation:**
+- Validate `tenant_id` and `account_id` are present in tool arguments
+- Validate `tenant_id` matches identity context (if identity carries tenant claims)
+- Fail fast with `ValidationError` if mismatch
+
+**Adapter Pattern:**
+```typescript
+// In adapter execute() method
+if (!args.tenant_id || !args.account_id) {
+  throw new ValidationError('Missing required parameters: tenant_id and account_id');
+}
+
+// Validate tenant binding
+if (invocation.identity?.tenantId && invocation.identity.tenantId !== args.tenant_id) {
+  throw new ValidationError(`Tenant mismatch: identity tenant_id does not match tool argument tenant_id`);
+}
+```
 
 ---
 
-## 9. Next Steps
+## 9. Connector Configuration Service
+
+### File: `src/services/execution/ConnectorConfigService.ts` (New)
+
+**Purpose:** Retrieve tenant-scoped connector configuration (instance URLs, API endpoints, etc.)
+
+**Implementation:**
+
+```typescript
+import { DynamoDBDocumentClient, GetCommand } from '@aws-sdk/lib-dynamodb';
+import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-secrets-manager';
+import { Logger } from '../core/Logger';
+
+export interface ConnectorConfig {
+  instanceUrl?: string; // For Salesforce, Google Workspace, etc.
+  apiEndpoint?: string; // For custom APIs
+  apiKey?: string; // If needed (stored in Secrets Manager, not DynamoDB)
+  // ... connector-specific config
+}
+
+export class ConnectorConfigService {
+  constructor(
+    private dynamoClient: DynamoDBDocumentClient,
+    private configTableName: string,
+    private secretsClient: SecretsManagerClient,
+    private logger: Logger
+  ) {}
+
+  /**
+   * Get connector config for tenant/account
+   * 
+   * Strategy:
+   * 1. Check DynamoDB connector config table (non-sensitive config like instanceUrl)
+   * 2. Check Secrets Manager for sensitive config (API keys, OAuth secrets)
+   */
+  async getConnectorConfig(
+    tenantId: string,
+    accountId: string,
+    connectorType: 'salesforce' | 'google' | 'microsoft' | string
+  ): Promise<ConnectorConfig | null> {
+    // Get non-sensitive config from DynamoDB
+    const result = await this.dynamoClient.send(new GetCommand({
+      TableName: this.configTableName,
+      Key: {
+        pk: `TENANT#${tenantId}#ACCOUNT#${accountId}`,
+        sk: `CONNECTOR#${connectorType}`,
+      },
+    }));
+
+    const config: ConnectorConfig = result.Item ? {
+      instanceUrl: result.Item.instance_url,
+      apiEndpoint: result.Item.api_endpoint,
+      // ... other non-sensitive fields
+    } : {};
+
+    // Get sensitive config from Secrets Manager
+    try {
+      const secretResult = await this.secretsClient.send(new GetSecretValueCommand({
+        SecretId: `tenant/${tenantId}/connector/${connectorType}`,
+      }));
+      const secretData = JSON.parse(secretResult.SecretString || '{}');
+      config.apiKey = secretData.apiKey;
+      // ... other sensitive fields
+    } catch (error: any) {
+      if (error.name !== 'ResourceNotFoundException') {
+        this.logger.warn('Failed to retrieve connector secret', { tenantId, connectorType, error: error.message });
+      }
+    }
+
+    return Object.keys(config).length > 0 ? config : null;
+  }
+}
+```
+
+**Usage in Adapter:**
+```typescript
+const configService = new ConnectorConfigService(...);
+const config = await configService.getConnectorConfig(tenantId, accountId, 'salesforce');
+const instanceUrl = config?.instanceUrl;
+if (!instanceUrl) {
+  throw new ConfigurationError('Salesforce instance URL not configured for tenant');
+}
+```
+
+---
+
+## 10. Implementation Checklist
+
+- [ ] Create `src/adapters/IConnectorAdapter.ts`
+- [ ] Create `src/adapters/internal/InternalConnectorAdapter.ts` (with persistence implementation)
+- [ ] Create `src/adapters/crm/CrmConnectorAdapter.ts` (with tenant-scoped config, validation)
+- [ ] Create `src/services/execution/ConnectorConfigService.ts` (tenant-scoped config retrieval)
+- [ ] Set up AgentCore Gateway (automated via CDK AwsCustomResource - canonical approach)
+- [ ] Create Lambda functions for adapters (with per-connector IAM roles)
+- [ ] Register adapters as Gateway targets (automated via CDK AwsCustomResource)
+- [ ] ✅ ToolMapper handler updated to pass `action_intent_id` in tool arguments (already fixed)
+- [ ] Seed initial ActionTypeRegistry entries using TypeScript service (with MANUAL_ONLY compensation)
+- [ ] Set up Connectors VPC (Phase B) with egress controls
+- [ ] Configure per-connector security groups and IAM roles
+
+**Must-Fix Validation Checklist:**
+- [ ] ✅ Validate `idempotency_key` presence in adapter (fail fast if missing)
+- [ ] ✅ Validate `action_intent_id` presence in adapter (fail fast if missing)
+- [ ] ✅ Validate `tenant_id` and `account_id` presence (security: tenant binding)
+- [ ] ✅ Validate tenant binding (identity.tenantId matches args.tenant_id)
+- [ ] ✅ Get Salesforce instance URL from tenant-scoped config (NOT hardcoded)
+- [ ] ✅ Handle Salesforce response shape correctly (Id vs id)
+- [ ] ✅ Implement internal adapter persistence before returning success
+- [ ] ✅ Set CRM compensation strategy to MANUAL_ONLY (until rollback implemented)
+- [ ] ✅ Use single deterministic Gateway setup approach (AwsCustomResource)
+
+---
+
+## 11. Critical Must-Fix Issues (Review Feedback)
+
+**These issues must be fixed before Phase 4.3 implementation:**
+
+1. ✅ **CRM adapter Salesforce response handling** - Handle both `Id` and `id` fields, validate presence
+2. ✅ **Hardcoded Salesforce instance URL** - Use tenant-scoped connector config (NOT hardcoded)
+3. ✅ **OAuth token validation** - Clarify Gateway Identity contract, validate token presence
+4. ✅ **Idempotency key validation** - Fail fast if missing (contract violation)
+5. ✅ **ActionIntentId validation** - Fail fast if missing (required for dedupe)
+6. ✅ **Internal adapter persistence** - Must persist before returning success
+7. ✅ **Gateway setup approach** - Use single deterministic approach (AwsCustomResource)
+8. ✅ **CRM compensation strategy** - Set to MANUAL_ONLY until rollback implemented
+9. ✅ **Tenant binding enforcement** - Validate tenant_id matches identity context
+
+**All issues addressed in plan above.**
+
+---
+
+## 12. Next Steps
 
 After Phase 4.3 completion:
 - ✅ Connector adapters ready

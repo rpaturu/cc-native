@@ -55,6 +55,12 @@ export class ValidationError extends ExecutionError {
   }
 }
 
+export class ConfigurationError extends ExecutionError {
+  constructor(message: string, errorCode?: string) {
+    super(message, 'VALIDATION', errorCode || 'CONFIGURATION_ERROR', false);
+  }
+}
+
 /**
  * Execution already in progress error (terminal, no retry)
  */
