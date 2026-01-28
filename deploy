@@ -23,10 +23,13 @@ fi
 
 # Export CDK_DEFAULT_REGION
 export CDK_DEFAULT_REGION=$CDK_REGION
+SKIP_TESTS=false
 while [[ "$#" -gt 0 ]]; do case $1 in
   --profile) CDK_PROFILE="$2"; shift;;
   --region) AWS_REGION="$2"; shift;;
   --env) DEPLOYMENT_ENV="$2"; shift;;
+  --skip-tests) SKIP_TESTS=true;;
+  --no-test) SKIP_TESTS=true;;
 esac; shift; done
 
 # Check if region is set
@@ -36,8 +39,9 @@ if [ -z "$AWS_REGION" ]; then
   
   if [ -z "$AWS_REGION" ]; then
     echo "Error: AWS region is required"
-    echo "Usage: ./deploy [--profile <aws_profile>] [--region <aws_region>] [--env <environment>]"
+    echo "Usage: ./deploy [--profile <aws_profile>] [--region <aws_region>] [--env <environment>] [--skip-tests]"
     echo "Example: ./deploy --profile dev --region us-west-2 --env development"
+    echo "         ./deploy --skip-tests  # Skip unit tests before deployment"
     echo "You may also configure your region by running 'aws configure'"
     exit 1
   fi
@@ -61,6 +65,22 @@ if [ ! -d "node_modules" ] || ! npm run build > /dev/null 2>&1; then
   npm install
 fi
 npm run build
+
+# Run unit tests before deployment (unless skipped)
+if [ "$SKIP_TESTS" = false ]; then
+  echo ""
+  echo "🧪 Running unit tests..."
+  if npm test; then
+    echo "✅ All unit tests passed"
+  else
+    echo "❌ Unit tests failed - deployment aborted"
+    echo "   Use --skip-tests to deploy without running tests"
+    exit 1
+  fi
+else
+  echo ""
+  echo "⏭️  Skipping unit tests (--skip-tests flag provided)"
+fi
 
 # Prepare CDK context parameters
 CDK_CONTEXT_PARAMS=""
