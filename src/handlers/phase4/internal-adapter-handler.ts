@@ -9,24 +9,16 @@ import { Handler, Context } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
 import { InternalConnectorAdapter } from '../../adapters/internal/InternalConnectorAdapter';
+import { IConnectorAdapter } from '../../adapters/IConnectorAdapter';
 import { MCPToolInvocation, MCPResponse } from '../../types/MCPTypes';
 import { Logger } from '../../services/core/Logger';
 
-const logger = new Logger('InternalAdapterHandler');
-// ✅ FIX: Use AWS SDK v3 constructor pattern (not .from({}))
-const dynamoClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));
-
-const notesTableName = process.env.INTERNAL_NOTES_TABLE_NAME || 'cc-native-internal-notes';
-const tasksTableName = process.env.INTERNAL_TASKS_TABLE_NAME || 'cc-native-internal-tasks';
-
-const adapter = new InternalConnectorAdapter(
-  dynamoClient,
-  notesTableName,
-  tasksTableName,
-  logger
-);
-
-export const handler: Handler = async (event: any, context: Context): Promise<MCPResponse> => {
+/**
+ * Create handler function with dependency injection for testability
+ * Exported for unit testing
+ */
+export function createHandler(adapter: IConnectorAdapter, logger: Logger): Handler {
+  return async (event: any, context: Context): Promise<MCPResponse> => {
   // ✅ Extract MCP context from Lambda context (per article pattern)
   // Gateway injects MCP metadata into context.clientContext.custom
   const customContext = context.clientContext?.custom || {};
@@ -77,6 +69,21 @@ export const handler: Handler = async (event: any, context: Context): Promise<MC
     eventKeys: Object.keys(event),
   });
 
-  // ✅ Call adapter execute() method
-  return await adapter.execute(invocation);
-};
+    // ✅ Call adapter execute() method
+    return await adapter.execute(invocation);
+  };
+}
+
+// Production handler with real dependencies
+const logger = new Logger('InternalAdapterHandler');
+const dynamoClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));
+const notesTableName = process.env.INTERNAL_NOTES_TABLE_NAME || 'cc-native-internal-notes';
+const tasksTableName = process.env.INTERNAL_TASKS_TABLE_NAME || 'cc-native-internal-tasks';
+const adapter = new InternalConnectorAdapter(
+  dynamoClient,
+  notesTableName,
+  tasksTableName,
+  logger
+);
+
+export const handler = createHandler(adapter, logger);

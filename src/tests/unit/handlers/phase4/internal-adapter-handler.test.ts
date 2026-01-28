@@ -5,18 +5,18 @@
  */
 
 import { Handler, Context } from 'aws-lambda';
-import { handler } from '../../../../handlers/phase4/internal-adapter-handler';
-import { InternalConnectorAdapter } from '../../../../adapters/internal/InternalConnectorAdapter';
+import { createHandler } from '../../../../handlers/phase4/internal-adapter-handler';
+import { IConnectorAdapter } from '../../../../adapters/IConnectorAdapter';
 import { MCPToolInvocation, MCPResponse } from '../../../../types/MCPTypes';
 import { ValidationError } from '../../../../types/ExecutionErrors';
+import { Logger } from '../../../../services/core/Logger';
 import gatewayEventInternal from '../../../fixtures/execution/adapters/gateway-lambda-event-internal.json';
 import lambdaContextWithIdentity from '../../../fixtures/execution/adapters/lambda-context-with-identity.json';
 
-// Mock InternalConnectorAdapter
-jest.mock('../../../../adapters/internal/InternalConnectorAdapter');
-
 describe('InternalAdapterHandler', () => {
-  let mockAdapter: jest.Mocked<InternalConnectorAdapter>;
+  let mockAdapter: jest.Mocked<IConnectorAdapter>;
+  let mockLogger: Logger;
+  let handler: Handler;
   let mockContext: Context;
 
   beforeEach(() => {
@@ -28,7 +28,16 @@ describe('InternalAdapterHandler', () => {
       validate: jest.fn(),
     } as any;
     
-    (InternalConnectorAdapter as jest.Mock).mockImplementation(() => mockAdapter);
+    // Create mock logger
+    mockLogger = {
+      info: jest.fn(),
+      warn: jest.fn(),
+      error: jest.fn(),
+      debug: jest.fn(),
+    } as any;
+    
+    // Create handler with injected dependencies
+    handler = createHandler(mockAdapter, mockLogger);
 
     // Create mock Lambda context
     // Note: Using 'as any' to bypass strict ClientContext type checking for test mocks
@@ -211,7 +220,7 @@ describe('InternalAdapterHandler', () => {
       };
       mockAdapter.execute.mockResolvedValue(mockResponse);
 
-      await handler(gatewayEventInternal, contextWithoutMessageId, jest.fn());
+      await handler(gatewayEventInternal, contextWithoutMessageId as any, jest.fn());
 
       expect(mockAdapter.execute).toHaveBeenCalledWith(
         expect.objectContaining({

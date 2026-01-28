@@ -10,26 +10,16 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
 import { SecretsManagerClient } from '@aws-sdk/client-secrets-manager';
 import { CrmConnectorAdapter } from '../../adapters/crm/CrmConnectorAdapter';
+import { IConnectorAdapter } from '../../adapters/IConnectorAdapter';
 import { MCPToolInvocation, MCPResponse } from '../../types/MCPTypes';
 import { Logger } from '../../services/core/Logger';
 
-const logger = new Logger('CrmAdapterHandler');
-// ✅ FIX: Use AWS SDK v3 constructor pattern (not .from({}))
-const dynamoClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));
-const secretsClient = new SecretsManagerClient({});
-
-const dedupeTableName = process.env.EXTERNAL_WRITE_DEDUPE_TABLE_NAME!;
-const configTableName = process.env.CONNECTOR_CONFIG_TABLE_NAME!;
-
-const adapter = new CrmConnectorAdapter(
-  dynamoClient,
-  dedupeTableName,
-  configTableName,
-  secretsClient,
-  logger
-);
-
-export const handler: Handler = async (event: any, context: Context): Promise<MCPResponse> => {
+/**
+ * Create handler function with dependency injection for testability
+ * Exported for unit testing
+ */
+export function createHandler(adapter: IConnectorAdapter, logger: Logger): Handler {
+  return async (event: any, context: Context): Promise<MCPResponse> => {
   // ✅ Extract MCP context from Lambda context (same pattern as internal adapter)
   const customContext = context.clientContext?.custom || {};
   const toolNameWithPrefix = customContext.bedrockAgentCoreToolName || '';
@@ -76,6 +66,23 @@ export const handler: Handler = async (event: any, context: Context): Promise<MC
     eventKeys: Object.keys(event),
   });
 
-  // ✅ Call adapter execute() method
-  return await adapter.execute(invocation);
-};
+    // ✅ Call adapter execute() method
+    return await adapter.execute(invocation);
+  };
+}
+
+// Production handler with real dependencies
+const logger = new Logger('CrmAdapterHandler');
+const dynamoClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));
+const secretsClient = new SecretsManagerClient({});
+const dedupeTableName = process.env.EXTERNAL_WRITE_DEDUPE_TABLE_NAME!;
+const configTableName = process.env.CONNECTOR_CONFIG_TABLE_NAME!;
+const adapter = new CrmConnectorAdapter(
+  dynamoClient,
+  dedupeTableName,
+  configTableName,
+  secretsClient,
+  logger
+);
+
+export const handler = createHandler(adapter, logger);

@@ -5,18 +5,18 @@
  */
 
 import { Handler, Context } from 'aws-lambda';
-import { handler } from '../../../../handlers/phase4/crm-adapter-handler';
-import { CrmConnectorAdapter } from '../../../../adapters/crm/CrmConnectorAdapter';
+import { createHandler } from '../../../../handlers/phase4/crm-adapter-handler';
+import { IConnectorAdapter } from '../../../../adapters/IConnectorAdapter';
 import { MCPToolInvocation, MCPResponse } from '../../../../types/MCPTypes';
 import { ValidationError, ConfigurationError } from '../../../../types/ExecutionErrors';
+import { Logger } from '../../../../services/core/Logger';
 import gatewayEventCrm from '../../../fixtures/execution/adapters/gateway-lambda-event-crm.json';
 import lambdaContextWithIdentity from '../../../fixtures/execution/adapters/lambda-context-with-identity.json';
 
-// Mock CrmConnectorAdapter
-jest.mock('../../../../adapters/crm/CrmConnectorAdapter');
-
 describe('CrmAdapterHandler', () => {
-  let mockAdapter: jest.Mocked<CrmConnectorAdapter>;
+  let mockAdapter: jest.Mocked<IConnectorAdapter>;
+  let mockLogger: Logger;
+  let handler: Handler;
   let mockContext: Context;
 
   beforeEach(() => {
@@ -28,7 +28,16 @@ describe('CrmAdapterHandler', () => {
       validate: jest.fn(),
     } as any;
     
-    (CrmConnectorAdapter as jest.Mock).mockImplementation(() => mockAdapter);
+    // Create mock logger
+    mockLogger = {
+      info: jest.fn(),
+      warn: jest.fn(),
+      error: jest.fn(),
+      debug: jest.fn(),
+    } as any;
+    
+    // Create handler with injected dependencies
+    handler = createHandler(mockAdapter, mockLogger);
 
     // Create mock Lambda context with CRM tool name
     const contextWithCrmTool = {
