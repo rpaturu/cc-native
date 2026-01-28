@@ -520,7 +520,7 @@ export class ExecutionInfrastructure extends Construct {
     
     return new stepfunctions.StateMachine(this, 'ExecutionStateMachine', {
       stateMachineName: config.stepFunctions.stateMachineName,
-      definition,
+      definitionBody: stepfunctions.DefinitionBody.fromChainable(definition),
       timeout: cdk.Duration.hours(config.stepFunctions.timeoutHours),
     });
   }
