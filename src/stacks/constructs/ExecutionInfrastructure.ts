@@ -682,6 +682,9 @@ export class ExecutionInfrastructure extends Construct {
       ],
     });
 
+    // Add Name tag for easier identification
+    cdk.Tags.of(vpc).add('Name', 'ConnectorsVpc');
+
     // VPC endpoints for AWS services
     // ✅ DynamoDB uses Gateway endpoint (not Interface endpoint)
     new ec2.GatewayVpcEndpoint(this, 'DynamoDBEndpoint', {
@@ -900,6 +903,8 @@ export class ExecutionInfrastructure extends Construct {
     toolName: string,
     toolSchema: bedrockagentcore.CfnGatewayTarget.ToolDefinitionProperty
   ): void {
+    // Generate unique permission ID based on tool name to avoid conflicts
+    const permissionId = `AllowGatewayInvoke-${toolName.replace(/\./g, '-')}`;
     // Validate tool schema structure
     if (!toolSchema.name || !toolSchema.description || !toolSchema.inputSchema) {
       throw new Error(
@@ -931,7 +936,7 @@ export class ExecutionInfrastructure extends Construct {
     gatewayTarget.addDependency(this.executionGateway);
 
     // Grant Lambda invoke permission to Gateway
-    adapterLambda.addPermission('AllowGatewayInvoke', {
+    adapterLambda.addPermission(permissionId, {
       principal: new iam.ServicePrincipal('bedrock-agentcore.amazonaws.com'),
       sourceArn: this.executionGateway.attrGatewayArn,
     });

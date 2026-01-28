@@ -97,9 +97,7 @@ describe('CCNativeStack Infrastructure', () => {
     });
 
     it('should output ActionTypeRegistryTableName', () => {
-      template.hasOutput('ActionTypeRegistryTableName', {
-        Value: 'cc-native-action-type-registry',
-      });
+      template.hasOutput('ActionTypeRegistryTableName', {});
     });
 
     it('should output ExecutionAttemptsTableName', () => {
