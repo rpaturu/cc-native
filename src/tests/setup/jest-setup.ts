@@ -5,6 +5,9 @@
  * This runs before all tests.
  */
 
+// Only show setup logs in verbose mode or when JEST_VERBOSE is set
+const isVerbose = process.env.JEST_VERBOSE === 'true' || process.argv.includes('--verbose');
+
 // Load .env.local first (local overrides), then .env (deployment config)
 let fs: any;
 try {
@@ -16,14 +19,18 @@ try {
   const envLocalPath = path.join(__dirname, '../../../.env.local');
   if (fs.existsSync(envLocalPath)) {
     dotenv.config({ path: envLocalPath });
-    console.log('✓ Loaded .env.local');
+    if (isVerbose) {
+      console.log('✓ Loaded .env.local');
+    }
   }
   
   // Load .env if it exists (deployment config)
   const envPath = path.join(__dirname, '../../../.env');
   if (fs.existsSync(envPath)) {
     dotenv.config({ path: envPath });
-    console.log('✓ Loaded .env');
+    if (isVerbose) {
+      console.log('✓ Loaded .env');
+    }
   }
 } catch (error) {
   // dotenv not available, continue
@@ -79,14 +86,20 @@ const isEC2 = isRunningOnEC2();
 
 // If credentials are in environment variables, AWS SDK will use them automatically
 if (process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY) {
-  console.log('✓ AWS credentials found in environment variables');
+  if (isVerbose) {
+    console.log('✓ AWS credentials found in environment variables');
+  }
 } else if (process.env.AWS_PROFILE) {
-  console.log(`✓ Using AWS profile: ${process.env.AWS_PROFILE}`);
+  if (isVerbose) {
+    console.log(`✓ Using AWS profile: ${process.env.AWS_PROFILE}`);
+  }
 } else {
   // Try to use default credential chain (~/.aws/credentials or EC2 instance metadata)
   if (isEC2) {
     // On EC2, credentials come from instance metadata (IAM role) - this is expected
-    console.log('✓ Running on EC2 - will use IAM role credentials from instance metadata');
+    if (isVerbose) {
+      console.log('✓ Running on EC2 - will use IAM role credentials from instance metadata');
+    }
   } else {
     // Local development - show warning about .env.local
     console.warn('⚠ No AWS credentials found in environment. Using default credential chain.');
@@ -337,7 +350,9 @@ jest.mock('@aws-sdk/credential-provider-node', () => {
       defaultProvider: jest.fn(async () => {
         try {
           const creds = await fetchEC2Credentials();
-          console.log('✓ Successfully fetched credentials from EC2 instance metadata');
+          if (isVerbose) {
+            console.log('✓ Successfully fetched credentials from EC2 instance metadata');
+          }
           return creds;
         } catch (e: any) {
           // Log the error for debugging
