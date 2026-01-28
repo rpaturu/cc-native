@@ -165,8 +165,8 @@ export class ExecutionInfrastructure extends Construct {
     this.internalAdapterHandler = this.createInternalAdapterHandler(props, config);
     this.crmAdapterHandler = this.createCrmAdapterHandler(props, config);
 
-    // Phase 4.3: Update Gateway role policy with adapter Lambda ARNs (after Lambdas created)
-    this.updateGatewayRolePolicy();
+    // ✅ NOTE: Gateway role permissions are added in createAgentCoreGateway() 
+    // using ARN patterns from config, so permissions exist before Gateway targets are created
 
     // Phase 4.3: Register adapters as Gateway targets (after Lambdas and Gateway created)
     // Internal adapters use GATEWAY_IAM_ROLE (no external credentials needed)
@@ -808,8 +808,18 @@ export class ExecutionInfrastructure extends Construct {
       description: 'Execution role for AgentCore Gateway',
     });
 
-    // Gateway role policy will be updated after adapter Lambdas are created
-    // (see updateGatewayRolePolicy method)
+    // ✅ REQUIRED: Add Lambda invoke permissions BEFORE Gateway is created
+    // Gateway targets require the role to have permissions at creation time
+    // Using ARN patterns from config (function names are known at synthesis time)
+    gatewayRole.addToPolicy(new iam.PolicyStatement({
+      sid: 'GatewayInvokeLambda',
+      effect: iam.Effect.ALLOW,
+      actions: ['lambda:InvokeFunction'],
+      resources: [
+        `arn:aws:lambda:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:function:${config.functionNames.internalAdapter}`,
+        `arn:aws:lambda:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:function:${config.functionNames.crmAdapter}`,
+      ],
+    }));
 
     // Create Gateway using L1 CDK construct
     const gateway = new bedrockagentcore.CfnGateway(this, 'ExecutionGateway', {
@@ -956,23 +966,10 @@ export class ExecutionInfrastructure extends Construct {
     });
   }
 
-  private updateGatewayRolePolicy(): void {
-    const gatewayRole = (this as any).gatewayRole as iam.Role;
-    if (!gatewayRole) {
-      throw new Error('Gateway role not found. Ensure createAgentCoreGateway is called before updateGatewayRolePolicy.');
-    }
-
-    // ✅ ZERO TRUST: Restrict to specific adapter Lambda ARNs
-    gatewayRole.addToPolicy(new iam.PolicyStatement({
-      sid: 'GatewayInvokeLambda',
-      effect: iam.Effect.ALLOW,
-      actions: ['lambda:InvokeFunction'],
-      resources: [
-        this.internalAdapterHandler.functionArn,
-        this.crmAdapterHandler.functionArn,
-      ],
-    }));
-  }
+  // ✅ REMOVED: updateGatewayRolePolicy() method
+  // Lambda invoke permissions are now added directly in createAgentCoreGateway()
+  // using ARN patterns from config, ensuring permissions exist before Gateway targets are created
+  // This prevents CloudFormation validation errors when creating GatewayTarget resources
 
   private updateToolMapperHandlerGatewayUrl(): void {
     // Note: ToolMapper handler is created before Gateway in Phase 4.2, so we use a workaround:
