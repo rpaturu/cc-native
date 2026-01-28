@@ -1,0 +1,9 @@
+{
+  "title": "Salesforce task title",
+  "description": "Salesforce task description",
+  "priority": "High",
+  "tenant_id": "tenant_test_1",
+  "account_id": "account_test_1",
+  "idempotency_key": "idempotency_key_123",
+  "action_intent_id": "ai_test_123"
+}

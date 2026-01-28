@@ -1,0 +1,22 @@
+{
+  "jsonrpc": "2.0",
+  "id": "invocation_789",
+  "method": "tools/call",
+  "params": {
+    "name": "crm.create_task",
+    "arguments": {
+      "title": "Salesforce task title",
+      "description": "Salesforce task description",
+      "priority": "High",
+      "tenant_id": "tenant_test_1",
+      "account_id": "account_test_1",
+      "idempotency_key": "idempotency_key_123",
+      "action_intent_id": "ai_test_123"
+    }
+  },
+  "identity": {
+    "accessToken": "oauth_token_123",
+    "tenantId": "tenant_test_1",
+    "userId": "user_test_1"
+  }
+}

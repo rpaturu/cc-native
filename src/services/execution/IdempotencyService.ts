@@ -6,7 +6,7 @@
 
 import { createHash } from 'crypto';
 import { DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
-import { ExternalWriteDedupe } from '../../types/ExecutionTypes';
+import { ExternalWriteDedupe, ExternalObjectRef } from '../../types/ExecutionTypes';
 
 export class IdempotencyService {
   /**
@@ -105,17 +105,43 @@ export class IdempotencyService {
   }
 
   /**
+   * Deep equality check for ExternalObjectRef arrays
+   * Compares arrays by normalizing order and comparing each object
+   */
+  private arraysEqual(a: ExternalObjectRef[], b: ExternalObjectRef[]): boolean {
+    if (a.length !== b.length) return false;
+    
+    // Sort by object_id for comparison (order-independent)
+    const sortedA = [...a].sort((x, y) => x.object_id.localeCompare(y.object_id));
+    const sortedB = [...b].sort((x, y) => x.object_id.localeCompare(y.object_id));
+    
+    return sortedA.every((refA, index) => {
+      const refB = sortedB[index];
+      return (
+        refA.system === refB.system &&
+        refA.object_type === refB.object_type &&
+        refA.object_id === refB.object_id &&
+        refA.object_url === refB.object_url
+      );
+    });
+  }
+
+  /**
    * Check if external write already happened (adapter-level idempotency)
    * Uses LATEST pointer for fast lookup (best-effort)
    * 
+   * Phase 4.3 Enhancement: Returns ExternalObjectRef[] instead of string | null
+   * 
    * Note: LATEST pointer is best-effort; source of truth is history items.
    * If LATEST pointer is missing, falls back to querying history items.
+   * 
+   * Backwards compatibility: Handles both old format (external_object_id) and new format (external_object_refs)
    */
   async checkExternalWriteDedupe(
     dynamoClient: DynamoDBDocumentClient,
     tableName: string,
     idempotencyKey: string
-  ): Promise<string | null> {
+  ): Promise<ExternalObjectRef[] | null> {
     // First, check LATEST pointer (best-effort fast path)
     const latestResult = await dynamoClient.send(new GetCommand({
       TableName: tableName,
@@ -126,7 +152,7 @@ export class IdempotencyService {
     }));
     
     if (latestResult.Item) {
-      const latest = latestResult.Item as ExternalWriteDedupe;
+      const latest = latestResult.Item as any; // Use any to handle both old and new formats
       // If pointer exists, fetch the actual record it points to
       if (latest.latest_sk) {
         const actualResult = await dynamoClient.send(new GetCommand({
@@ -138,11 +164,34 @@ export class IdempotencyService {
         }));
         
         if (actualResult.Item) {
-          return (actualResult.Item as ExternalWriteDedupe).external_object_id;
+          const item = actualResult.Item as any;
+          // ✅ Phase 4.3: Handle new format (external_object_refs)
+          if (item.external_object_refs && Array.isArray(item.external_object_refs)) {
+            return item.external_object_refs;
+          }
+          // ✅ Backwards compatibility: Handle old format (external_object_id)
+          if (item.external_object_id) {
+            return [{
+              system: 'CRM', // Default - may not be accurate for all old records
+              object_type: 'Unknown',
+              object_id: item.external_object_id,
+            }];
+          }
         }
       }
-      // Fallback: LATEST item itself has the data (backwards compatibility)
-      return latest.external_object_id;
+      // Fallback: LATEST item itself has the data
+      // ✅ Phase 4.3: Handle new format (external_object_refs)
+      if (latest.external_object_refs && Array.isArray(latest.external_object_refs)) {
+        return latest.external_object_refs;
+      }
+      // ✅ Backwards compatibility: Handle old format (external_object_id)
+      if (latest.external_object_id) {
+        return [{
+          system: 'CRM', // Default - may not be accurate for all old records
+          object_type: 'Unknown',
+          object_id: latest.external_object_id,
+        }];
+      }
     }
     
     // LATEST pointer missing - query history items directly (source of truth)
@@ -160,8 +209,19 @@ export class IdempotencyService {
     }));
     
     if (historyResult.Items && historyResult.Items.length > 0) {
-      const historyItem = historyResult.Items[0] as ExternalWriteDedupe;
-      return historyItem.external_object_id;
+      const historyItem = historyResult.Items[0] as any;
+      // ✅ Phase 4.3: Handle new format (external_object_refs)
+      if (historyItem.external_object_refs && Array.isArray(historyItem.external_object_refs)) {
+        return historyItem.external_object_refs;
+      }
+      // ✅ Backwards compatibility: Handle old format (external_object_id)
+      if (historyItem.external_object_id) {
+        return [{
+          system: 'CRM', // Default - may not be accurate for all old records
+          object_type: 'Unknown',
+          object_id: historyItem.external_object_id,
+        }];
+      }
     }
     
     return null;
@@ -170,17 +230,19 @@ export class IdempotencyService {
   /**
    * Record external write dedupe (adapter-level idempotency)
    * 
+   * Phase 4.3 Enhancement: Accepts ExternalObjectRef[] instead of single externalObjectId string
+   * 
    * Option A: Immutable per idempotency_key with history
    * - Creates new item with sk = CREATED_AT#<timestamp> (preserves history)
    * - Updates LATEST pointer to point to new item
-   * - If idempotency_key already exists with same external_object_id, returns (idempotent)
-   * - If idempotency_key exists with different external_object_id, throws collision error
+   * - If idempotency_key already exists with same external_object_refs, returns (idempotent)
+   * - If idempotency_key exists with different external_object_refs, throws collision error
    */
   async recordExternalWriteDedupe(
     dynamoClient: DynamoDBDocumentClient,
     tableName: string,
     idempotencyKey: string,
-    externalObjectId: string,
+    externalObjectRefs: ExternalObjectRef[],
     actionIntentId: string,
     toolName: string
   ): Promise<void> {
@@ -194,11 +256,12 @@ export class IdempotencyService {
     const existing = await this.checkExternalWriteDedupe(dynamoClient, tableName, idempotencyKey);
     
     if (existing) {
-      if (existing !== externalObjectId) {
-        // Collision - different external_object_id for same idempotency_key
+      // ✅ Phase 4.3: Compare arrays (deep equality, order-independent)
+      if (!this.arraysEqual(existing, externalObjectRefs)) {
+        // Collision - different external_object_refs for same idempotency_key
         const error = new Error(
-          `Idempotency key collision: ${idempotencyKey} maps to different external_object_id. ` +
-          `Expected: ${externalObjectId}, Found: ${existing}. ` +
+          `Idempotency key collision: ${idempotencyKey} maps to different external_object_refs. ` +
+          `Expected: ${JSON.stringify(externalObjectRefs)}, Found: ${JSON.stringify(existing)}. ` +
           `This may indicate a bug in idempotency key generation.`
         );
         error.name = 'IdempotencyCollisionError';
@@ -214,7 +277,7 @@ export class IdempotencyService {
         
         throw error;
       }
-      // Same external_object_id - idempotent operation, no-op
+      // Same external_object_refs - idempotent operation, no-op
       return;
     }
     
@@ -223,7 +286,7 @@ export class IdempotencyService {
       pk: `IDEMPOTENCY_KEY#${idempotencyKey}`,
       sk: historySk,
       idempotency_key: idempotencyKey,
-      external_object_id: externalObjectId,
+      external_object_refs: externalObjectRefs, // ✅ Phase 4.3: Array format
       action_intent_id: actionIntentId,
       tool_name: toolName,
       created_at: now,
@@ -235,7 +298,7 @@ export class IdempotencyService {
       pk: `IDEMPOTENCY_KEY#${idempotencyKey}`,
       sk: 'LATEST',
       idempotency_key: idempotencyKey,
-      external_object_id: externalObjectId, // For backwards compatibility
+      external_object_refs: externalObjectRefs, // ✅ Phase 4.3: Array format
       action_intent_id: actionIntentId,
       tool_name: toolName,
       created_at: now,

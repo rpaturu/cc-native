@@ -5,7 +5,7 @@
 import { IdempotencyService } from '../../../services/execution/IdempotencyService';
 import { DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { mockDynamoDBDocumentClient, resetAllMocks } from '../../__mocks__/aws-sdk-clients';
-import { ExternalWriteDedupe } from '../../../types/ExecutionTypes';
+import { ExternalWriteDedupe, ExternalObjectRef } from '../../../types/ExecutionTypes';
 import externalWriteDedupeLatest from '../../fixtures/execution/external-write-dedupe-latest.json';
 import externalWriteDedupe from '../../fixtures/execution/external-write-dedupe.json';
 
@@ -184,13 +184,14 @@ describe('IdempotencyService', () => {
           Item: externalWriteDedupe as ExternalWriteDedupe,
         }); // Actual history item
 
-      const externalObjectId = await service.checkExternalWriteDedupe(
+      const externalObjectRefs = await service.checkExternalWriteDedupe(
         mockDynamoDBDocumentClient as any,
         'test-table',
         'hash_123'
       );
 
-      expect(externalObjectId).toBe('task_12345');
+      expect(externalObjectRefs).not.toBeNull();
+      expect(externalObjectRefs![0].object_id).toBe('task_12345');
       expect(GetCommand).toHaveBeenCalledTimes(2); // LATEST + history item
     });
 
@@ -203,13 +204,14 @@ describe('IdempotencyService', () => {
           Items: [externalWriteDedupe] as ExternalWriteDedupe[],
         }); // History query
 
-      const externalObjectId = await service.checkExternalWriteDedupe(
+      const externalObjectRefs = await service.checkExternalWriteDedupe(
         mockDynamoDBDocumentClient as any,
         'test-table',
         'hash_123'
       );
 
-      expect(externalObjectId).toBe('task_12345');
+      expect(externalObjectRefs).not.toBeNull();
+      expect(externalObjectRefs![0].object_id).toBe('task_12345');
       expect(QueryCommand).toHaveBeenCalled();
     });
 
@@ -222,13 +224,13 @@ describe('IdempotencyService', () => {
           Items: [], // History query returns empty
         });
 
-      const externalObjectId = await service.checkExternalWriteDedupe(
+      const externalObjectRefs = await service.checkExternalWriteDedupe(
         mockDynamoDBDocumentClient as any,
         'test-table',
         'hash_123'
       );
 
-      expect(externalObjectId).toBeNull();
+      expect(externalObjectRefs).toBeNull();
     });
 
     it('should handle TTL expiration (item not found)', async () => {
@@ -240,13 +242,13 @@ describe('IdempotencyService', () => {
           Items: [], // History items also expired
         });
 
-      const externalObjectId = await service.checkExternalWriteDedupe(
+      const externalObjectRefs = await service.checkExternalWriteDedupe(
         mockDynamoDBDocumentClient as any,
         'test-table',
         'hash_123'
       );
 
-      expect(externalObjectId).toBeNull();
+      expect(externalObjectRefs).toBeNull();
     });
 
     it('should use backwards compatibility if LATEST item has external_object_id directly', async () => {
@@ -259,13 +261,14 @@ describe('IdempotencyService', () => {
         Item: latestWithData as ExternalWriteDedupe,
       });
 
-      const externalObjectId = await service.checkExternalWriteDedupe(
+      const externalObjectRefs = await service.checkExternalWriteDedupe(
         mockDynamoDBDocumentClient as any,
         'test-table',
         'hash_123'
       );
 
-      expect(externalObjectId).toBe('task_12345');
+      expect(externalObjectRefs).not.toBeNull();
+      expect(externalObjectRefs![0].object_id).toBe('task_12345');
       expect(GetCommand).toHaveBeenCalledTimes(1); // Only LATEST, no history fetch
     });
   });
@@ -279,11 +282,18 @@ describe('IdempotencyService', () => {
         .mockResolvedValueOnce({}) // PutCommand history item
         .mockResolvedValueOnce({}); // PutCommand LATEST pointer
 
+      const externalObjectRefs: ExternalObjectRef[] = [{
+        system: 'CRM',
+        object_type: 'Task',
+        object_id: 'task_12345',
+        object_url: 'https://test.salesforce.com/task_12345',
+      }];
+
       await service.recordExternalWriteDedupe(
         mockDynamoDBDocumentClient as any,
         'test-table',
         'hash_123',
-        'task_12345',
+        externalObjectRefs,
         'ai_test_123',
         'crm.create_task'
       );
@@ -294,7 +304,7 @@ describe('IdempotencyService', () => {
 
       // History item
       expect(historyCall.Item.sk).toMatch(/^CREATED_AT#\d+$/);
-      expect(historyCall.Item.external_object_id).toBe('task_12345');
+      expect(historyCall.Item.external_object_refs).toEqual(externalObjectRefs);
       expect(historyCall.ConditionExpression).toBe('attribute_not_exists(pk) AND attribute_not_exists(sk)');
 
       // LATEST pointer
@@ -312,11 +322,18 @@ describe('IdempotencyService', () => {
           Item: externalWriteDedupe as ExternalWriteDedupe,
         });
 
+      const externalObjectRefs: ExternalObjectRef[] = [{
+        system: 'CRM',
+        object_type: 'Task',
+        object_id: 'task_12345',
+        object_url: 'https://test.salesforce.com/task_12345',
+      }];
+
       await service.recordExternalWriteDedupe(
         mockDynamoDBDocumentClient as any,
         'test-table',
         'hash_123',
-        'task_12345', // Same as existing
+        externalObjectRefs, // Same as existing
         'ai_test_123',
         'crm.create_task'
       );
@@ -335,12 +352,19 @@ describe('IdempotencyService', () => {
           Item: externalWriteDedupe as ExternalWriteDedupe,
         });
 
+      const differentExternalObjectRefs: ExternalObjectRef[] = [{
+        system: 'CRM',
+        object_type: 'Task',
+        object_id: 'task_99999', // Different from existing
+        object_url: 'https://test.salesforce.com/task_99999',
+      }];
+
       await expect(
         service.recordExternalWriteDedupe(
           mockDynamoDBDocumentClient as any,
           'test-table',
           'hash_123',
-          'task_99999', // Different from existing
+          differentExternalObjectRefs,
           'ai_test_123',
           'crm.create_task'
         )
@@ -354,11 +378,18 @@ describe('IdempotencyService', () => {
         .mockResolvedValueOnce({})
         .mockResolvedValueOnce({});
 
+      const externalObjectRefs: ExternalObjectRef[] = [{
+        system: 'CRM',
+        object_type: 'Task',
+        object_id: 'task_12345',
+        object_url: 'https://test.salesforce.com/task_12345',
+      }];
+
       await service.recordExternalWriteDedupe(
         mockDynamoDBDocumentClient as any,
         'test-table',
         'hash_123',
-        'task_12345',
+        externalObjectRefs,
         'ai_test_123',
         'crm.create_task'
       );

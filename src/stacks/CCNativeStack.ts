@@ -17,6 +17,8 @@ import { PerceptionHandlers } from './constructs/PerceptionHandlers';
 import { GraphIntelligenceHandlers } from './constructs/GraphIntelligenceHandlers';
 import { DecisionInfrastructure } from './constructs/DecisionInfrastructure';
 import { createDecisionInfrastructureConfig } from './constructs/DecisionInfrastructureConfig';
+import { ExecutionInfrastructure } from './constructs/ExecutionInfrastructure';
+import { createExecutionInfrastructureConfig } from './constructs/ExecutionInfrastructureConfig';
 
 export interface CCNativeStackProps extends cdk.StackProps {
   // Add any custom props here
@@ -630,6 +632,23 @@ export class CCNativeStack extends cdk.Stack {
       config: decisionConfig, // Pass config created from CDK context
     });
 
+    // ✅ Phase 4: Execution Infrastructure (execution orchestration, tool mapping, connector adapters)
+    // Create ExecutionInfrastructure config (same pattern as DecisionInfrastructure)
+    // Reuse awsRegion from DecisionInfrastructure config creation above
+    const executionConfig = createExecutionInfrastructureConfig(awsRegion.trim());
+    
+    const executionInfrastructure = new ExecutionInfrastructure(this, 'ExecutionInfrastructure', {
+      eventBus: this.eventBus,
+      ledgerTable: this.ledgerTable,
+      actionIntentTable: this.actionIntentTable,
+      tenantsTable: this.tenantsTable,
+      userPool: this.userPool,
+      userPoolClient: this.userPoolClient,
+      artifactsBucket: this.artifactsBucket,
+      config: executionConfig,
+      region: this.region,
+    });
+
     // Stack Outputs
     // World Model S3 Buckets
     new cdk.CfnOutput(this, 'EvidenceLedgerBucketName', {
@@ -881,6 +900,42 @@ export class CCNativeStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'BudgetResetHandlerArn', {
       value: decisionInfrastructure.budgetResetHandler.functionArn,
       description: 'ARN of budget reset handler Lambda function (scheduled daily at midnight UTC)',
+    });
+
+    // Phase 4: Execution Infrastructure Outputs
+    new cdk.CfnOutput(this, 'ActionTypeRegistryTableName', {
+      value: executionInfrastructure.actionTypeRegistryTable.tableName,
+      description: 'DynamoDB table for action type registry (tool mappings)',
+    });
+
+    new cdk.CfnOutput(this, 'ExecutionAttemptsTableName', {
+      value: executionInfrastructure.executionAttemptsTable.tableName,
+      description: 'DynamoDB table for execution attempts',
+    });
+
+    new cdk.CfnOutput(this, 'ExecutionOutcomesTableName', {
+      value: executionInfrastructure.executionOutcomesTable.tableName,
+      description: 'DynamoDB table for execution outcomes',
+    });
+
+    new cdk.CfnOutput(this, 'ExternalWriteDedupeTableName', {
+      value: executionInfrastructure.externalWriteDedupeTable.tableName,
+      description: 'DynamoDB table for external write deduplication',
+    });
+
+    new cdk.CfnOutput(this, 'ConnectorConfigTableName', {
+      value: executionInfrastructure.connectorConfigTable.tableName,
+      description: 'DynamoDB table for connector configuration',
+    });
+
+    new cdk.CfnOutput(this, 'InternalNotesTableName', {
+      value: executionInfrastructure.internalNotesTable.tableName,
+      description: 'DynamoDB table for internal notes',
+    });
+
+    new cdk.CfnOutput(this, 'InternalTasksTableName', {
+      value: executionInfrastructure.internalTasksTable.tableName,
+      description: 'DynamoDB table for internal tasks',
     });
   }
 

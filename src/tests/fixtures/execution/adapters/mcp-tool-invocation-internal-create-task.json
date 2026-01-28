@@ -1,0 +1,19 @@
+{
+  "jsonrpc": "2.0",
+  "id": "invocation_456",
+  "method": "tools/call",
+  "params": {
+    "name": "internal.create_task",
+    "arguments": {
+      "title": "Test task title",
+      "description": "Test task description",
+      "tenant_id": "tenant_test_1",
+      "account_id": "account_test_1"
+    }
+  },
+  "identity": {
+    "accessToken": "token_internal_456",
+    "tenantId": "tenant_test_1",
+    "userId": "user_test_1"
+  }
+}

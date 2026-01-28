@@ -111,6 +111,7 @@ describe('ActionIntentService', () => {
         tenant_id: 'tenant-1',
         account_id: 'account-1',
         trace_id: 'trace-1',
+        registry_version: 1,
       };
 
       mockDynamoDBDocumentClient.send
@@ -148,6 +149,7 @@ describe('ActionIntentService', () => {
         tenant_id: 'tenant-1',
         account_id: 'account-1',
         trace_id: 'trace-1',
+        registry_version: 1,
       };
 
       mockDynamoDBDocumentClient.send.mockResolvedValue({ Items: [originalIntent] });
@@ -180,6 +182,7 @@ describe('ActionIntentService', () => {
         tenant_id: 'tenant-1',
         account_id: 'account-1',
         trace_id: 'trace-1',
+        registry_version: 1,
       };
 
       const newExpiresAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();

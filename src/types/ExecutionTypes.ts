@@ -62,6 +62,17 @@ export interface ExecutionAttempt {
 }
 
 /**
+ * ExternalObjectRef - Reference to an object created in an external system
+ * Extracted as shared type for reuse across ActionOutcomeV1, ToolInvocationResponse, and ExternalWriteDedupe
+ */
+export interface ExternalObjectRef {
+  system: 'CRM' | 'CALENDAR' | 'INTERNAL';
+  object_type: string; // e.g., "Task", "Event", "Note"
+  object_id: string; // External system ID
+  object_url?: string; // Link to external object (if available)
+}
+
+/**
  * ActionOutcomeV1 - Structured execution outcome
  * Normalized for analytics, debugging, future learning
  */
@@ -80,12 +91,7 @@ export interface ActionOutcomeV1 {
   status: 'SUCCEEDED' | 'FAILED' | 'RETRYING' | 'CANCELLED';
   
   // External system references
-  external_object_refs: Array<{
-    system: 'CRM' | 'CALENDAR' | 'INTERNAL';
-    object_type: string; // e.g., "Task", "Event", "Note"
-    object_id: string; // External system ID
-    object_url?: string; // Link to external object (if available)
-  }>;
+  external_object_refs: ExternalObjectRef[];
   
   // Error classification
   error_code?: string; // e.g., "AUTH_FAILED", "RATE_LIMIT", "VALIDATION_ERROR"
@@ -172,6 +178,9 @@ export interface ActionTypeRegistry {
  * 
  * Note: LATEST pointer is best-effort; source of truth is history items.
  * If LATEST pointer is missing, fall back to querying history items by created_at descending.
+ * 
+ * Phase 4.3 Enhancement: Uses external_object_refs[] array instead of single external_object_id string
+ * to match Phase 4.2 contract and preserve full object reference information.
  */
 export interface ExternalWriteDedupe {
   // Composite keys
@@ -180,7 +189,8 @@ export interface ExternalWriteDedupe {
   
   // Dedupe metadata
   idempotency_key: string;
-  external_object_id: string; // Result from external API
+  // ✅ Phase 4.3: Changed from external_object_id: string to external_object_refs: ExternalObjectRef[]
+  external_object_refs: ExternalObjectRef[]; // Full object references (system, object_type, object_id, object_url)
   action_intent_id: string;
   tool_name: string;
   
@@ -214,12 +224,7 @@ export interface ToolInvocationRequest {
  */
 export interface ToolInvocationResponse {
   success: boolean;
-  external_object_refs?: Array<{
-    system: string;
-    object_type: string;
-    object_id: string;
-    object_url?: string;
-  }>;
+  external_object_refs?: ExternalObjectRef[];
   tool_run_ref: string; // Gateway invocation reference
   raw_response_artifact_ref?: string; // S3 pointer if large
   error_code?: string;
@@ -288,7 +293,7 @@ export const ActionOutcomeV1Schema = z.object({
     object_type: z.string(),
     object_id: z.string(),
     object_url: z.string().optional(),
-  })),
+  })), // Matches ExternalObjectRef interface
   error_code: z.string().optional(),
   error_class: z.enum(['AUTH', 'RATE_LIMIT', 'VALIDATION', 'DOWNSTREAM', 'TIMEOUT', 'UNKNOWN']).optional(),
   error_message: z.string().optional(),

@@ -1,0 +1,15 @@
+{
+  "clientContext": {
+    "custom": {
+      "bedrockAgentCoreToolName": "internal-adapter___internal.create_note",
+      "bedrockAgentCoreGatewayId": "gateway_123",
+      "bedrockAgentCoreTargetId": "target_123",
+      "bedrockAgentCoreMcpMessageId": "mcp_message_123",
+      "bedrockAgentCoreIdentity": {
+        "accessToken": "oauth_token_123",
+        "tenantId": "tenant_test_1",
+        "userId": "user_test_1"
+      }
+    }
+  }
+}

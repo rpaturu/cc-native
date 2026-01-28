@@ -19,7 +19,9 @@
     "cdk:synth": "cdk synth",
     "cdk:diff": "cdk diff",
     "deploy": "npm run build && npm run cdk:deploy",
-    "seed:methodologies": "ts-node src/scripts/seed-methodologies.ts"
+    "seed:methodologies": "ts-node src/scripts/seed-methodologies.ts",
+    "seed:action-types": "ts-node src/scripts/seed-action-type-registry.ts",
+    "seed:all": "ts-node src/scripts/seed-all.ts"
   },
   "keywords": [
     "autonomous",

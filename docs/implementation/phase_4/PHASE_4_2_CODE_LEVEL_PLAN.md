@@ -1,9 +1,8 @@
 # Phase 4.2 — Orchestration: Code-Level Implementation Plan
 
-**Status:** ✅ **COMPLETE**  
+**Status:** 🟡 **PLANNING**  
 **Created:** 2026-01-26  
-**Last Updated:** 2026-01-26  
-**Implementation Completed:** 2026-01-26  
+**Last Updated:** 2026-01-26 (Updated to align with Phase 4.1 revisions)  
 **Parent Document:** `PHASE_4_CODE_LEVEL_PLAN.md`  
 **Prerequisites:** Phase 4.1 complete
 
@@ -172,14 +171,7 @@ export const handler: Handler = async (event: unknown) => {
     const intent = await actionIntentService.getIntent(action_intent_id, tenant_id, account_id);
     
     if (!intent) {
-      // Use typed error for SFN-friendly classification
-      const error = new Error(
-        `ActionIntent not found: ${action_intent_id}. ` +
-        `This may indicate the intent was deleted or the tenant/account combination is invalid. ` +
-        `Check ActionIntent table for ACTION_INTENT#${action_intent_id} with tenant_id=${tenant_id}, account_id=${account_id}.`
-      );
-      error.name = 'ValidationError'; // SFN will route to failure recorder, not retry
-      throw error;
+      throw new Error(`ActionIntent not found: ${action_intent_id}`);
     }
     
     // 2. Get tool mapping from registry using registry_version (from starter handler output)
@@ -190,14 +182,11 @@ export const handler: Handler = async (event: unknown) => {
     );
     
     if (!toolMapping) {
-      // Use typed error for SFN-friendly classification
-      const error = new Error(
+      throw new Error(
         `Tool mapping not found for action_type: ${intent.action_type}, registry_version: ${registry_version}. ` +
         `This may indicate the action type was removed or the registry version is invalid. ` +
         `Check ActionTypeRegistry table for ACTION_TYPE#${intent.action_type}, REGISTRY_VERSION#${registry_version}.`
       );
-      error.name = 'ConfigurationError'; // SFN will route to failure recorder, not retry
-      throw error;
     }
     
     // 3. Map parameters to tool arguments
@@ -236,20 +225,11 @@ export const handler: Handler = async (event: unknown) => {
 
 /**
  * Get JWT token for Gateway authentication (Cognito)
- * 
- * Note: This is done in ToolInvoker (not ToolMapper) to keep mapping deterministic
- * and auth logic near the HTTP caller where retry/refresh logic lives.
- * 
- * IMPORTANT: If this throws, the error bubbles to SFN. Auth failures should be
- * PermanentError (non-retryable). This function throws PermanentError for consistent SFN error handling.
  */
 async function getJwtToken(tenantId: string): Promise<string> {
   // TODO: Implement Cognito JWT token retrieval
   // Use Cognito Identity Pool or User Pool client credentials
-  // For now, throw PermanentError (auth failures are not retryable)
-  const error = new Error('PermanentError: JWT token retrieval not implemented');
-  error.name = 'PermanentError';
-  throw error;
+  throw new Error('JWT token retrieval not implemented');
 }
 ```
 
@@ -260,28 +240,10 @@ async function getJwtToken(tenantId: string): Promise<string> {
 **Handler:**
 
 ```typescript
-/**
- * Tool Invoker Handler - Phase 4.2
- * 
- * MCP Gateway client (centralizes MCP protocol, auth, retries, timeouts)
- * 
- * Contract: See "Execution Contract (Canonical)" section in PHASE_4_2_CODE_LEVEL_PLAN.md
- * 
- * Step Functions input: ToolInvocationRequest
- * Step Functions output: ToolInvocationResponse
- * 
- * IMPORTANT: This handler throws errors for SFN retry/catch logic:
- * - Throws Error with name='TransientError' for retryable errors (via invokeWithRetry)
- * - Throws Error with name='PermanentError' for non-retryable errors (via invokeWithRetry)
- * - Only returns ToolInvocationResponse (with success:false) for tool-level business failures
- *   where tool ran but reported an error (proceed to RecordOutcome without SFN retry)
- */
-
 import { Handler } from 'aws-lambda';
-import { z } from 'zod';
 import { Logger } from '../../services/core/Logger';
 import { TraceService } from '../../services/core/TraceService';
-import { ToolInvocationResponse } from '../../types/ExecutionTypes';
+import { ToolInvocationRequest, ToolInvocationResponse } from '../../types/ExecutionTypes';
 import axios, { AxiosError } from 'axios';
 
 const logger = new Logger('ToolInvokerHandler');
@@ -289,114 +251,50 @@ const traceService = new TraceService(logger);
 
 // Note: No DynamoDB client needed - this handler only calls Gateway via HTTP
 
-const ToolInvocationRequestSchema = z.object({
-  gateway_url: z.string().url('gateway_url must be a valid URL'),
-  tool_name: z.string().min(1, 'tool_name is required'),
-  tool_arguments: z.record(z.any())
-    .refine(
-      (val) => {
-        // Must be a plain object (not array, not null)
-        if (!val || typeof val !== 'object' || Array.isArray(val)) {
-          return false;
-        }
-        return true;
-      },
-      { message: 'tool_arguments must be a plain object (not array, not null)' }
-    )
-    .refine(
-      (val) => {
-        // Size guard: prevent huge SFN payloads (max 256KB for SFN input)
-        // tool_arguments should be < 200KB to leave room for other fields
-        const size = JSON.stringify(val).length;
-        return size < 200 * 1024; // 200KB
-      },
-      { message: 'tool_arguments exceeds size limit (200KB). Large payloads should be passed via S3 artifact reference.' }
-    ),
-  idempotency_key: z.string().min(1, 'idempotency_key is required'),
-  action_intent_id: z.string().min(1, 'action_intent_id is required'),
-  tenant_id: z.string().min(1, 'tenant_id is required'),
-  account_id: z.string().min(1, 'account_id is required'),
-  trace_id: z.string().min(1, 'trace_id is required'),
-  attempt_count: z.number().int().positive().optional(), // Optional for tool_run_ref generation
-}).strict();
-
-export const handler: Handler = async (event: unknown) => {
-  // Validate SFN input with Zod (fail fast with precise errors)
-  const validationResult = ToolInvocationRequestSchema.safeParse(event);
-  if (!validationResult.success) {
-    const error = new Error(
-      `[ToolInvokerHandler] Invalid Step Functions input: ${validationResult.error.message}. ` +
-      `Expected: { gateway_url: string, tool_name: string, tool_arguments: object, idempotency_key: string, action_intent_id: string, tenant_id: string, account_id: string, trace_id: string, attempt_count?: number }. ` +
-      `Received: ${JSON.stringify(event)}. ` +
-      `Check Step Functions state machine definition to ensure all required fields are passed from tool-mapper-handler output.`
-    );
-    error.name = 'ValidationError';
-    throw error;
-  }
-  
-  const { gateway_url, tool_name, tool_arguments, idempotency_key, action_intent_id, tenant_id, account_id, trace_id, attempt_count } = validationResult.data;
+/**
+ * Step Functions input: ToolInvocationRequest
+ * Step Functions output: ToolInvocationResponse
+ */
+export const handler: Handler<ToolInvocationRequest, ToolInvocationResponse> = async (event) => {
+  const { gateway_url, tool_name, tool_arguments, idempotency_key, jwt_token, action_intent_id, tenant_id, account_id, trace_id } = event;
   
   logger.info('Tool invoker invoked', { action_intent_id, tool_name, trace_id });
   
-  // IMPORTANT: Error semantics for SFN retry/catch logic
-  // 
-  // THROW (for SFN retry/catch):
-  // - Infrastructure errors: network failures, timeouts, 5xx responses
-  // - Auth errors: JWT token retrieval failures, 401/403 responses
-  // - These throw TransientError (retryable) or PermanentError (non-retryable)
-  // - SFN will retry on TransientError and catch PermanentError
-  //
-  // RETURN success:false (for business logic):
-  // - Tool ran successfully but reported a structured business failure
-  // - Gateway returned HTTP 200 with success:false in response payload
-  // - These proceed to RecordOutcome without SFN retry
-  //
-  // No try-catch wrapper - let ALL infrastructure/auth errors bubble up to SFN
-  
-  // 1. Get JWT token for Gateway authentication (Cognito)
-  // This is done here (not in ToolMapper) to keep mapping deterministic and auth logic near HTTP caller
-  // If getJwtToken throws, error bubbles to SFN (will be caught as generic error or we can wrap it)
-  const jwtToken = await getJwtToken(tenant_id);
-  
-  // 2. Make MCP protocol call to AgentCore Gateway
-  const mcpRequest = {
-    jsonrpc: '2.0',
-    id: `invoke-${Date.now()}`,
-    method: 'tools/call',
-    params: {
-      name: tool_name,
-      arguments: tool_arguments,
-    },
-  };
-  
-  // Generate stable, traceable tool_run_ref for audit joins
-  // Format: toolrun/{execution_trace_id}/{attempt_count}/{tool_name}
-  // This allows correlating tool invocations with execution attempts and traces
-  const toolRunRef = `toolrun/${trace_id}/${attempt_count || 1}/${tool_name}`;
-  
-  // 3. Call Gateway with retry logic
-  // invokeWithRetry throws errors with name='TransientError' or 'PermanentError' for SFN
-  const response = await invokeWithRetry(
-    gateway_url,
-    mcpRequest,
-    jwtToken,
-    toolRunRef,
-    action_intent_id
-  );
-  
-  // 4. Parse MCP response
-  const parsedResponse = parseMCPResponse(response);
-  
-  // 5. Extract external object refs (use input tool_name for system inference)
-  const externalObjectRefs = extractExternalObjectRefs(parsedResponse, tool_name);
-  
-  // 6. Check if tool reported a structured failure (tool ran but returned error)
-  // In this case, we return success:false but don't throw (proceed to RecordOutcome)
-  // This is different from HTTP/infrastructure errors which throw for SFN retry/catch
-  if (parsedResponse.success === false) {
+  try {
+    // 1. Make MCP protocol call to AgentCore Gateway
+    const mcpRequest = {
+      jsonrpc: '2.0',
+      id: `invoke-${Date.now()}`,
+      method: 'tools/call',
+      params: {
+        name: tool_name,
+        arguments: tool_arguments,
+      },
+    };
+    
+    const toolRunRef = `gateway_invocation_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+    
+    // 2. Call Gateway with retry logic
+    const response = await invokeWithRetry(
+      gateway_url,
+      mcpRequest,
+      jwt_token,
+      toolRunRef,
+      action_intent_id
+    );
+    
+    // 3. Parse MCP response
+    const parsedResponse = parseMCPResponse(response);
+    
+    // 4. Extract external object refs
+    const externalObjectRefs = extractExternalObjectRefs(parsedResponse);
+    
+    // 5. Classify errors (if any)
     const errorClassification = classifyError(parsedResponse);
+    
+    // 6. Return structured response
     return {
-      success: false,
+      success: parsedResponse.success,
       external_object_refs: externalObjectRefs,
       tool_run_ref: toolRunRef,
       raw_response_artifact_ref: parsedResponse.raw_response_artifact_ref,
@@ -404,28 +302,24 @@ export const handler: Handler = async (event: unknown) => {
       error_class: errorClassification?.error_class,
       error_message: errorClassification?.error_message,
     };
+  } catch (error: any) {
+    logger.error('Tool invocation failed', { action_intent_id, tool_name, error });
+    
+    // Classify error
+    const errorClassification = classifyErrorFromException(error);
+    
+    return {
+      success: false,
+      tool_run_ref: `gateway_invocation_failed_${Date.now()}`,
+      error_code: errorClassification.error_code,
+      error_class: errorClassification.error_class,
+      error_message: errorClassification.error_message,
+    };
   }
-  
-  // 7. Tool succeeded - return structured response
-  return {
-    success: true,
-    external_object_refs: externalObjectRefs,
-    tool_run_ref: toolRunRef,
-    raw_response_artifact_ref: parsedResponse.raw_response_artifact_ref,
-  };
 };
 
 /**
  * Invoke Gateway with retry logic (exponential backoff)
- * 
- * IMPORTANT: This function throws errors for SFN retry/catch logic.
- * - Throws Error with name='TransientError' for retryable errors (5xx, network, timeout)
- * - Throws Error with name='PermanentError' for non-retryable errors (4xx auth/validation)
- * - Only returns response data on success
- * 
- * Step Functions will:
- * - Retry on 'TransientError' (via .addRetry configuration)
- * - Catch 'PermanentError' and route to compensation/failure handlers
  */
 async function invokeWithRetry(
   gatewayUrl: string,
@@ -456,14 +350,12 @@ async function invokeWithRetry(
       lastError = error;
       
       // Check if error is retryable
-      const isRetryable = isRetryableError(error);
-      
-      // If not retryable or max retries reached, throw with SFN-compatible error name
-      if (!isRetryable || attempt === maxRetries) {
-        const errorName = isRetryable ? 'TransientError' : 'PermanentError';
-        const sfError = new Error(`${errorName}: ${error.message || 'Unknown error'}`);
-        sfError.name = errorName;
-        throw sfError;
+      if (!isRetryableError(error) || attempt === maxRetries) {
+        // Throw with Step Functions-compatible error type
+        if (error.response?.status >= 400 && error.response?.status < 500) {
+          throw new Error('PermanentError: ' + error.message);
+        }
+        throw new Error('TransientError: ' + error.message);
       }
       
       // Exponential backoff
@@ -479,49 +371,27 @@ async function invokeWithRetry(
     }
   }
   
-  // Should never reach here (thrown in loop), but TypeScript requires return
-  const errorName = isRetryableError(lastError) ? 'TransientError' : 'PermanentError';
-  const sfError = new Error(`${errorName}: ${lastError?.message || 'Unknown error'}`);
-  sfError.name = errorName;
-  throw sfError;
+  // Throw with appropriate error type for Step Functions
+  if (lastError.response?.status >= 400 && lastError.response?.status < 500) {
+    throw new Error('PermanentError: ' + lastError.message);
+  }
+  throw new Error('TransientError: ' + lastError.message);
 }
 
 /**
  * Check if error is retryable (transient)
- * 
- * Retryable errors include:
- * - 5xx server errors (gateway/adapter failures)
- * - 429 rate limiting (with backoff)
- * - Network errors: DNS failures, connection refused, timeouts, resets
  */
 function isRetryableError(error: any): boolean {
   if (error instanceof AxiosError) {
-    // 5xx errors are retryable (server failures)
+    // 5xx errors are retryable
     if (error.response?.status && error.response.status >= 500) {
       return true;
     }
     
-    // 429 rate limiting is retryable (with exponential backoff)
-    if (error.response?.status === 429) {
-      return true;
-    }
-    
     // Network errors are retryable
-    const retryableNetworkCodes = [
-      'ECONNRESET',    // Connection reset by peer
-      'ETIMEDOUT',     // Connection timeout
-      'ENOTFOUND',     // DNS lookup failed
-      'EAI_AGAIN',     // DNS temporary failure
-      'ECONNREFUSED',  // Connection refused
-    ];
-    if (error.code && retryableNetworkCodes.includes(error.code)) {
+    if (error.code === 'ECONNRESET' || error.code === 'ETIMEDOUT') {
       return true;
     }
-  }
-  
-  // Non-Axios network errors (e.g., from fetch or other HTTP clients)
-  if (error.code && ['ENOTFOUND', 'EAI_AGAIN', 'ECONNREFUSED', 'ECONNRESET', 'ETIMEDOUT'].includes(error.code)) {
-    return true;
   }
   
   return false;
@@ -529,26 +399,13 @@ function isRetryableError(error: any): boolean {
 
 /**
  * Parse MCP response
- * 
- * IMPORTANT: Protocol failures (malformed JSON, invalid MCP structure) throw errors for SFN retry/catch.
- * Only tool-reported business failures (success:false in valid JSON) return success:false.
- * 
- * Error Classification Policy:
- * - Invalid structure (missing result.content): TransientError (plausibly upstream outage/partial response)
- * - Malformed JSON: TransientError (plausibly gateway timeout/truncation)
- * - MCP error response: PermanentError (structured error from Gateway/adapter, typically non-retryable)
  */
 function parseMCPResponse(response: any): any {
-  // MCP error response (structured error from Gateway)
   if (response.error) {
-    // MCP protocol error - structured error from Gateway/adapter
-    // Typically indicates configuration/auth issues (non-retryable)
-    const error = new Error(
-      `MCP protocol error: ${JSON.stringify(response.error)}. ` +
-      `This indicates a Gateway or adapter protocol failure, not a tool business failure.`
-    );
-    error.name = 'PermanentError'; // Structured errors are typically non-retryable
-    throw error;
+    return {
+      success: false,
+      error: response.error,
+    };
   }
   
   if (response.result?.content) {
@@ -557,102 +414,62 @@ function parseMCPResponse(response: any): any {
     if (textContent) {
       try {
         const parsed = JSON.parse(textContent.text);
-        // Valid JSON - return parsed response (success may be false for business failures)
         return {
           success: parsed.success !== false,
           ...parsed,
         };
       } catch (e) {
-        // JSON parse failure - protocol failure, throw for SFN
-        // Classify as TransientError (plausibly gateway timeout/truncation causing partial JSON)
-        const error = new Error(
-          `Failed to parse MCP response JSON: ${e instanceof Error ? e.message : 'Unknown parse error'}. ` +
-          `Response text: ${textContent.text?.substring(0, 500)}. ` +
-          `This is a protocol failure, not a tool business failure.`
-        );
-        error.name = 'TransientError'; // Malformed JSON may be due to upstream timeout/truncation
-        throw error;
+        return {
+          success: false,
+          error: 'Failed to parse MCP response',
+        };
       }
     }
   }
   
-  // Invalid MCP response structure - protocol failure, throw for SFN
-  // Classify as TransientError (plausibly upstream outage/partial response)
-  const error = new Error(
-    `Invalid MCP response format: missing result.content or text content. ` +
-    `Response: ${JSON.stringify(response).substring(0, 500)}. ` +
-    `This is a protocol failure, not a tool business failure.`
-  );
-  error.name = 'TransientError'; // Invalid structure may be due to upstream outage
-  throw error;
+  return {
+    success: false,
+    error: 'Invalid MCP response format',
+  };
 }
 
 /**
  * Extract external object refs from parsed response
- * 
- * @param parsedResponse - Parsed MCP response from Gateway
- * @param toolName - Tool name from input (used for system inference, not from response)
- * 
- * CONTRACT REQUIREMENT: All execution tools must return external_object_refs on success.
- * This is a Phase 4.2 contract requirement - tools that create/modify external objects must
- * return references for audit, compensation, and signal emission.
- * 
- * Note: Adapter contract should return external_object_refs as an array directly.
- * This function supports both:
- * - Direct array: parsedResponse.external_object_refs (preferred)
- * - Legacy single object: parsedResponse.external_object_id + object_type (for backwards compatibility)
  */
-function extractExternalObjectRefs(
-  parsedResponse: any,
-  toolName: string
-): ToolInvocationResponse['external_object_refs'] {
-  // If tool failed, external refs may not exist (that's fine)
-  if (!parsedResponse.success) {
+function extractExternalObjectRefs(parsedResponse: any): ToolInvocationResponse['external_object_refs'] {
+  if (!parsedResponse.success || !parsedResponse.external_object_id) {
     return undefined;
   }
   
-  // Preferred: adapter returns external_object_refs array directly
-  if (Array.isArray(parsedResponse.external_object_refs)) {
-    // Validate each ref has required fields
-    const validatedRefs = parsedResponse.external_object_refs.map((ref: any, index: number) => {
-      if (!ref.object_id || !ref.object_type) {
-        throw new Error(
-          `Tool invocation response external_object_refs[${index}] is missing required fields (object_id, object_type). ` +
-          `Tool: ${toolName}, Ref: ${JSON.stringify(ref)}`
-        );
-      }
-      // Infer system from tool_name if not provided
-      return {
-        system: ref.system || inferSystemFromTool(toolName),
-        object_type: ref.object_type,
-        object_id: ref.object_id,
-        object_url: ref.object_url,
-      };
-    });
-    return validatedRefs.length > 0 ? validatedRefs : undefined;
+  // Infer system from tool name or response
+  const system = inferSystemFromTool(parsedResponse.tool_name);
+  
+  if (!parsedResponse.external_object_id) {
+    const error = new Error(
+      'Tool invocation response is missing required field: external_object_id. ' +
+      'The connector adapter must return external_object_id in the MCP response. ' +
+      `Tool: ${parsedResponse.tool_name || 'unknown'}, Response: ${JSON.stringify(parsedResponse)}`
+    );
+    error.name = 'InvalidToolResponseError';
+    throw error;
   }
   
-  // Legacy: single object format (for backwards compatibility)
-  if (parsedResponse.external_object_id && parsedResponse.object_type) {
-    const system = inferSystemFromTool(toolName);
-    return [{
-      system,
-      object_type: parsedResponse.object_type,
-      object_id: parsedResponse.external_object_id,
-      object_url: parsedResponse.object_url,
-    }];
+  if (!parsedResponse.object_type) {
+    const error = new Error(
+      'Tool invocation response is missing required field: object_type. ' +
+      'The connector adapter must return object_type in the MCP response. ' +
+      `Tool: ${parsedResponse.tool_name || 'unknown'}, Response: ${JSON.stringify(parsedResponse)}`
+    );
+    error.name = 'InvalidToolResponseError';
+    throw error;
   }
   
-  // CONTRACT VIOLATION: Tool succeeded but no external refs
-  // All execution tools must return external_object_refs on success (Phase 4.2 contract requirement)
-  const error = new Error(
-    'Tool invocation response is missing required field: external_object_refs (or legacy external_object_id + object_type). ' +
-    'CONTRACT REQUIREMENT: All execution tools must return external_object_refs when success=true. ' +
-    'This is required for audit, compensation, and signal emission. ' +
-    `Tool: ${toolName}, Response: ${JSON.stringify(parsedResponse)}`
-  );
-  error.name = 'InvalidToolResponseError';
-  throw error;
+  return [{
+    system,
+    object_type: parsedResponse.object_type,
+    object_id: parsedResponse.external_object_id,
+    object_url: parsedResponse.object_url,
+  }];
 }
 
 /**
@@ -894,8 +711,6 @@ export const handler: Handler = async (event: unknown) => {
   
   try {
     const completedAt = new Date().toISOString();
-    // Note: status must match ExecutionAttempt.status enum: 'SUCCEEDED' | 'FAILED' | 'CANCELLED'
-    // Phase 4.1 ExecutionAttempt uses these exact values, so this is correct
     const status = tool_invocation_response.success ? 'SUCCEEDED' : 'FAILED';
     
     // 1. Record outcome (include registry_version for audit and backwards compatibility)
@@ -1102,28 +917,13 @@ export const handler: Handler = async (event: {
     const intent = await actionIntentService.getIntent(action_intent_id, tenant_id, account_id);
     
     if (!intent) {
-      // Use typed error for SFN-friendly classification
-      const error = new Error(
-        `ActionIntent not found: ${action_intent_id}. ` +
-        `This may indicate the intent was deleted or the tenant/account combination is invalid. ` +
-        `Check ActionIntent table for ACTION_INTENT#${action_intent_id} with tenant_id=${tenant_id}, account_id=${account_id}.`
-      );
-      error.name = 'ValidationError'; // SFN will route to failure recorder, not retry
-      throw error;
+      throw new Error(`ActionIntent not found: ${action_intent_id}`);
     }
     
     // 2. Get tool mapping to determine compensation strategy
-    // Use registry_version from SFN input (deterministic execution)
-    // If not provided, fall back to intent.registry_version
-    const registryVersion = registry_version || intent.registry_version;
-    if (!registryVersion) {
-      throw new Error(`Registry version not found for action_intent_id: ${action_intent_id}. ` +
-        `This is required for deterministic compensation.`);
-    }
-    
     const toolMapping = await actionTypeRegistryService.getToolMapping(
       intent.action_type,
-      registryVersion
+      intent.parameters_schema_version
     );
     
     if (!toolMapping) {
@@ -1491,367 +1291,12 @@ private buildStateMachineDefinition(): stepfunctions.IChainable {
     resultPath: '$.error',
   });
   
-  // InvokeTool errors: route to RecordFailure (not compensation)
-  // Compensation should only run conditionally if external write occurred (see Choice state below)
-  invokeTool.addCatch(recordFailure, {
-    errors: ['States.ALL'], // All errors (TransientError exhausted, PermanentError, etc.)
+  invokeTool.addCatch(compensateAction, {
+    errors: ['PermanentError'],
     resultPath: '$.error',
   });
   
-  // Choice state: Check if compensation is needed after tool invocation
-  // Compensation should only run if:
-  // 1. Tool invocation failed (success: false) AND
-  // 2. External object refs exist (write occurred) AND
-  // 3. Registry compensation strategy is AUTOMATIC
-  const checkCompensation = new stepfunctions.Choice(this, 'CheckCompensation')
-    .when(
-      stepfunctions.Condition.and(
-        stepfunctions.Condition.booleanEquals('$.tool_invocation_response.success', false),
-        stepfunctions.Condition.isPresent('$.tool_invocation_response.external_object_refs[0]'),
-        stepfunctions.Condition.stringEquals('$.compensation_strategy', 'AUTOMATIC')
-      ),
-      compensateAction.next(recordOutcome)
-    )
-    .otherwise(recordOutcome);
-  
-  // Build chain
-  return startExecution
-    .next(validatePreflight)
-    .next(mapActionToTool)
-    .next(invokeTool)
-    .next(checkCompensation); // Choice state routes to compensation or directly to recordOutcome
-}
-
-private createExecutionTriggerRule(
-  props: ExecutionInfrastructureProps,
-  config: ExecutionInfrastructureConfig
-): events.Rule {
-  const rule = new events.Rule(this, 'ExecutionTriggerRule', {
-    eventBus: props.eventBus,
-    eventPattern: {
-      source: [config.eventBridge.source],
-      detailType: [config.eventBridge.detailTypes.actionApproved],
-    },
-  });
-  
-  // Trigger Step Functions with action_intent_id, tenant_id, and account_id
-  // Note: tenant_id and account_id are REQUIRED - execution-starter-handler needs them for security validation
-  // Note: Idempotency is handled by DynamoDB attempt lock in Phase 4.1 (ExecutionAttemptService.startAttempt)
-  // EventBridge may trigger multiple executions for the same action_intent_id, but the attempt lock prevents duplicates
-  rule.addTarget(new eventsTargets.SfnStateMachine(this.executionStateMachine, {
-    input: events.RuleTargetInput.fromObject({
-      action_intent_id: events.EventField.fromPath('$.detail.data.action_intent_id'),
-      tenant_id: events.EventField.fromPath('$.detail.data.tenant_id'),
-      account_id: events.EventField.fromPath('$.detail.data.account_id'),
-    }),
-  }));
-  
-  // Grant Step Functions permission to be invoked by EventBridge
-  this.executionStateMachine.grantStartExecution(new iam.ServicePrincipal('events.amazonaws.com'));
-  
-  return rule;
-}
-```
-
----
-
-## 3. Step Functions State Machine Definition
-
-**File:** `src/stacks/constructs/ExecutionInfrastructure.ts` (in `buildStateMachineDefinition` method)
-
-**Note:** The Step Functions state machine is built programmatically in CDK using `stepfunctionsTasks.LambdaInvoke` with Lambda function references. Function names come from `config.functionNames.*`. 
-
-**IMPORTANT:** The CDK code above (`buildStateMachineDefinition()`) is the canonical definition. The JSON below is for reference only to show the equivalent Step Functions JSON structure. Always refer to the CDK code for the actual implementation.
-
-**State Machine JSON (for reference only - matches CDK implementation above):**
-
-```json
-{
-  "Comment": "Action Intent Execution Orchestrator",
-  "StartAt": "StartExecution",
-  "States": {
-    "StartExecution": {
-      "Type": "Task",
-      "Resource": "arn:aws:states:::lambda:invoke",
-      "Parameters": {
-        "FunctionName": "cc-native-execution-starter",
-        "Payload": {
-          "action_intent_id": "$.action_intent_id",
-          "tenant_id": "$.tenant_id",
-          "account_id": "$.account_id"
-        }
-      },
-      "Next": "ValidatePreflight",
-      "Catch": [
-        {
-          "ErrorEquals": ["States.ALL"],
-          "Next": "RecordFailure",
-          "ResultPath": "$.error"
-        }
-      ]
-    },
-    "ValidatePreflight": {
-      "Type": "Task",
-      "Resource": "arn:aws:states:::lambda:invoke",
-      "Parameters": {
-        "FunctionName": "cc-native-execution-validator",
-        "Payload": {
-          "action_intent_id": "$.action_intent_id",
-          "tenant_id": "$.tenant_id",
-          "account_id": "$.account_id",
-          "trace_id": "$.trace_id",
-          "registry_version": "$.registry_version",
-          "attempt_count": "$.attempt_count",
-          "started_at": "$.started_at"
-        }
-      },
-      "Next": "MapActionToTool",
-      "Catch": [
-        {
-          "ErrorEquals": ["States.ALL"],
-          "Next": "RecordFailure",
-          "ResultPath": "$.error"
-        }
-      ]
-    },
-    "MapActionToTool": {
-      "Type": "Task",
-      "Resource": "arn:aws:states:::lambda:invoke",
-      "Parameters": {
-        "FunctionName": "cc-native-tool-mapper",
-        "Payload": {
-          "action_intent_id": "$.action_intent_id",
-          "tenant_id": "$.tenant_id",
-          "account_id": "$.account_id",
-          "idempotency_key": "$.idempotency_key",
-          "trace_id": "$.trace_id",
-          "registry_version": "$.registry_version",
-          "attempt_count": "$.attempt_count",
-          "started_at": "$.started_at"
-        }
-      },
-      "Next": "InvokeTool",
-      "Catch": [
-        {
-          "ErrorEquals": ["States.ALL"],
-          "Next": "RecordFailure",
-          "ResultPath": "$.error"
-        }
-      ]
-    },
-    "InvokeTool": {
-      "Type": "Task",
-      "Resource": "arn:aws:states:::lambda:invoke",
-      "Parameters": {
-        "FunctionName": "cc-native-tool-invoker",
-        "Payload": {
-          "gateway_url": "$.gateway_url",
-          "tool_name": "$.tool_name",
-          "tool_arguments": "$.tool_arguments",
-          "idempotency_key": "$.idempotency_key",
-          "action_intent_id": "$.action_intent_id",
-          "tenant_id": "$.tenant_id",
-          "account_id": "$.account_id",
-          "trace_id": "$.trace_id",
-          "attempt_count": "$.attempt_count"
-        }
-      },
-      "ResultPath": "$.tool_invocation_response",
-      "Retry": [
-        {
-          "ErrorEquals": ["TransientError"],
-          "IntervalSeconds": 2,
-          "MaxAttempts": 3,
-          "BackoffRate": 2.0
-        }
-      ],
-      "Catch": [
-        {
-          "ErrorEquals": ["States.ALL"],
-          "Next": "RecordFailure",
-          "ResultPath": "$.error"
-        }
-      ],
-      "Next": "CheckCompensation"
-    },
-    "CheckCompensation": {
-      "Type": "Choice",
-      "Choices": [
-        {
-          "And": [
-            {
-              "Variable": "$.tool_invocation_response.success",
-              "BooleanEquals": false
-            },
-            {
-              "Variable": "$.tool_invocation_response.external_object_refs[0]",
-              "IsPresent": true
-            },
-            {
-              "Variable": "$.compensation_strategy",
-              "StringEquals": "AUTOMATIC"
-            }
-          ],
-          "Next": "CompensateAction"
-        }
-      ],
-      "Default": "RecordOutcome"
-    },
-    "CompensateAction": {
-      "Type": "Task",
-      "Resource": "arn:aws:states:::lambda:invoke",
-      "Parameters": {
-        "FunctionName": "cc-native-compensation-handler",
-        "Payload": {
-          "action_intent_id": "$.action_intent_id",
-          "tenant_id": "$.tenant_id",
-          "account_id": "$.account_id",
-          "trace_id": "$.trace_id",
-          "registry_version": "$.registry_version",
-          "execution_result": "$.tool_invocation_response"
-        }
-      },
-      "Next": "RecordOutcome"
-    },
-    "RecordOutcome": {
-      "Type": "Task",
-      "Resource": "arn:aws:states:::lambda:invoke",
-      "Parameters": {
-        "FunctionName": "cc-native-execution-recorder",
-        "Payload": {
-          "action_intent_id": "$.action_intent_id",
-          "tenant_id": "$.tenant_id",
-          "account_id": "$.account_id",
-          "trace_id": "$.trace_id",
-          "tool_invocation_response": "$.tool_invocation_response",
-          "tool_name": "$.tool_name",
-          "tool_schema_version": "$.tool_schema_version",
-          "registry_version": "$.registry_version",
-          "compensation_strategy": "$.compensation_strategy",
-          "attempt_count": "$.attempt_count",
-          "started_at": "$.started_at"
-        }
-      },
-      "End": true
-    },
-    "RecordFailure": {
-      "Type": "Task",
-      "Resource": "arn:aws:states:::lambda:invoke",
-      "Parameters": {
-        "FunctionName": "cc-native-execution-failure-recorder",
-        "Payload": {
-          "action_intent_id": "$.action_intent_id",
-          "tenant_id": "$.tenant_id",
-          "account_id": "$.account_id",
-          "trace_id": "$.trace_id",
-          "registry_version": "$.registry_version",
-          "status": "FAILED",
-          "error": "$.error"
-        }
-      },
-      "End": true
-    }
-  }
-}
-```
-
----
-
-## 4. Testing
-
-### Testing Strategy
-
-**Current Status:** Integration tests are deferred until Phase 4.3 when connector adapters are available for end-to-end testing.
-
-**Why Defer:**
-- ToolInvoker handler requires AgentCore Gateway to be configured (Phase 4.3)
-- Connector adapters need to be implemented before full end-to-end testing
-- Unit tests for individual handlers can be written, but orchestration flow requires Gateway + adapters
-
-**Recommended Testing Approach:**
-
-1. **Unit Tests (Can be done now):**
-   - Handler input/output validation (Zod schemas)
-   - Service layer logic (ExecutionAttemptService, ActionTypeRegistryService, etc.)
-   - Error classification logic
-   - Idempotency key generation
-
-2. **Integration Tests (Phase 4.3+):**
-   - Step Functions execution flow (with mock Gateway)
-   - ToolInvoker → Gateway → Adapter flow (with real Gateway)
-   - Compensation routing logic
-   - Error handling and retry behavior
-
-3. **End-to-End Tests (Phase 4.3+):**
-   - Full execution lifecycle from ACTION_APPROVED event
-   - External system integration (CRM, Calendar, etc.)
-   - Compensation scenarios
-
-**Files to Create (Phase 4.3):**
-- `src/tests/integration/execution/orchestration-flow.test.ts` - Step Functions execution flow
-- `src/tests/integration/execution/tool-invocation.test.ts` - ToolInvoker → Gateway → Adapter flow
-
----
-
-## 5. Implementation Checklist
-
-- [x] Create `src/handlers/phase4/tool-mapper-handler.ts`
-- [x] Create `src/handlers/phase4/tool-invoker-handler.ts`
-- [x] Create `src/handlers/phase4/execution-recorder-handler.ts`
-- [x] Create `src/handlers/phase4/execution-failure-recorder-handler.ts`
-- [x] Create `src/handlers/phase4/compensation-handler.ts`
-- [x] Update `src/stacks/constructs/ExecutionInfrastructure.ts` (Phase 4.2 additions - use config for all hardcoded values)
-- [x] Add Phase 4.2 handlers to CDK construct - use `config.functionNames.*`, `config.defaults.timeout.*`, `config.lambda.retryAttempts`
-- [x] Add Phase 4.2 DLQs to CDK construct - use `config.queueNames.*` and `config.lambda.dlqRetentionDays`
-- [x] Add S3 bucket for raw response artifacts - use `config.s3.executionArtifactsBucketPrefix`
-- [x] Create Step Functions state machine in CDK (with error handling) - use `config.stepFunctions.*`
-- [x] Create EventBridge rule (ACTION_APPROVED → Step Functions) - use `config.eventBridge.*`
-- [ ] Integration tests for orchestration (deferred - see Testing section below)
-
----
-
-## 6. Phase 4.2 Acceptance Criteria
-
-**Phase 4.2 is complete when:**
-
-1. ✅ Step Functions state machine orchestrates execution lifecycle (Start → Validate → Map → Invoke → Record)
-2. ✅ ToolMapper handler maps action types to tools using deterministic `registry_version`
-3. ✅ ToolInvoker handler invokes Gateway with retry logic and proper error classification
-4. ✅ Execution recorder handler records structured outcomes with audit fields
-5. ✅ Execution failure recorder handler records pre-tool failures with proper error classification
-6. ✅ Compensation handler structure exists (AUTOMATIC compensation implementation deferred to Phase 4.3/4.4)
-7. ✅ EventBridge rule triggers Step Functions on ACTION_APPROVED events with idempotency
-8. ✅ All handlers use Zod validation for fail-fast input validation
-9. ✅ All handlers use execution_trace_id for trace correlation
-10. ✅ Compensation routing is conditional (gated on success=false + external refs + strategy=AUTOMATIC)
-
-**Note:** AUTOMATIC compensation strategy exists in registry and is correctly routed by SFN Choice state, but the actual compensation tool invocation implementation is deferred to Phase 4.3/4.4.
-
----
-
-## 7. Implementation Status
-
-**Phase 4.2 Implementation:** ✅ **COMPLETE**
-
-All core components have been implemented:
-- ✅ All 5 Phase 4.2 handlers created and integrated
-- ✅ Step Functions state machine with conditional compensation routing
-- ✅ EventBridge rule for ACTION_APPROVED events
-- ✅ S3 bucket for raw response artifacts
-- ✅ All DLQs and error handling configured
-- ✅ CDK infrastructure fully integrated
-
-**Note:** Integration tests are deferred to Phase 4.3/4.4 when connectors are available for end-to-end testing.
-
-## 8. Next Steps
-
-After Phase 4.2 completion:
-- ✅ Orchestration layer complete
-- ⏳ Proceed to Phase 4.3 (Connectors) - Adapter interface, Internal adapter, CRM adapter, AgentCore Gateway
-
----
-
-**See:** `PHASE_4_CODE_LEVEL_PLAN.md` for complete Phase 4 overview and cross-references.
+  invokeTool.addCatch(recordFailure, {
     errors: ['States.ALL'],
     resultPath: '$.error',
   });
@@ -2071,35 +1516,9 @@ private createExecutionTriggerRule(
 
 ## 4. Testing
 
-### Testing Strategy
+### Integration Tests
 
-**Current Status:** Integration tests are deferred until Phase 4.3 when connector adapters are available for end-to-end testing.
-
-**Why Defer:**
-- ToolInvoker handler requires AgentCore Gateway to be configured (Phase 4.3)
-- Connector adapters need to be implemented before full end-to-end testing
-- Unit tests for individual handlers can be written, but orchestration flow requires Gateway + adapters
-
-**Recommended Testing Approach:**
-
-1. **Unit Tests (Can be done now):**
-   - Handler input/output validation (Zod schemas)
-   - Service layer logic (ExecutionAttemptService, ActionTypeRegistryService, etc.)
-   - Error classification logic
-   - Idempotency key generation
-
-2. **Integration Tests (Phase 4.3+):**
-   - Step Functions execution flow (with mock Gateway)
-   - ToolInvoker → Gateway → Adapter flow (with real Gateway)
-   - Compensation routing logic
-   - Error handling and retry behavior
-
-3. **End-to-End Tests (Phase 4.3+):**
-   - Full execution lifecycle from ACTION_APPROVED event
-   - External system integration (CRM, Calendar, etc.)
-   - Compensation scenarios
-
-**Files to Create (Phase 4.3):**
+**Files to Create:**
 - `src/tests/integration/execution/orchestration-flow.test.ts` - Step Functions execution flow
 - `src/tests/integration/execution/tool-invocation.test.ts` - ToolInvoker → Gateway → Adapter flow
 
@@ -2107,35 +1526,21 @@ private createExecutionTriggerRule(
 
 ## 5. Implementation Checklist
 
-- [x] Create `src/handlers/phase4/tool-mapper-handler.ts`
+- [ ] Create `src/handlers/phase4/tool-mapper-handler.ts`
 - [ ] Create `src/handlers/phase4/tool-invoker-handler.ts`
 - [ ] Create `src/handlers/phase4/execution-recorder-handler.ts`
-- [x] Create `src/handlers/phase4/compensation-handler.ts`
-- [x] Update `src/stacks/constructs/ExecutionInfrastructure.ts` (Phase 4.2 additions - use config for all hardcoded values)
-- [x] Add Phase 4.2 handlers to CDK construct - use `config.functionNames.*`, `config.defaults.timeout.*`, `config.lambda.retryAttempts`
-- [x] Add Phase 4.2 DLQs to CDK construct - use `config.queueNames.*` and `config.lambda.dlqRetentionDays`
-- [x] Add S3 bucket for raw response artifacts - use `config.s3.executionArtifactsBucketPrefix`
-- [x] Create Step Functions state machine in CDK (with error handling) - use `config.stepFunctions.*`
-- [x] Create EventBridge rule (ACTION_APPROVED → Step Functions) - use `config.eventBridge.*`
-- [ ] Integration tests for orchestration (deferred - see Testing section above)
+- [ ] Create `src/handlers/phase4/compensation-handler.ts`
+- [ ] Update `src/stacks/constructs/ExecutionInfrastructure.ts` (Phase 4.2 additions - use config for all hardcoded values)
+- [ ] Add Phase 4.2 handlers to CDK construct - use `config.functionNames.*`, `config.defaults.timeout.*`, `config.lambda.retryAttempts`
+- [ ] Add Phase 4.2 DLQs to CDK construct - use `config.queueNames.*` and `config.lambda.dlqRetentionDays`
+- [ ] Add S3 bucket for raw response artifacts - use `config.s3.executionArtifactsBucketPrefix`
+- [ ] Create Step Functions state machine in CDK (with error handling) - use `config.stepFunctions.*`
+- [ ] Create EventBridge rule (ACTION_APPROVED → Step Functions) - use `config.eventBridge.*`
+- [ ] Integration tests for orchestration
 
 ---
 
-## 6. Implementation Status
-
-**Phase 4.2 Implementation:** ✅ **COMPLETE**
-
-All core components have been implemented:
-- ✅ All 5 Phase 4.2 handlers created and integrated
-- ✅ Step Functions state machine with conditional compensation routing
-- ✅ EventBridge rule for ACTION_APPROVED events
-- ✅ S3 bucket for raw response artifacts
-- ✅ All DLQs and error handling configured
-- ✅ CDK infrastructure fully integrated
-
-**Note:** Integration tests are deferred to Phase 4.3/4.4 when connectors are available for end-to-end testing.
-
-## 7. Next Steps
+## 6. Next Steps
 
 After Phase 4.2 completion:
 - ✅ Orchestration layer complete

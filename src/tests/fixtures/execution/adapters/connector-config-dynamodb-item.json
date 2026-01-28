@@ -1,0 +1,6 @@
+{
+  "pk": "TENANT#tenant_test_1#ACCOUNT#account_test_1",
+  "sk": "CONNECTOR#salesforce",
+  "instance_url": "https://test.salesforce.com",
+  "api_endpoint": "https://test.salesforce.com/services/data/v58.0"
+}

@@ -17,6 +17,8 @@ import * as stepfunctions from 'aws-cdk-lib/aws-stepfunctions';
 import * as stepfunctionsTasks from 'aws-cdk-lib/aws-stepfunctions-tasks';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as cognito from 'aws-cdk-lib/aws-cognito';
+import * as bedrockagentcore from 'aws-cdk-lib/aws-bedrockagentcore';
+import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import { Construct } from 'constructs';
 import {
   ExecutionInfrastructureConfig,
@@ -28,8 +30,9 @@ export interface ExecutionInfrastructureProps {
   readonly ledgerTable: dynamodb.Table;
   readonly actionIntentTable: dynamodb.Table;
   readonly tenantsTable: dynamodb.Table;
-  readonly gatewayUrl?: string; // AgentCore Gateway URL (required for Phase 4.2)
-  readonly userPool?: cognito.IUserPool; // Cognito User Pool for JWT token retrieval (optional)
+  readonly gatewayUrl?: string; // AgentCore Gateway URL (Phase 4.2 - will be removed after Phase 4.3 Gateway setup)
+  readonly userPool?: cognito.IUserPool; // Cognito User Pool for JWT auth (required for Phase 4.3 Gateway)
+  readonly userPoolClient?: cognito.IUserPoolClient; // Cognito User Pool Client (required for Phase 4.3 Gateway)
   readonly artifactsBucket?: s3.IBucket; // S3 bucket for raw response artifacts (optional, will be created if not provided)
   readonly config?: ExecutionInfrastructureConfig;
   readonly region?: string;
@@ -73,6 +76,24 @@ export class ExecutionInfrastructure extends Construct {
   // S3 Bucket (Phase 4.2)
   public readonly executionArtifactsBucket?: s3.IBucket;
 
+  // AgentCore Gateway (Phase 4.3)
+  public readonly executionGateway: bedrockagentcore.CfnGateway;
+  public readonly gatewayUrl: string; // Output: Gateway URL for ToolMapper handler
+
+  // Connectors VPC (Phase 4.3)
+  public readonly connectorsVpc: ec2.Vpc;
+  public readonly internalAdapterSecurityGroup: ec2.SecurityGroup;
+  public readonly crmAdapterSecurityGroup: ec2.SecurityGroup;
+
+  // Adapter Lambda Functions (Phase 4.3)
+  public readonly internalAdapterHandler: lambda.Function;
+  public readonly crmAdapterHandler: lambda.Function;
+
+  // Connector Config Table (Phase 4.3)
+  public readonly connectorConfigTable: dynamodb.Table;
+  public readonly internalNotesTable: dynamodb.Table;
+  public readonly internalTasksTable: dynamodb.Table;
+
   constructor(scope: Construct, id: string, props: ExecutionInfrastructureProps) {
     super(scope, id);
 
@@ -101,14 +122,21 @@ export class ExecutionInfrastructure extends Construct {
     this.executionFailureRecorderDlq = this.createDlq('ExecutionFailureRecorderDlq', config.queueNames.executionFailureRecorderDlq, config);
     this.compensationDlq = this.createDlq('CompensationDlq', config.queueNames.compensationDlq, config);
     
-    // Phase 4.2: Additional Lambda Functions
-    this.toolMapperHandler = this.createToolMapperHandler(props, config);
-    this.toolInvokerHandler = this.createToolInvokerHandler(props, config);
-    this.executionRecorderHandler = this.createExecutionRecorderHandler(props, config);
-    this.executionFailureRecorderHandler = this.createExecutionFailureRecorderHandler(props, config);
-    this.compensationHandler = this.createCompensationHandler(props, config);
-    
-    // Phase 4.2: S3 Bucket (if not provided)
+    // Phase 4.3: Additional DynamoDB Tables (create early, before handlers that might need them)
+    this.connectorConfigTable = this.createConnectorConfigTable(config);
+    this.internalNotesTable = this.createInternalNotesTable(config);
+    this.internalTasksTable = this.createInternalTasksTable(config);
+
+    // Phase 4.3: Connectors VPC (create before security groups and Lambdas)
+    this.connectorsVpc = this.createConnectorsVpc(config);
+    this.internalAdapterSecurityGroup = this.createInternalAdapterSecurityGroup();
+    this.crmAdapterSecurityGroup = this.createCrmAdapterSecurityGroup();
+
+    // Phase 4.3: AgentCore Gateway (create before adapter handlers and ToolMapper)
+    this.executionGateway = this.createAgentCoreGateway(props, config);
+    this.gatewayUrl = this.executionGateway.attrGatewayUrl;
+
+    // Phase 4.2: S3 Bucket (create BEFORE handlers that need it)
     if (!props.artifactsBucket) {
       this.executionArtifactsBucket = new s3.Bucket(this, 'ExecutionArtifactsBucket', {
         bucketName: `${config.s3.executionArtifactsBucketPrefix}-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}`,
@@ -118,12 +146,32 @@ export class ExecutionInfrastructure extends Construct {
     } else {
       this.executionArtifactsBucket = props.artifactsBucket;
     }
+
+    // Phase 4.2: Additional Lambda Functions (ToolMapper now uses this.gatewayUrl)
+    // Note: ToolInvokerHandler needs executionArtifactsBucket, so bucket must be created first
+    this.toolMapperHandler = this.createToolMapperHandler(props, config);
+    this.toolInvokerHandler = this.createToolInvokerHandler(props, config);
+    this.executionRecorderHandler = this.createExecutionRecorderHandler(props, config);
+    this.executionFailureRecorderHandler = this.createExecutionFailureRecorderHandler(props, config);
+    this.compensationHandler = this.createCompensationHandler(props, config);
     
     // Phase 4.2: Step Functions State Machine
     this.executionStateMachine = this.createExecutionStateMachine(config);
     
     // Phase 4.2: EventBridge Rule
     this.executionTriggerRule = this.createExecutionTriggerRule(props, config);
+
+    // Phase 4.3: Adapter Lambda Functions (create after Gateway and VPC)
+    this.internalAdapterHandler = this.createInternalAdapterHandler(props, config);
+    this.crmAdapterHandler = this.createCrmAdapterHandler(props, config);
+
+    // Phase 4.3: Update Gateway role policy with adapter Lambda ARNs (after Lambdas created)
+    this.updateGatewayRolePolicy();
+
+    // Phase 4.3: Register adapters as Gateway targets (after Lambdas and Gateway created)
+    this.registerGatewayTarget(this.internalAdapterHandler, 'internal.create_note', this.getInternalNoteToolSchema());
+    this.registerGatewayTarget(this.internalAdapterHandler, 'internal.create_task', this.getInternalTaskToolSchema());
+    this.registerGatewayTarget(this.crmAdapterHandler, 'crm.create_task', this.getCrmTaskToolSchema());
   }
 
   private createDlq(id: string, queueName: string, config: ExecutionInfrastructureConfig): sqs.Queue {
@@ -287,6 +335,17 @@ export class ExecutionInfrastructure extends Construct {
     props: ExecutionInfrastructureProps,
     config: ExecutionInfrastructureConfig
   ): lambda.Function {
+    // Phase 4.3: Use Gateway URL from construct if available, otherwise fall back to props.gatewayUrl
+    // Note: In Phase 4.3, Gateway is created in constructor, so this.gatewayUrl will be available
+    // For backwards compatibility during migration, we still support props.gatewayUrl
+    const gatewayUrl = (this as any).gatewayUrl || props.gatewayUrl || (() => {
+      throw new Error(
+        '[ExecutionInfrastructure] Missing required property: gatewayUrl. ' +
+        'Provide gatewayUrl in ExecutionInfrastructureProps or ensure AgentCore Gateway is configured. ' +
+        'The Gateway URL is required for tool-mapper-handler to invoke connector adapters.'
+      );
+    })();
+
     const handler = new lambdaNodejs.NodejsFunction(this, 'ToolMapperHandler', {
       functionName: config.functionNames.toolMapper,
       entry: 'src/handlers/phase4/tool-mapper-handler.ts',
@@ -297,13 +356,7 @@ export class ExecutionInfrastructure extends Construct {
       environment: {
         ACTION_INTENT_TABLE_NAME: props.actionIntentTable.tableName,
         ACTION_TYPE_REGISTRY_TABLE_NAME: this.actionTypeRegistryTable.tableName,
-        AGENTCORE_GATEWAY_URL: props.gatewayUrl || (() => {
-          throw new Error(
-            '[ExecutionInfrastructure] Missing required property: gatewayUrl. ' +
-            'Provide gatewayUrl in ExecutionInfrastructureProps or ensure AgentCore Gateway is configured. ' +
-            'The Gateway URL is required for tool-mapper-handler to invoke connector adapters.'
-          );
-        })(),
+        AGENTCORE_GATEWAY_URL: gatewayUrl,
         // Note: AWS_REGION is automatically set by Lambda runtime and should not be set manually
       },
       deadLetterQueue: this.toolMapperDlq,
@@ -599,5 +652,367 @@ export class ExecutionInfrastructure extends Construct {
     this.executionStateMachine.grantStartExecution(new iam.ServicePrincipal('events.amazonaws.com'));
     
     return rule;
+  }
+
+  // ============================================
+  // Phase 4.3: Connectors VPC and Gateway Setup
+  // ============================================
+
+  // ✅ MCP Version: Define as class-level constant for reuse
+  // Verify supported MCP versions in your account/region and pin one for stability
+  // Check AWS documentation for current supported versions
+  private readonly MCP_SUPPORTED_VERSION = '2025-03-26'; // TODO: Verify this version is supported in your region
+
+  private createConnectorsVpc(config: ExecutionInfrastructureConfig): ec2.Vpc {
+    // ✅ REQUIRED: Explicit PUBLIC and PRIVATE subnets (NAT Gateway needs public subnets)
+    const vpc = new ec2.Vpc(this, 'ConnectorsVpc', {
+      maxAzs: 2,
+      natGateways: 1,
+      subnetConfiguration: [
+        {
+          cidrMask: 24,
+          name: 'ConnectorPublic',
+          subnetType: ec2.SubnetType.PUBLIC, // Required for NAT Gateway
+        },
+        {
+          cidrMask: 24,
+          name: 'ConnectorPrivate',
+          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS, // Lambdas go here
+        },
+      ],
+    });
+
+    // VPC endpoints for AWS services
+    // ✅ DynamoDB uses Gateway endpoint (not Interface endpoint)
+    new ec2.GatewayVpcEndpoint(this, 'DynamoDBEndpoint', {
+      vpc,
+      service: ec2.GatewayVpcEndpointAwsService.DYNAMODB,
+    });
+
+    // S3 also uses Gateway endpoint
+    new ec2.GatewayVpcEndpoint(this, 'S3Endpoint', {
+      vpc,
+      service: ec2.GatewayVpcEndpointAwsService.S3,
+    });
+
+    // Interface endpoints for other services (Secrets Manager, KMS, CloudWatch Logs, STS)
+    // ✅ REQUIRED: CloudWatch Logs endpoint (Lambdas in VPC need this for logging)
+    new ec2.InterfaceVpcEndpoint(this, 'CloudWatchLogsEndpoint', {
+      vpc,
+      service: ec2.InterfaceVpcEndpointAwsService.CLOUDWATCH_LOGS,
+    });
+
+    // ✅ REQUIRED: STS endpoint (if using assumed roles or temporary credentials)
+    new ec2.InterfaceVpcEndpoint(this, 'STSEndpoint', {
+      vpc,
+      service: ec2.InterfaceVpcEndpointAwsService.STS,
+    });
+
+    new ec2.InterfaceVpcEndpoint(this, 'SecretsManagerEndpoint', {
+      vpc,
+      service: ec2.InterfaceVpcEndpointAwsService.SECRETS_MANAGER,
+    });
+
+    new ec2.InterfaceVpcEndpoint(this, 'KMSEndpoint', {
+      vpc,
+      service: ec2.InterfaceVpcEndpointAwsService.KMS,
+    });
+
+    // Enable VPC Flow Logs for audit
+    vpc.addFlowLog('ConnectorsVpcFlowLog');
+
+    return vpc;
+  }
+
+  private createInternalAdapterSecurityGroup(): ec2.SecurityGroup {
+    // VPC is already created at this point in constructor
+    return new ec2.SecurityGroup(this, 'InternalAdapterSecurityGroup', {
+      vpc: this.connectorsVpc,
+      description: 'Security group for Internal adapter',
+      allowAllOutbound: false, // Explicit egress control
+    });
+  }
+
+  private createCrmAdapterSecurityGroup(): ec2.SecurityGroup {
+    // VPC is already created at this point in constructor
+    return new ec2.SecurityGroup(this, 'CrmAdapterSecurityGroup', {
+      vpc: this.connectorsVpc,
+      description: 'Security group for CRM adapter',
+      allowAllOutbound: false, // Explicit egress control
+    });
+  }
+
+  private createConnectorConfigTable(config: ExecutionInfrastructureConfig): dynamodb.Table {
+    return new dynamodb.Table(this, 'ConnectorConfigTable', {
+      tableName: config.tableNames.connectorConfig,
+      partitionKey: { name: 'pk', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'sk', type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      pointInTimeRecoverySpecification: {
+        pointInTimeRecoveryEnabled: true,
+      },
+    });
+  }
+
+  private createInternalNotesTable(config: ExecutionInfrastructureConfig): dynamodb.Table {
+    return new dynamodb.Table(this, 'InternalNotesTable', {
+      tableName: config.tableNames.internalNotes,
+      partitionKey: { name: 'pk', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'sk', type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      pointInTimeRecoverySpecification: {
+        pointInTimeRecoveryEnabled: true,
+      },
+    });
+  }
+
+  private createInternalTasksTable(config: ExecutionInfrastructureConfig): dynamodb.Table {
+    return new dynamodb.Table(this, 'InternalTasksTable', {
+      tableName: config.tableNames.internalTasks,
+      partitionKey: { name: 'pk', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'sk', type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      pointInTimeRecoverySpecification: {
+        pointInTimeRecoveryEnabled: true,
+      },
+    });
+  }
+
+  private createAgentCoreGateway(
+    props: ExecutionInfrastructureProps,
+    config: ExecutionInfrastructureConfig
+  ): bedrockagentcore.CfnGateway {
+    // Validate prerequisites
+    if (!props.userPool) {
+      throw new Error(
+        'Cognito User Pool is required for Gateway CUSTOM_JWT authorizer. ' +
+        'Provide userPool in ExecutionInfrastructureProps or use AWS_IAM authorizer instead.'
+      );
+    }
+
+    if (!props.userPoolClient) {
+      throw new Error(
+        'Cognito User Pool Client is required for Gateway CUSTOM_JWT authorizer. ' +
+        'Provide userPoolClient in ExecutionInfrastructureProps.'
+      );
+    }
+
+    // Create IAM role for Gateway
+    const gatewayRole = new iam.Role(this, 'ExecutionGatewayRole', {
+      assumedBy: new iam.ServicePrincipal('bedrock-agentcore.amazonaws.com'),
+      description: 'Execution role for AgentCore Gateway',
+    });
+
+    // Gateway role policy will be updated after adapter Lambdas are created
+    // (see updateGatewayRolePolicy method)
+
+    // Create Gateway using L1 CDK construct
+    const gateway = new bedrockagentcore.CfnGateway(this, 'ExecutionGateway', {
+      name: 'cc-native-execution-gateway',
+      roleArn: gatewayRole.roleArn,
+      protocolType: 'MCP',
+      protocolConfiguration: {
+        mcp: {
+          supportedVersions: [this.MCP_SUPPORTED_VERSION],
+        },
+      },
+      authorizerType: 'CUSTOM_JWT',
+      authorizerConfiguration: {
+        customJwtAuthorizer: {
+          allowedClients: props.userPoolClient ? [props.userPoolClient.userPoolClientId] : [],
+          discoveryUrl: props.userPool ? `https://cognito-idp.${cdk.Aws.REGION}.amazonaws.com/${props.userPool.userPoolId}/.well-known/openid-configuration` : '',
+        },
+      },
+      description: 'AgentCore Gateway for cc-native execution layer with MCP protocol and JWT inbound auth',
+    });
+
+    // Store gateway role for later policy updates
+    (this as any).gatewayRole = gatewayRole;
+
+    return gateway;
+  }
+
+  private createInternalAdapterHandler(
+    props: ExecutionInfrastructureProps,
+    config: ExecutionInfrastructureConfig
+  ): lambda.Function {
+    const handler = new lambdaNodejs.NodejsFunction(this, 'InternalAdapterHandler', {
+      functionName: config.functionNames.internalAdapter,
+      entry: 'src/handlers/phase4/internal-adapter-handler.ts',
+      handler: 'handler',
+      runtime: lambda.Runtime.NODEJS_20_X,
+      timeout: cdk.Duration.seconds(30),
+      environment: {
+        INTERNAL_NOTES_TABLE_NAME: this.internalNotesTable.tableName,
+        INTERNAL_TASKS_TABLE_NAME: this.internalTasksTable.tableName,
+      },
+      vpc: this.connectorsVpc,
+      vpcSubnets: {
+        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+      },
+      securityGroups: [this.internalAdapterSecurityGroup],
+    });
+
+    // Grant permissions
+    this.internalNotesTable.grantWriteData(handler);
+    this.internalTasksTable.grantWriteData(handler);
+
+    return handler;
+  }
+
+  private createCrmAdapterHandler(
+    props: ExecutionInfrastructureProps,
+    config: ExecutionInfrastructureConfig
+  ): lambda.Function {
+    const handler = new lambdaNodejs.NodejsFunction(this, 'CrmAdapterHandler', {
+      functionName: config.functionNames.crmAdapter,
+      entry: 'src/handlers/phase4/crm-adapter-handler.ts',
+      handler: 'handler',
+      runtime: lambda.Runtime.NODEJS_20_X,
+      timeout: cdk.Duration.seconds(60), // Longer timeout for external API calls
+      environment: {
+        EXTERNAL_WRITE_DEDUPE_TABLE_NAME: this.externalWriteDedupeTable.tableName,
+        CONNECTOR_CONFIG_TABLE_NAME: this.connectorConfigTable.tableName,
+      },
+      vpc: this.connectorsVpc,
+      vpcSubnets: {
+        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+      },
+      securityGroups: [this.crmAdapterSecurityGroup],
+    });
+
+    // Grant permissions
+    this.externalWriteDedupeTable.grantReadWriteData(handler);
+    this.connectorConfigTable.grantReadData(handler);
+    handler.addToRolePolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: ['secretsmanager:GetSecretValue'],
+      resources: [
+        `arn:aws:secretsmanager:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:secret:tenant/*/account/*/connector/*`,
+      ],
+    }));
+
+    return handler;
+  }
+
+  private registerGatewayTarget(
+    adapterLambda: lambda.Function,
+    toolName: string,
+    toolSchema: bedrockagentcore.CfnGatewayTarget.ToolDefinitionProperty
+  ): void {
+    // Validate tool schema structure
+    if (!toolSchema.name || !toolSchema.description || !toolSchema.inputSchema) {
+      throw new Error(
+        `Invalid tool schema for ${toolName}: must include name, description, and inputSchema. ` +
+        `Received: ${JSON.stringify(Object.keys(toolSchema))}`
+      );
+    }
+
+    const gatewayId = this.executionGateway.attrGatewayIdentifier;
+
+    // Create Gateway Target using L1 construct
+    const gatewayTarget = new bedrockagentcore.CfnGatewayTarget(this, `GatewayTarget-${toolName.replace(/[^a-zA-Z0-9]/g, '-')}`, {
+      gatewayIdentifier: gatewayId,
+      name: toolName.toLowerCase().replace(/[^a-z0-9-]/g, '-'),
+      description: `Gateway target for ${toolName}`,
+      targetConfiguration: {
+        mcp: {
+          lambda: {
+            lambdaArn: adapterLambda.functionArn,
+            toolSchema: {
+              inlinePayload: [toolSchema], // ✅ Array of tool definitions (required by Gateway)
+            },
+          },
+        },
+      },
+    });
+
+    // Ensure target is created after gateway
+    gatewayTarget.addDependency(this.executionGateway);
+
+    // Grant Lambda invoke permission to Gateway
+    adapterLambda.addPermission('AllowGatewayInvoke', {
+      principal: new iam.ServicePrincipal('bedrock-agentcore.amazonaws.com'),
+      sourceArn: this.executionGateway.attrGatewayArn,
+    });
+  }
+
+  private updateGatewayRolePolicy(): void {
+    const gatewayRole = (this as any).gatewayRole as iam.Role;
+    if (!gatewayRole) {
+      throw new Error('Gateway role not found. Ensure createAgentCoreGateway is called before updateGatewayRolePolicy.');
+    }
+
+    // ✅ ZERO TRUST: Restrict to specific adapter Lambda ARNs
+    gatewayRole.addToPolicy(new iam.PolicyStatement({
+      sid: 'GatewayInvokeLambda',
+      effect: iam.Effect.ALLOW,
+      actions: ['lambda:InvokeFunction'],
+      resources: [
+        this.internalAdapterHandler.functionArn,
+        this.crmAdapterHandler.functionArn,
+      ],
+    }));
+  }
+
+  private updateToolMapperHandlerGatewayUrl(): void {
+    // Note: ToolMapper handler is created before Gateway in Phase 4.2, so we use a workaround:
+    // The createToolMapperHandler method checks for this.gatewayUrl first (set after Gateway creation)
+    // If Gateway URL is not yet available, it falls back to props.gatewayUrl for backwards compatibility
+    // In Phase 4.3, Gateway is created before ToolMapper handler, so this.gatewayUrl will be used
+    // This method is a placeholder for future enhancements (e.g., updating existing handler env vars)
+  }
+
+  private getInternalNoteToolSchema(): bedrockagentcore.CfnGatewayTarget.ToolDefinitionProperty {
+    return {
+      name: 'create_note',
+      description: 'Create an internal note in the system',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          content: { type: 'string', description: 'Note content' },
+          tenant_id: { type: 'string' },
+          account_id: { type: 'string' },
+        },
+        required: ['content', 'tenant_id', 'account_id'],
+      },
+    };
+  }
+
+  private getInternalTaskToolSchema(): bedrockagentcore.CfnGatewayTarget.ToolDefinitionProperty {
+    return {
+      name: 'create_task',
+      description: 'Create an internal task in the system',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          title: { type: 'string', description: 'Task title' },
+          description: { type: 'string', description: 'Task description' },
+          tenant_id: { type: 'string' },
+          account_id: { type: 'string' },
+        },
+        required: ['title', 'tenant_id', 'account_id'],
+      },
+    };
+  }
+
+  private getCrmTaskToolSchema(): bedrockagentcore.CfnGatewayTarget.ToolDefinitionProperty {
+    return {
+      name: 'create_task',
+      description: 'Create a task in CRM system',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          title: { type: 'string', description: 'Task title' },
+          description: { type: 'string', description: 'Task description' },
+          priority: { type: 'string', description: 'Task priority' },
+          tenant_id: { type: 'string' },
+          account_id: { type: 'string' },
+          idempotency_key: { type: 'string' },
+          action_intent_id: { type: 'string' },
+        },
+        required: ['title', 'tenant_id', 'account_id', 'idempotency_key', 'action_intent_id'],
+      },
+    };
   }
 }

@@ -15,6 +15,9 @@ export interface ExecutionInfrastructureConfig {
     readonly executionOutcomes: string;
     readonly actionTypeRegistry: string;
     readonly externalWriteDedupe: string;
+    readonly connectorConfig: string; // Phase 4.3
+    readonly internalNotes: string; // Phase 4.3
+    readonly internalTasks: string; // Phase 4.3
   };
   
   // Function names
@@ -27,6 +30,8 @@ export interface ExecutionInfrastructureConfig {
     readonly executionFailureRecorder: string;
     readonly compensation: string;
     readonly executionStatusApi: string;
+    readonly internalAdapter: string; // Phase 4.3
+    readonly crmAdapter: string; // Phase 4.3
   };
   
   // Queue names (DLQs)
@@ -100,6 +105,9 @@ export const DEFAULT_EXECUTION_INFRASTRUCTURE_CONFIG: ExecutionInfrastructureCon
     executionOutcomes: 'cc-native-execution-outcomes',
     actionTypeRegistry: 'cc-native-action-type-registry',
     externalWriteDedupe: 'cc-native-external-write-dedupe',
+    connectorConfig: 'cc-native-connector-config', // Phase 4.3
+    internalNotes: 'cc-native-internal-notes', // Phase 4.3
+    internalTasks: 'cc-native-internal-tasks', // Phase 4.3
   },
   
   functionNames: {
@@ -111,6 +119,8 @@ export const DEFAULT_EXECUTION_INFRASTRUCTURE_CONFIG: ExecutionInfrastructureCon
     executionFailureRecorder: 'cc-native-execution-failure-recorder',
     compensation: 'cc-native-compensation-handler',
     executionStatusApi: 'cc-native-execution-status-api',
+    internalAdapter: 'cc-native-internal-adapter-handler', // Phase 4.3
+    crmAdapter: 'cc-native-crm-adapter-handler', // Phase 4.3
   },
   
   queueNames: {

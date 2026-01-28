@@ -174,6 +174,15 @@ USER_POOL_CLIENT_ID_OUTPUT=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.Output
 DECISION_API_URL_OUTPUT=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="DecisionApiUrl") | .OutputValue')
 DECISION_API_KEY_ID_OUTPUT=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="DecisionApiKeyId") | .OutputValue')
 
+# Phase 4: Execution Infrastructure table outputs
+ACTION_TYPE_REGISTRY_TABLE_OUTPUT=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="ActionTypeRegistryTableName") | .OutputValue')
+EXECUTION_ATTEMPTS_TABLE_OUTPUT=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="ExecutionAttemptsTableName") | .OutputValue')
+EXECUTION_OUTCOMES_TABLE_OUTPUT=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="ExecutionOutcomesTableName") | .OutputValue')
+EXTERNAL_WRITE_DEDUPE_TABLE_OUTPUT=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="ExternalWriteDedupeTableName") | .OutputValue')
+CONNECTOR_CONFIG_TABLE_OUTPUT=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="ConnectorConfigTableName") | .OutputValue')
+INTERNAL_NOTES_TABLE_OUTPUT=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="InternalNotesTableName") | .OutputValue')
+INTERNAL_TASKS_TABLE_OUTPUT=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="InternalTasksTableName") | .OutputValue')
+
 # Retrieve API key value (required for API calls - API Gateway needs the actual key value, not just ID)
 if [ -n "$DECISION_API_KEY_ID_OUTPUT" ] && [ "$DECISION_API_KEY_ID_OUTPUT" != "null" ]; then
   echo "Retrieving API key value..."
@@ -247,6 +256,15 @@ IDENTITIES_TABLE_NAME=$IDENTITIES_TABLE_OUTPUT
 ACCOUNT_POSTURE_STATE_TABLE_NAME=$ACCOUNT_POSTURE_STATE_TABLE_OUTPUT
 GRAPH_MATERIALIZATION_STATUS_TABLE_NAME=$GRAPH_MATERIALIZATION_STATUS_TABLE_OUTPUT
 
+# DynamoDB Tables (Phase 4: Execution Infrastructure)
+ACTION_TYPE_REGISTRY_TABLE_NAME=$ACTION_TYPE_REGISTRY_TABLE_OUTPUT
+EXECUTION_ATTEMPTS_TABLE_NAME=$EXECUTION_ATTEMPTS_TABLE_OUTPUT
+EXECUTION_OUTCOMES_TABLE_NAME=$EXECUTION_OUTCOMES_TABLE_OUTPUT
+EXTERNAL_WRITE_DEDUPE_TABLE_NAME=$EXTERNAL_WRITE_DEDUPE_TABLE_OUTPUT
+CONNECTOR_CONFIG_TABLE_NAME=$CONNECTOR_CONFIG_TABLE_OUTPUT
+INTERNAL_NOTES_TABLE_NAME=$INTERNAL_NOTES_TABLE_OUTPUT
+INTERNAL_TASKS_TABLE_NAME=$INTERNAL_TASKS_TABLE_OUTPUT
+
 # Neptune (Phase 2)
 NEPTUNE_CLUSTER_ENDPOINT=$NEPTUNE_CLUSTER_ENDPOINT_OUTPUT
 NEPTUNE_CLUSTER_PORT=$NEPTUNE_CLUSTER_PORT_OUTPUT
@@ -273,6 +291,17 @@ LOG_LEVEL=$LOG_LEVEL
 EOF
 
 echo "Environment variables saved to .env file"
+
+# Run master seed script (intelligently seeds all required data)
+echo ""
+echo "🌱 Running master seed script..."
+if npm run seed:all 2>&1; then
+  echo "✅ Seed script completed successfully"
+else
+  echo "❌ Seed script failed - required tables may be missing"
+  echo "   Please ensure all infrastructure is deployed before seeding"
+  exit 1
+fi
 
 echo ""
 echo "🎉 Autonomous Revenue Decision Loop deployment complete!"

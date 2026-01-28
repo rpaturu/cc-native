@@ -130,6 +130,11 @@ export class MethodologyService implements IMethodologyService {
 
       return methodology;
     } catch (error) {
+      // Don't log ConditionalCheckFailedException as error - it's expected when item already exists
+      if (error instanceof Error && error.name === 'ConditionalCheckFailedException') {
+        // Item already exists - this is expected behavior, not an error
+        throw error; // Re-throw without logging
+      }
       this.logger.error('Failed to create methodology', {
         methodology_id: input.methodology_id,
         error: error instanceof Error ? error.message : String(error),
