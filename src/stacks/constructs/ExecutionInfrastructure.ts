@@ -169,9 +169,11 @@ export class ExecutionInfrastructure extends Construct {
     this.updateGatewayRolePolicy();
 
     // Phase 4.3: Register adapters as Gateway targets (after Lambdas and Gateway created)
-    this.registerGatewayTarget(this.internalAdapterHandler, 'internal.create_note', this.getInternalNoteToolSchema());
-    this.registerGatewayTarget(this.internalAdapterHandler, 'internal.create_task', this.getInternalTaskToolSchema());
-    this.registerGatewayTarget(this.crmAdapterHandler, 'crm.create_task', this.getCrmTaskToolSchema());
+    // Internal adapters use GATEWAY_IAM_ROLE (no external credentials needed)
+    this.registerGatewayTarget(this.internalAdapterHandler, 'internal.create_note', this.getInternalNoteToolSchema(), 'GATEWAY_IAM_ROLE');
+    this.registerGatewayTarget(this.internalAdapterHandler, 'internal.create_task', this.getInternalTaskToolSchema(), 'GATEWAY_IAM_ROLE');
+    // CRM adapter also uses GATEWAY_IAM_ROLE for now (OAuth credential provider will be added in Phase 4.4)
+    this.registerGatewayTarget(this.crmAdapterHandler, 'crm.create_task', this.getCrmTaskToolSchema(), 'GATEWAY_IAM_ROLE');
   }
 
   private createDlq(id: string, queueName: string, config: ExecutionInfrastructureConfig): sqs.Queue {
@@ -901,7 +903,8 @@ export class ExecutionInfrastructure extends Construct {
   private registerGatewayTarget(
     adapterLambda: lambda.Function,
     toolName: string,
-    toolSchema: bedrockagentcore.CfnGatewayTarget.ToolDefinitionProperty
+    toolSchema: bedrockagentcore.CfnGatewayTarget.ToolDefinitionProperty,
+    credentialProviderType: 'GATEWAY_IAM_ROLE' | 'OAUTH' = 'GATEWAY_IAM_ROLE'
   ): void {
     // Generate unique permission ID based on tool name to avoid conflicts
     const permissionId = `AllowGatewayInvoke-${toolName.replace(/\./g, '-')}`;
@@ -916,6 +919,9 @@ export class ExecutionInfrastructure extends Construct {
     const gatewayId = this.executionGateway.attrGatewayIdentifier;
 
     // Create Gateway Target using L1 construct
+    // ✅ REQUIRED: credentialProviderConfigurations is required for Lambda targets
+    // For internal adapters (no external auth needed), use GATEWAY_IAM_ROLE
+    // For CRM adapters (OAuth needed), this will be updated in Phase 4.4 when credential providers are set up
     const gatewayTarget = new bedrockagentcore.CfnGatewayTarget(this, `GatewayTarget-${toolName.replace(/[^a-zA-Z0-9]/g, '-')}`, {
       gatewayIdentifier: gatewayId,
       name: toolName.toLowerCase().replace(/[^a-z0-9-]/g, '-'),
@@ -930,6 +936,14 @@ export class ExecutionInfrastructure extends Construct {
           },
         },
       },
+      // ✅ REQUIRED: Credential provider configuration for Lambda targets
+      // Using GATEWAY_IAM_ROLE for internal adapters (no external credentials needed)
+      // CRM adapter will need OAuth credential provider (to be added in Phase 4.4)
+      credentialProviderConfigurations: [{
+        credentialProviderType: credentialProviderType,
+        // credentialProvider field can be omitted for GATEWAY_IAM_ROLE
+        // For OAUTH, credentialProvider.oauthCredentialProvider will be required (Phase 4.4)
+      }],
     });
 
     // Ensure target is created after gateway
