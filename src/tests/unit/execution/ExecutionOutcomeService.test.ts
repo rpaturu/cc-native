@@ -294,9 +294,10 @@ describe('ExecutionOutcomeService', () => {
         Items: [actionOutcomeSucceeded, actionOutcomeFailed] as ActionOutcomeV1[],
       });
 
-      const outcomes = await service.listOutcomes('tenant_test_1', 'account_test_1', 50);
+      const result = await service.listOutcomes('tenant_test_1', 'account_test_1', 50);
 
-      expect(outcomes).toHaveLength(2);
+      expect(result.items).toHaveLength(2);
+      expect(result.nextToken).toBeUndefined();
       expect(QueryCommand).toHaveBeenCalled();
       const queryCommandCall = (QueryCommand as unknown as jest.Mock).mock.calls[0][0];
       expect(queryCommandCall.KeyConditionExpression).toBe('pk = :pk');
@@ -325,14 +326,31 @@ describe('ExecutionOutcomeService', () => {
       expect(queryCommandCall.Limit).toBe(50);
     });
 
-    it('should return empty array if no outcomes found', async () => {
+    it('should return empty items and no nextToken if no outcomes found', async () => {
       mockDynamoDBDocumentClient.send.mockResolvedValue({
         Items: [],
       });
 
-      const outcomes = await service.listOutcomes('tenant_test_1', 'account_test_1');
+      const result = await service.listOutcomes('tenant_test_1', 'account_test_1');
 
-      expect(outcomes).toEqual([]);
+      expect(result.items).toEqual([]);
+      expect(result.nextToken).toBeUndefined();
+    });
+
+    it('should pass nextToken as ExclusiveStartKey and return nextToken when LastEvaluatedKey present', async () => {
+      const lastKey = { pk: 'TENANT#tenant_test_1#ACCOUNT#account_test_1', sk: 'OUTCOME#next-id' };
+      mockDynamoDBDocumentClient.send.mockResolvedValue({
+        Items: [actionOutcomeSucceeded] as ActionOutcomeV1[],
+        LastEvaluatedKey: lastKey,
+      });
+
+      const encodedToken = Buffer.from(JSON.stringify(lastKey), 'utf8').toString('base64');
+      const result = await service.listOutcomes('tenant_test_1', 'account_test_1', 10, encodedToken);
+
+      expect(result.items).toHaveLength(1);
+      expect(result.nextToken).toBeDefined();
+      const queryCommandCall = (QueryCommand as unknown as jest.Mock).mock.calls[0][0];
+      expect(queryCommandCall.ExclusiveStartKey).toEqual(lastKey);
     });
   });
 });

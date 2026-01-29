@@ -59,7 +59,11 @@ describe('CrmConnectorAdapter', () => {
     resetAllMocks();
     jest.clearAllMocks();
     logger = new Logger('CrmConnectorAdapterTest');
-    
+
+    // Default: Secrets Manager returns valid empty secret so ConnectorConfigService does not warn.
+    // Tests that expect "secret missing" can override with mockRejectedValue or mockResolvedValue(undefined).
+    mockSecretsManagerClient.send.mockResolvedValue({ SecretString: '{}' });
+
     // Reset IdempotencyService mock
     mockIdempotencyService = {
       checkExternalWriteDedupe: jest.fn().mockResolvedValue(null),

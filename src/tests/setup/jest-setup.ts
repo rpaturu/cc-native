@@ -369,3 +369,11 @@ jest.mock('@aws-sdk/credential-provider-node', () => {
     };
   }
 });
+
+// Suppress console output during tests to avoid "● Console" blocks in Jest output.
+// Runs after setup file's own console usage. Tests that assert on console (e.g. Logger.test.ts)
+// can use jest.spyOn(console, 'warn') etc. and will override this noop.
+const noop = () => {};
+console.warn = noop;
+console.log = noop;
+console.error = noop;

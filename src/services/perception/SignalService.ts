@@ -24,10 +24,14 @@ import { createHash } from 'crypto';
 export interface SignalServiceConfig {
   logger: Logger;
   signalsTableName: string;
-  accountsTableName: string; // For TransactWriteItems
-  lifecycleStateService: LifecycleStateService;
-  eventPublisher: EventPublisher;
-  ledgerService: LedgerService;
+  /** Required for createSignal (lifecycle signals). Omit for execution-only (createExecutionSignal only). */
+  accountsTableName?: string;
+  /** Required for createSignal. Omit for execution-only. */
+  lifecycleStateService?: LifecycleStateService;
+  /** Optional for createExecutionSignal (event publish). */
+  eventPublisher?: EventPublisher;
+  /** Optional for createExecutionSignal (ledger append). */
+  ledgerService?: LedgerService;
   s3Client?: S3Client;
   region?: string;
 }
@@ -39,10 +43,10 @@ export class SignalService {
   private dynamoClient: DynamoDBDocumentClient;
   private logger: Logger;
   private signalsTableName: string;
-  private accountsTableName: string;
-  private lifecycleStateService: LifecycleStateService;
-  private eventPublisher: EventPublisher;
-  private ledgerService: LedgerService;
+  private accountsTableName: string | undefined;
+  private lifecycleStateService: LifecycleStateService | undefined;
+  private eventPublisher: EventPublisher | undefined;
+  private ledgerService: LedgerService | undefined;
   private s3Client?: S3Client;
 
   constructor(config: SignalServiceConfig) {
@@ -53,7 +57,6 @@ export class SignalService {
     this.eventPublisher = config.eventPublisher;
     this.ledgerService = config.ledgerService;
     this.s3Client = config.s3Client;
-    
     this.dynamoClient = DynamoDBDocumentClient.from(new DynamoDBClient({ region: config.region }));
   }
 
@@ -62,8 +65,21 @@ export class SignalService {
    * 
    * Atomicity: Updates signalsTable + AccountState in single transaction.
    * Uses DynamoDB TransactWriteItems for atomicity.
+   * Requires accountsTableName, lifecycleStateService, eventPublisher, ledgerService (full config).
    */
   async createSignal(signal: Signal): Promise<Signal> {
+    if (
+      !this.accountsTableName ||
+      !this.lifecycleStateService ||
+      !this.eventPublisher ||
+      !this.ledgerService
+    ) {
+      throw new Error(
+        'SignalService not configured for full lifecycle signals. ' +
+          'Provide accountsTableName, lifecycleStateService, eventPublisher, and ledgerService for createSignal(). ' +
+          'Use createExecutionSignal() for execution-only signals.'
+      );
+    }
     try {
       // Check for existing signal with same dedupeKey (idempotency check)
       const existing = await this.getSignalByDedupeKey(signal.tenantId, signal.dedupeKey);
@@ -183,6 +199,93 @@ export class SignalService {
       }
 
       this.logger.error('Failed to create signal', {
+        signalId: signal.signalId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Create execution outcome signal (Phase 4.4).
+   * Writes only to signals table; no lifecycle state or accounts table update.
+   * Idempotent via signalId (ConditionExpression attribute_not_exists(signalId)).
+   * Optionally publishes event and appends to ledger when configured.
+   */
+  async createExecutionSignal(signal: Signal): Promise<Signal> {
+    try {
+      await this.dynamoClient.send(
+        new PutCommand({
+          TableName: this.signalsTableName,
+          Item: {
+            ...signal,
+            timestamp: signal.createdAt,
+          },
+          ConditionExpression: 'attribute_not_exists(signalId)',
+        })
+      );
+
+      if (this.ledgerService) {
+        await this.ledgerService.append({
+          eventType: LedgerEventType.SIGNAL,
+          accountId: signal.accountId,
+          tenantId: signal.tenantId,
+          traceId: signal.traceId,
+          data: {
+            signalId: signal.signalId,
+            signalType: signal.signalType,
+            confidence: signal.metadata.confidence,
+            severity: signal.metadata.severity,
+          },
+          evidenceRefs: [
+            {
+              type: 's3',
+              location: signal.evidence.evidenceRef.s3Uri,
+              timestamp: signal.evidence.evidenceRef.capturedAt,
+            },
+          ],
+        });
+      }
+
+      if (this.eventPublisher) {
+        await this.eventPublisher.publish({
+          eventType: 'SIGNAL_CREATED',
+          source: 'perception',
+          payload: {
+            signalId: signal.signalId,
+            signalType: signal.signalType,
+            accountId: signal.accountId,
+          },
+          traceId: signal.traceId,
+          tenantId: signal.tenantId,
+          ts: signal.createdAt,
+        });
+      }
+
+      this.logger.info('Execution signal created', {
+        signalId: signal.signalId,
+        signalType: signal.signalType,
+        accountId: signal.accountId,
+        tenantId: signal.tenantId,
+      });
+      return signal;
+    } catch (error: any) {
+      if (error.name === 'ConditionalCheckFailedException') {
+        const existing = await this.dynamoClient.send(
+          new GetCommand({
+            TableName: this.signalsTableName,
+            Key: { tenantId: signal.tenantId, signalId: signal.signalId },
+          })
+        );
+        if (existing.Item) {
+          this.logger.debug('Execution signal already exists (idempotent)', {
+            signalId: signal.signalId,
+            dedupeKey: signal.dedupeKey,
+          });
+          return existing.Item as Signal;
+        }
+      }
+      this.logger.error('Failed to create execution signal', {
         signalId: signal.signalId,
         error: error instanceof Error ? error.message : String(error),
       });
@@ -372,6 +475,11 @@ export class SignalService {
     recomputedSignal: Signal;
     matches: boolean;
   }> {
+    if (!this.lifecycleStateService || !this.ledgerService) {
+      throw new Error(
+        'SignalService not configured for replay. Provide lifecycleStateService and ledgerService.'
+      );
+    }
     try {
       // Get stored signal
       const stored = await this.dynamoClient.send(new GetCommand({
@@ -424,10 +532,10 @@ export class SignalService {
       }
 
       // Compare dedupeKey and key fields
-      const matches = 
+      const matches =
         recomputed.dedupeKey === storedSignal.dedupeKey &&
         recomputed.windowKey === storedSignal.windowKey &&
-        recomputed.metadata.confidence === storedSignal.metadata.confidence;
+        (recomputed.metadata?.confidence ?? 0) === (storedSignal.metadata?.confidence ?? 0);
 
       if (!matches) {
         // Log mismatch
@@ -469,14 +577,16 @@ export class SignalService {
     signalId: string,
     signalType: SignalType
   ): Promise<void> {
+    if (!this.lifecycleStateService) return;
     const accountState = await this.lifecycleStateService.getAccountState(accountId, tenantId);
     if (!accountState) {
       return;
     }
 
     const updatedIndex = { ...accountState.activeSignalIndex };
-    if (updatedIndex[signalType]) {
-      updatedIndex[signalType] = updatedIndex[signalType].filter(id => id !== signalId);
+    const list = updatedIndex[signalType];
+    if (list) {
+      updatedIndex[signalType] = list.filter((id) => id !== signalId);
     }
 
     await this.lifecycleStateService.updateAccountState(accountId, tenantId, {
@@ -493,16 +603,17 @@ export class SignalService {
     signalId: string,
     signalType: SignalType
   ): Promise<void> {
+    if (!this.lifecycleStateService) {
+      throw new Error('SignalService not configured for lifecycle. Provide lifecycleStateService.');
+    }
     const accountState = await this.lifecycleStateService.getAccountState(accountId, tenantId);
     const updatedIndex = accountState
       ? { ...accountState.activeSignalIndex }
       : this.initializeActiveSignalIndex();
 
-    if (!updatedIndex[signalType]) {
-      updatedIndex[signalType] = [];
-    }
-    if (!updatedIndex[signalType].includes(signalId)) {
-      updatedIndex[signalType].push(signalId);
+    const list = updatedIndex[signalType] ?? [];
+    if (!list.includes(signalId)) {
+      updatedIndex[signalType] = [...list, signalId];
     }
 
     await this.lifecycleStateService.updateAccountState(accountId, tenantId, {

@@ -9,6 +9,7 @@ import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as neptune from 'aws-cdk-lib/aws-neptune';
+import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import { Construct } from 'constructs';
 // Import constructs
 import { NeptuneInfrastructure } from './constructs/NeptuneInfrastructure';
@@ -636,17 +637,43 @@ export class CCNativeStack extends cdk.Stack {
     // Create ExecutionInfrastructure config (same pattern as DecisionInfrastructure)
     // Reuse awsRegion from DecisionInfrastructure config creation above
     const executionConfig = createExecutionInfrastructureConfig(awsRegion.trim());
-    
+
+    // Phase 4.4: Execution Status API Gateway (parent creates resources to avoid route collisions)
+    const executionStatusApi = new apigateway.RestApi(this, 'ExecutionStatusApi', {
+      restApiName: 'cc-native-execution-status-api',
+      description: 'Execution status API (GET execution status, list account executions)',
+      defaultCorsPreflightOptions: {
+        allowOrigins: apigateway.Cors.ALL_ORIGINS,
+        allowMethods: ['GET', 'OPTIONS'],
+        allowHeaders: ['Content-Type', 'Authorization', 'X-Api-Key', 'X-Tenant-Id'],
+      },
+    });
+    const executionStatusAuthorizer = new apigateway.CognitoUserPoolsAuthorizer(
+      this,
+      'ExecutionStatusApiCognitoAuthorizer',
+      {
+        cognitoUserPools: [this.userPool],
+        identitySource: 'method.request.header.Authorization',
+      }
+    );
+    const executionsResource = executionStatusApi.root.addResource('executions');
+    const accountsResource = executionStatusApi.root.addResource('accounts');
+
     const executionInfrastructure = new ExecutionInfrastructure(this, 'ExecutionInfrastructure', {
       eventBus: this.eventBus,
       ledgerTable: this.ledgerTable,
       actionIntentTable: this.actionIntentTable,
       tenantsTable: this.tenantsTable,
+      signalsTable: this.signalsTable,
       userPool: this.userPool,
       userPoolClient: this.userPoolClient,
       artifactsBucket: this.artifactsBucket,
       config: executionConfig,
       region: this.region,
+      apiGateway: executionStatusApi,
+      executionStatusAuthorizer,
+      executionsResource,
+      accountsResource,
     });
 
     // Stack Outputs
@@ -900,6 +927,11 @@ export class CCNativeStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'BudgetResetHandlerArn', {
       value: decisionInfrastructure.budgetResetHandler.functionArn,
       description: 'ARN of budget reset handler Lambda function (scheduled daily at midnight UTC)',
+    });
+
+    new cdk.CfnOutput(this, 'ExecutionStatusApiUrl', {
+      value: executionStatusApi.url,
+      description: 'API Gateway URL for execution status API (JWT auth: GET /executions/{id}/status, GET /accounts/{id}/executions)',
     });
 
     // Phase 4: Execution Infrastructure Outputs

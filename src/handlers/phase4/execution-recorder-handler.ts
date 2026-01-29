@@ -22,11 +22,14 @@ import { ExecutionOutcomeService } from '../../services/execution/ExecutionOutco
 import { ExecutionAttemptService } from '../../services/execution/ExecutionAttemptService';
 import { ActionIntentService } from '../../services/decision/ActionIntentService';
 import { LedgerService } from '../../services/ledger/LedgerService';
+import { SignalService } from '../../services/perception/SignalService';
+import { EventPublisher } from '../../services/events/EventPublisher';
 import { LedgerEventType } from '../../types/LedgerTypes';
 import { ToolInvocationResponse } from '../../types/ExecutionTypes';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
 import { getAWSClientConfig } from '../../utils/aws-client-config';
+import { buildExecutionOutcomeSignal } from '../../utils/execution-signal-helpers';
 
 const logger = new Logger('ExecutionRecorderHandler');
 const traceService = new TraceService(logger);
@@ -48,13 +51,22 @@ function requireEnv(name: string, handlerName: string): string {
   return value;
 }
 
-// Note: AWS_REGION is automatically set by Lambda runtime (not set in CDK environment variables)
-// Validate it exists (should always be present, but fail fast if somehow missing)
-const region = requireEnv('AWS_REGION', 'ExecutionRecorderHandler');
+// AWS_REGION is set by Lambda runtime; do not use requireEnv (use runtime-specific message if missing).
+const region: string =
+  process.env.AWS_REGION ||
+  (() => {
+    const err = new Error(
+      '[ExecutionRecorderHandler] AWS_REGION is not set. This is normally set by the Lambda runtime; check that the function is running in a Lambda environment.'
+    );
+    err.name = 'ConfigurationError';
+    throw err;
+  })();
 const executionOutcomesTableName = requireEnv('EXECUTION_OUTCOMES_TABLE_NAME', 'ExecutionRecorderHandler');
 const executionAttemptsTableName = requireEnv('EXECUTION_ATTEMPTS_TABLE_NAME', 'ExecutionRecorderHandler');
 const actionIntentTableName = requireEnv('ACTION_INTENT_TABLE_NAME', 'ExecutionRecorderHandler');
 const ledgerTableName = requireEnv('LEDGER_TABLE_NAME', 'ExecutionRecorderHandler');
+const signalsTableName = requireEnv('SIGNALS_TABLE_NAME', 'ExecutionRecorderHandler');
+const eventBusName = requireEnv('EVENT_BUS_NAME', 'ExecutionRecorderHandler');
 
 // Initialize AWS clients
 const clientConfig = getAWSClientConfig(region);
@@ -86,6 +98,15 @@ const ledgerService = new LedgerService(
   ledgerTableName,
   region
 );
+
+const eventPublisher = new EventPublisher(logger, eventBusName, region);
+const signalService = new SignalService({
+  logger,
+  signalsTableName,
+  eventPublisher,
+  ledgerService,
+  region,
+});
 
 // Zod schema for SFN input validation (fail fast with precise errors)
 const StepFunctionsInputSchema = z.object({
@@ -201,11 +222,13 @@ export const handler: Handler = async (event: unknown) => {
         attempt_count,
       },
     });
-    
-    // Note: Signal emission for Phase 1 perception layer is implemented in Phase 4.4 (Safety & Outcomes)
-    // See PHASE_4_4_CODE_LEVEL_PLAN.md for SignalService integration
-    
-    // 4. Return outcome
+
+    // 4. Emit execution outcome signal (Phase 4.4 — dedupeKey prevents duplicate signals per action_intent_id)
+    const now = new Date().toISOString();
+    const executionSignal = buildExecutionOutcomeSignal(outcome, intent ?? null, trace_id, now);
+    await signalService.createExecutionSignal(executionSignal);
+
+    // 5. Return outcome
     return {
       outcome,
     };

@@ -2,7 +2,7 @@
 
 **Status:** ✅ **COMPLETE**  
 **Created:** 2026-01-27  
-**Last Updated:** 2026-01-27  
+**Last Updated:** 2026-01-25  
 **Parent Document:** `PHASE_4_3_CODE_LEVEL_PLAN.md`
 
 ---
@@ -28,6 +28,10 @@ This document outlines the comprehensive testing strategy for Phase 4.3 (Connect
 3. ✅ `ConnectorConfigService.test.ts` - Tenant-scoped config retrieval, secrets handling (12 tests)
 4. ✅ `internal-adapter-handler.test.ts` - Gateway event → MCPToolInvocation conversion (8 tests)
 5. ✅ `crm-adapter-handler.test.ts` - Gateway event → MCPToolInvocation conversion (8 tests)
+
+**Phase 4.1 Handler Tests (Completed — see PHASE_4_TEST_COVERAGE.md):**
+- ✅ `execution-starter-handler.test.ts` - Handler validation, event processing, error handling, execution trace (22 tests)
+- ✅ `execution-validator-handler.test.ts` - Preflight checks, validation, expiration, kill switch, edge cases (25 tests)
 
 **🟡 Integration Tests: PLANNING**
 
@@ -509,6 +513,7 @@ This document outlines the comprehensive testing strategy for Phase 4.3 (Connect
 
 - Adapter tests should focus on business logic (validation, persistence, API calls)
 - Handler tests should focus on event conversion (Gateway event → MCPToolInvocation)
+- Phase 4.1 handler tests (execution-starter, execution-validator) are complete; see `PHASE_4_TEST_COVERAGE.md` for full Phase 4 coverage status
 - Integration tests require deployed Gateway and VPC infrastructure
 - Mock external APIs (Salesforce) to avoid dependencies on external systems
 - Test idempotency behavior (adapter-level dedupe)

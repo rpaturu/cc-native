@@ -95,22 +95,36 @@ export class ExecutionOutcomeService {
   }
 
   /**
-   * List outcomes for account
+   * List outcomes for account with pagination.
+   * Returns items and optional nextToken for subsequent pages.
    */
   async listOutcomes(
     tenantId: string,
     accountId: string,
-    limit: number = 50
-  ): Promise<ActionOutcomeV1[]> {
-    const result = await this.dynamoClient.send(new QueryCommand({
-      TableName: this.tableName,
-      KeyConditionExpression: 'pk = :pk',
-      ExpressionAttributeValues: {
-        ':pk': `TENANT#${tenantId}#ACCOUNT#${accountId}`,
-      },
-      Limit: limit,
-    }));
-    
-    return (result.Items || []) as ActionOutcomeV1[];
+    limit: number = 50,
+    nextToken?: string
+  ): Promise<{ items: ActionOutcomeV1[]; nextToken?: string }> {
+    const exclusiveStartKey = nextToken
+      ? (JSON.parse(Buffer.from(nextToken, 'base64').toString('utf8')) as Record<string, unknown>)
+      : undefined;
+
+    const result = await this.dynamoClient.send(
+      new QueryCommand({
+        TableName: this.tableName,
+        KeyConditionExpression: 'pk = :pk',
+        ExpressionAttributeValues: {
+          ':pk': `TENANT#${tenantId}#ACCOUNT#${accountId}`,
+        },
+        Limit: limit,
+        ExclusiveStartKey: exclusiveStartKey,
+      })
+    );
+
+    const items = (result.Items || []) as ActionOutcomeV1[];
+    const newToken = result.LastEvaluatedKey
+      ? Buffer.from(JSON.stringify(result.LastEvaluatedKey), 'utf8').toString('base64')
+      : undefined;
+
+    return { items, nextToken: newToken };
   }
 }

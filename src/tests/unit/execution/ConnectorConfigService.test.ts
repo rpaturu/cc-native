@@ -34,6 +34,8 @@ describe('ConnectorConfigService', () => {
     resetAllMocks();
     jest.clearAllMocks();
     logger = new Logger('ConnectorConfigServiceTest');
+    // Default: Secrets Manager returns valid empty secret so getConnectorConfig does not warn.
+    mockSecretsManagerClient.send.mockResolvedValue({ SecretString: '{}' });
     service = new ConnectorConfigService(
       mockDynamoDBDocumentClient as any,
       'test-connector-config-table',
@@ -116,6 +118,10 @@ describe('ConnectorConfigService', () => {
 
       it('should return null if config not found', async () => {
         mockDynamoDBDocumentClient.send.mockResolvedValue({});
+        // No secret so config stays {} and service returns null (override default SecretString mock).
+        mockSecretsManagerClient.send.mockRejectedValue(
+          Object.assign(new Error('ResourceNotFoundException'), { name: 'ResourceNotFoundException' })
+        );
 
         const config = await service.getConnectorConfig(
           'tenant_test_1',

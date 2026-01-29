@@ -19,6 +19,8 @@ import * as iam from 'aws-cdk-lib/aws-iam';
 import * as cognito from 'aws-cdk-lib/aws-cognito';
 import * as bedrockagentcore from 'aws-cdk-lib/aws-bedrockagentcore';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
+import * as apigateway from 'aws-cdk-lib/aws-apigateway';
+import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import { Construct } from 'constructs';
 import {
   ExecutionInfrastructureConfig,
@@ -30,12 +32,21 @@ export interface ExecutionInfrastructureProps {
   readonly ledgerTable: dynamodb.Table;
   readonly actionIntentTable: dynamodb.Table;
   readonly tenantsTable: dynamodb.Table;
+  readonly signalsTable: dynamodb.Table; // Phase 4.4: execution outcome signals
   readonly gatewayUrl?: string; // AgentCore Gateway URL (Phase 4.2 - will be removed after Phase 4.3 Gateway setup)
   readonly userPool?: cognito.IUserPool; // Cognito User Pool for JWT auth (required for Phase 4.3 Gateway)
   readonly userPoolClient?: cognito.IUserPoolClient; // Cognito User Pool Client (required for Phase 4.3 Gateway)
   readonly artifactsBucket?: s3.IBucket; // S3 bucket for raw response artifacts (optional, will be created if not provided)
   readonly config?: ExecutionInfrastructureConfig;
   readonly region?: string;
+  /** Phase 4.4: Optional API Gateway for execution status API */
+  readonly apiGateway?: apigateway.RestApi;
+  /** Phase 4.4: JWT authorizer for execution status API (required when apiGateway is set) */
+  readonly executionStatusAuthorizer?: apigateway.IAuthorizer;
+  /** Phase 4.4: Required when apiGateway is set; parent must create and pass to avoid duplicate routes */
+  readonly executionsResource?: apigateway.IResource;
+  /** Phase 4.4: Required when apiGateway is set; parent must create and pass to avoid duplicate routes */
+  readonly accountsResource?: apigateway.IResource;
 }
 
 export class ExecutionInfrastructure extends Construct {
@@ -94,6 +105,9 @@ export class ExecutionInfrastructure extends Construct {
   public readonly internalNotesTable: dynamodb.Table;
   public readonly internalTasksTable: dynamodb.Table;
 
+  // Phase 4.4: Execution Status API
+  public readonly executionStatusApiHandler: lambda.Function;
+
   constructor(scope: Construct, id: string, props: ExecutionInfrastructureProps) {
     super(scope, id);
 
@@ -136,7 +150,9 @@ export class ExecutionInfrastructure extends Construct {
     this.executionGateway = this.createAgentCoreGateway(props, config);
     this.gatewayUrl = this.executionGateway.attrGatewayUrl;
 
-    // Phase 4.2: S3 Bucket (create BEFORE handlers that need it)
+    // Phase 4.2: S3 Bucket for raw response artifacts (create BEFORE handlers that need it).
+    // Phase 4.4 verify: Tool-invoker writes large responses here and sets raw_response_artifact_ref;
+    // execution-recorder receives that ref only (no S3 env or grant). Bucket is required for tool-invoker.
     if (!props.artifactsBucket) {
       this.executionArtifactsBucket = new s3.Bucket(this, 'ExecutionArtifactsBucket', {
         bucketName: `${config.s3.executionArtifactsBucketPrefix}-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}`,
@@ -174,6 +190,13 @@ export class ExecutionInfrastructure extends Construct {
     this.registerGatewayTarget(this.internalAdapterHandler, 'internal.create_task', this.getInternalTaskToolSchema(), 'GATEWAY_IAM_ROLE');
     // CRM adapter also uses GATEWAY_IAM_ROLE for now (OAuth credential provider will be added in Phase 4.4)
     this.registerGatewayTarget(this.crmAdapterHandler, 'crm.create_task', this.getCrmTaskToolSchema(), 'GATEWAY_IAM_ROLE');
+
+    // Phase 4.4: Execution Status API Lambda (always create; API Gateway wiring optional)
+    this.executionStatusApiHandler = this.createExecutionStatusApiHandler(props, config);
+    this.createExecutionStatusApiGateway(props);
+
+    // Phase 4.4: CloudWatch alarms
+    this.createCloudWatchAlarms(config);
   }
 
   private createDlq(id: string, queueName: string, config: ExecutionInfrastructureConfig): sqs.Queue {
@@ -436,6 +459,8 @@ export class ExecutionInfrastructure extends Construct {
         EXECUTION_ATTEMPTS_TABLE_NAME: this.executionAttemptsTable.tableName,
         ACTION_INTENT_TABLE_NAME: props.actionIntentTable.tableName,
         LEDGER_TABLE_NAME: props.ledgerTable.tableName,
+        SIGNALS_TABLE_NAME: props.signalsTable.tableName,
+        EVENT_BUS_NAME: props.eventBus.eventBusName,
         // Note: AWS_REGION is automatically set by Lambda runtime and should not be set manually
       },
       deadLetterQueue: this.executionRecorderDlq,
@@ -448,6 +473,8 @@ export class ExecutionInfrastructure extends Construct {
     this.executionAttemptsTable.grantWriteData(handler);
     props.actionIntentTable.grantReadData(handler); // For fetching decision_trace_id
     props.ledgerTable.grantWriteData(handler);
+    props.signalsTable.grantWriteData(handler);
+    props.eventBus.grantPutEventsTo(handler);
     
     return handler;
   }
@@ -513,6 +540,105 @@ export class ExecutionInfrastructure extends Construct {
     this.executionOutcomesTable.grantReadWriteData(handler);
     
     return handler;
+  }
+
+  private createExecutionStatusApiHandler(
+    props: ExecutionInfrastructureProps,
+    config: ExecutionInfrastructureConfig
+  ): lambda.Function {
+    const handler = new lambdaNodejs.NodejsFunction(this, 'ExecutionStatusAPIHandler', {
+      functionName: config.functionNames.executionStatusApi,
+      entry: 'src/handlers/phase4/execution-status-api-handler.ts',
+      handler: 'handler',
+      runtime: lambda.Runtime.NODEJS_20_X,
+      timeout: cdk.Duration.seconds(config.defaults.timeout.executionStatusApi),
+      memorySize: config.defaults.memorySize?.executionStatusApi,
+      environment: {
+        EXECUTION_OUTCOMES_TABLE_NAME: this.executionOutcomesTable.tableName,
+        EXECUTION_ATTEMPTS_TABLE_NAME: this.executionAttemptsTable.tableName,
+        ACTION_INTENT_TABLE_NAME: props.actionIntentTable.tableName,
+      },
+    });
+    this.executionOutcomesTable.grantReadData(handler);
+    this.executionAttemptsTable.grantReadData(handler);
+    props.actionIntentTable.grantReadData(handler);
+    return handler;
+  }
+
+  private createExecutionStatusApiGateway(props: ExecutionInfrastructureProps): void {
+    if (!props.apiGateway || !props.executionStatusAuthorizer) return;
+    if (!props.executionsResource || !props.accountsResource) {
+      throw new Error(
+        'When apiGateway is set, executionsResource and accountsResource must be provided by the parent stack.'
+      );
+    }
+    const statusResource = props.executionsResource
+      .addResource('{action_intent_id}')
+      .addResource('status');
+    statusResource.addMethod(
+      'GET',
+      new apigateway.LambdaIntegration(this.executionStatusApiHandler),
+      { authorizer: props.executionStatusAuthorizer }
+    );
+    const accountExecutionsResource = props.accountsResource
+      .addResource('{account_id}')
+      .addResource('executions');
+    accountExecutionsResource.addMethod(
+      'GET',
+      new apigateway.LambdaIntegration(this.executionStatusApiHandler),
+      { authorizer: props.executionStatusAuthorizer }
+    );
+  }
+
+  private static readonly ALARM_PERIOD = cdk.Duration.minutes(5);
+  private static readonly ALARM_STATISTIC_SUM = 'Sum';
+
+  private createCloudWatchAlarms(config: ExecutionInfrastructureConfig): void {
+    new cloudwatch.Alarm(this, 'ExecutionFailureAlarm', {
+      metric: this.executionStateMachine.metricFailed({
+        period: ExecutionInfrastructure.ALARM_PERIOD,
+        statistic: ExecutionInfrastructure.ALARM_STATISTIC_SUM,
+      }),
+      threshold: 5,
+      evaluationPeriods: 1,
+      alarmDescription: 'Alert when execution failures exceed threshold',
+    });
+    new cloudwatch.Alarm(this, 'ExecutionDurationAlarm', {
+      metric: this.executionStateMachine.metricTime({
+        period: ExecutionInfrastructure.ALARM_PERIOD,
+        statistic: 'Average',
+      }),
+      threshold: 300000,
+      evaluationPeriods: 1,
+      alarmDescription: 'Alert when execution duration exceeds threshold',
+    });
+    new cloudwatch.Alarm(this, 'ExecutionThrottleAlarm', {
+      metric: this.executionStateMachine.metricThrottled({
+        period: ExecutionInfrastructure.ALARM_PERIOD,
+        statistic: ExecutionInfrastructure.ALARM_STATISTIC_SUM,
+      }),
+      threshold: 10,
+      evaluationPeriods: 1,
+      alarmDescription: 'Alert when execution throttles exceed threshold',
+    });
+    this.createLambdaErrorAlarm(this.toolInvokerHandler, 'ToolInvokerErrors');
+    this.createLambdaErrorAlarm(this.executionRecorderHandler, 'ExecutionRecorderErrors');
+    this.createLambdaErrorAlarm(
+      this.executionFailureRecorderHandler,
+      'ExecutionFailureRecorderErrors'
+    );
+  }
+
+  private createLambdaErrorAlarm(fn: lambda.Function, id: string): void {
+    new cloudwatch.Alarm(this, id, {
+      metric: fn.metricErrors({
+        period: ExecutionInfrastructure.ALARM_PERIOD,
+        statistic: ExecutionInfrastructure.ALARM_STATISTIC_SUM,
+      }),
+      threshold: 1,
+      evaluationPeriods: 1,
+      alarmDescription: `Alert when ${fn.functionName} reports errors`,
+    });
   }
 
   private createExecutionStateMachine(config: ExecutionInfrastructureConfig): stepfunctions.StateMachine {
