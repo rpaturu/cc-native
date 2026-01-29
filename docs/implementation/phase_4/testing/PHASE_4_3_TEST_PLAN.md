@@ -44,6 +44,16 @@ This document outlines the comprehensive testing strategy for Phase 4.3 (Connect
 2. ⏳ `connector-adapters.test.ts` - Adapter execution flow (with mocked Gateway)
 3. ⏳ `execution-flow-with-adapters.test.ts` - Full execution lifecycle with adapters
 
+### Unit test coverage summary (Phase 4.3)
+
+| Component | Test File | Status | Test Count |
+|-----------|-----------|--------|------------|
+| InternalConnectorAdapter | `InternalConnectorAdapter.test.ts` | ✅ Complete | 18 tests |
+| CrmConnectorAdapter | `CrmConnectorAdapter.test.ts` | ✅ Complete | 20 tests |
+| ConnectorConfigService | `ConnectorConfigService.test.ts` | ✅ Complete | 12 tests |
+| internal-adapter-handler | `internal-adapter-handler.test.ts` | ✅ Complete | 8 tests |
+| crm-adapter-handler | `crm-adapter-handler.test.ts` | ✅ Complete | 8 tests |
+
 ---
 
 ## Testing Strategy Overview
@@ -509,11 +519,23 @@ This document outlines the comprehensive testing strategy for Phase 4.3 (Connect
 
 ---
 
+## Verification commands
+
+```bash
+# Unit tests only (no integration)
+npm test -- --testPathIgnorePattern="integration"
+
+# Unit test coverage report
+npm test -- --coverage --testPathIgnorePattern="integration"
+```
+
+---
+
 ## Notes
 
 - Adapter tests should focus on business logic (validation, persistence, API calls)
 - Handler tests should focus on event conversion (Gateway event → MCPToolInvocation)
-- Phase 4.1 handler tests (execution-starter, execution-validator) are complete; see `PHASE_4_TEST_COVERAGE.md` for full Phase 4 coverage status
+- Phase 4.1 handler tests (execution-starter, execution-validator) are complete; see `PHASE_4_2_TEST_PLAN.md` for Phase 4.1 + 4.2 coverage
 - Integration tests require deployed Gateway and VPC infrastructure
 - Mock external APIs (Salesforce) to avoid dependencies on external systems
 - Test idempotency behavior (adapter-level dedupe)

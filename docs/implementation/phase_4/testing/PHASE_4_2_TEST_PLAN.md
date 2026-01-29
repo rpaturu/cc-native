@@ -50,6 +50,33 @@ This document outlines the comprehensive testing strategy for Phase 4.2 (Orchest
 - Deferred until connector adapters are implemented
 - Requires test environment setup
 
+### Unit test coverage summary (Phase 4.1 + 4.2)
+
+**Phase 4.1 – Foundation**
+
+| Component | Test File | Status | Test Count |
+|-----------|-----------|--------|------------|
+| ExecutionAttemptService | `ExecutionAttemptService.test.ts` | ✅ Complete | 26 tests |
+| ActionTypeRegistryService | `ActionTypeRegistryService.test.ts` | ✅ Complete | 20 tests |
+| IdempotencyService | `IdempotencyService.test.ts` | ✅ Complete | 18 tests |
+| ExecutionOutcomeService | `ExecutionOutcomeService.test.ts` | ✅ Complete | 12 tests |
+| KillSwitchService | `KillSwitchService.test.ts` | ✅ Complete | 12 tests |
+| execution-starter-handler | `execution-starter-handler.test.ts` | ✅ Complete | 22 tests |
+| execution-validator-handler | `execution-validator-handler.test.ts` | ✅ Complete | 25 tests |
+
+**Phase 4.2 – Orchestration**
+
+| Component | Test File | Status | Test Count |
+|-----------|-----------|--------|------------|
+| tool-mapper-handler | `tool-mapper-handler.test.ts` | ✅ Complete | 15 tests |
+| tool-invoker-handler | `tool-invoker-handler.test.ts` | ✅ Complete | 30 tests |
+| execution-recorder-handler | `execution-recorder-handler.test.ts` | ✅ Complete | 11 tests |
+| execution-failure-recorder-handler | `execution-failure-recorder-handler.test.ts` | ✅ Complete | 7 tests |
+| compensation-handler | `compensation-handler.test.ts` | ✅ Complete | 6 tests |
+| error-classification | `error-classification.test.ts` | ✅ Complete | 24 tests |
+
+**Coverage note:** Some Phase 4.2 handlers (tool-mapper, tool-invoker, execution-recorder, execution-failure-recorder, compensation) may show 0% line coverage in reports if tests mock the handler module. Options: keep as-is (event shapes only) or refactor to invoke the real handler with mocked dependencies for line coverage.
+
 ---
 
 ## Testing Strategy Overview
@@ -702,6 +729,18 @@ npm test -- --watch src/tests/unit/execution
    - Create integration test suite
    - Add end-to-end tests
    - Configure CI/CD pipeline for test execution
+
+---
+
+## Verification commands
+
+```bash
+# Unit tests only (no integration)
+npm test -- --testPathIgnorePattern="integration"
+
+# Unit test coverage report
+npm test -- --coverage --testPathIgnorePattern="integration"
+```
 
 ---
 

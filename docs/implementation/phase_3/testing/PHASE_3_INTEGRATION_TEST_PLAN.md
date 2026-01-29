@@ -1,14 +1,15 @@
-# Phase 3 Testing Plan
+# Phase 3 Integration Test Plan
 
 **Status:** 🟡 **IN PROGRESS**  
 **Created:** 2026-01-25  
-**Last Updated:** 2026-01-25
+**Last Updated:** 2026-01-28  
+**Parent:** [PHASE_3_TEST_PLAN.md](PHASE_3_TEST_PLAN.md)
 
 ---
 
 ## Overview
 
-This document outlines the testing strategy for Phase 3 - Autonomous Decision + Action Proposal (Human-in-the-Loop) implementation.
+This document outlines integration and manual testing for Phase 3 - Autonomous Decision + Action Proposal (Human-in-the-Loop).
 
 **Testing Objectives:**
 1. ✅ Verify Decision API endpoints are functional
@@ -203,16 +204,6 @@ aws logs tail /aws/lambda/cc-native-decision-evaluation-handler \
 - Verify IAM permissions for Bedrock
 - Check VPC endpoint DNS resolution
 
-### 2.3 Verify Private DNS
-
-```bash
-# SSH into a test instance in the VPC (if available)
-# Or check Lambda environment variables
-
-# From within VPC, Bedrock should resolve to VPC endpoint IP
-# Not to public Bedrock endpoint
-```
-
 ---
 
 ## 3. Test Decision Evaluation Flow End-to-End
@@ -241,10 +232,7 @@ aws logs tail /aws/lambda/cc-native-decision-evaluation-handler \
 
 ### 3.2 Trigger Decision Evaluation
 
-**Via API:**
-```bash
-# Use step 1.2 to trigger evaluation
-```
+**Via API:** Use step 1.2 to trigger evaluation.
 
 **Via EventBridge (simulate lifecycle change):**
 ```bash
@@ -266,49 +254,20 @@ aws events put-events \
 1. **Trigger Handler Executed:**
    ```bash
    aws logs tail /aws/lambda/cc-native-decision-trigger-handler \
-     --since 5m \
-     --region us-west-2 \
-     --no-cli-pager
+     --since 5m --region us-west-2 --no-cli-pager
    ```
 
-2. **Decision Evaluation Requested Event:**
-   ```bash
-   # Check EventBridge for DECISION_EVALUATION_REQUESTED event
-   ```
-
-3. **Decision Evaluation Handler Executed:**
+2. **Decision Evaluation Handler Executed:**
    ```bash
    aws logs tail /aws/lambda/cc-native-decision-evaluation-handler \
-     --since 5m \
-     --region us-west-2 \
-     --no-cli-pager
+     --since 5m --region us-west-2 --no-cli-pager
    ```
 
-4. **Decision Proposal Created:**
-   ```bash
-   # Check cc-native-decision-proposal table
-   aws dynamodb query \
-     --table-name cc-native-decision-proposal \
-     --key-condition-expression "pk = :pk" \
-     --expression-attribute-values '{":pk":{"S":"TENANT#test-tenant-1#ACCOUNT#test-account-1"}}' \
-     --region us-west-2 \
-     --no-cli-pager
-   ```
+3. **Decision Proposal Created:** Query `cc-native-decision-proposal` table.
 
-5. **Budget Consumed:**
-   ```bash
-   # Check cc-native-decision-budget table
-   aws dynamodb get-item \
-     --table-name cc-native-decision-budget \
-     --key '{"pk":{"S":"TENANT#test-tenant-1#ACCOUNT#test-account-1"},"sk":{"S":"BUDGET"}}' \
-     --region us-west-2 \
-     --no-cli-pager
-   ```
+4. **Budget Consumed:** Check `cc-native-decision-budget` table.
 
-6. **Ledger Events Created:**
-   ```bash
-   # Check cc-native-ledger table for DECISION_PROPOSED event
-   ```
+5. **Ledger Events Created:** Check `cc-native-ledger` for DECISION_PROPOSED.
 
 ### 3.4 Verify Policy Gate
 
@@ -317,8 +276,6 @@ aws events put-events \
 - Low-risk action (may auto-allow if confidence high)
 - Unknown action type (should be blocked)
 
-**Check policy evaluation results in logs**
-
 ---
 
 ## 4. Verify Budget Reset Scheduler
@@ -326,21 +283,13 @@ aws events put-events \
 ### 4.1 Check EventBridge Rule
 
 ```bash
-# Verify scheduled rule exists
-aws events list-rules \
-  --name-prefix BudgetReset \
-  --region us-west-2 \
-  --no-cli-pager
+aws events list-rules --name-prefix BudgetReset --region us-west-2 --no-cli-pager
 ```
 
-**Expected:**
-- Rule name: `CCNativeStack-BudgetResetScheduleRule-...`
-- Schedule: `cron(0 0 * * ? *)` (midnight UTC daily)
-- Target: `cc-native-budget-reset-handler` Lambda
+**Expected:** Rule targeting `cc-native-budget-reset-handler`, schedule `cron(0 0 * * ? *)` (midnight UTC daily).
 
 ### 4.2 Manually Trigger Budget Reset
 
-**For testing, manually invoke the handler:**
 ```bash
 aws lambda invoke \
   --function-name cc-native-budget-reset-handler \
@@ -352,140 +301,41 @@ aws lambda invoke \
 cat response.json
 ```
 
-**Expected:**
-- Status: 200
-- All account budgets reset to default daily limit
+**Expected:** Status 200; all account budgets reset to default daily limit.
 
 ### 4.3 Verify Budget Reset
 
-**Before reset:**
-```bash
-# Check budget for test account
-aws dynamodb get-item \
-  --table-name cc-native-decision-budget \
-  --key '{"pk":{"S":"TENANT#test-tenant-1#ACCOUNT#test-account-1"},"sk":{"S":"BUDGET"}}' \
-  --region us-west-2 \
-  --no-cli-pager
-```
-
-**After reset:**
-- `daily_remaining` should be reset to `daily_limit`
-- `last_reset_at` should be updated
-
-### 4.4 Check CloudWatch Logs
-
-```bash
-aws logs tail /aws/lambda/cc-native-budget-reset-handler \
-  --since 1h \
-  --region us-west-2 \
-  --no-cli-pager
-```
-
-**Look for:**
-- Successful budget resets
-- Number of accounts processed
-- Any errors
+Before/after: Check `cc-native-decision-budget`; `daily_remaining` should reset to `daily_limit`, `last_reset_at` updated.
 
 ---
 
 ## 5. Integration Test Script
 
-Create a comprehensive test script:
-
-```bash
-#!/bin/bash
-# scripts/phase_3/test-phase3-api.sh
-
-set -e
-
-API_URL="${DECISION_API_URL:-https://m50nppoghk.execute-api.us-west-2.amazonaws.com/prod}"
-API_KEY="${DECISION_API_KEY}"
-TENANT_ID="test-tenant-1"
-ACCOUNT_ID="test-account-1"
-
-echo "🧪 Testing Phase 3 Decision API Endpoints"
-echo "=========================================="
-
-# Test 1: Evaluate Decision
-echo "1. Testing POST /decisions/evaluate..."
-RESPONSE=$(curl -s -X POST \
-  "${API_URL}/decisions/evaluate" \
-  -H "Content-Type: application/json" \
-  -H "x-api-key: ${API_KEY}" \
-  -H "x-tenant-id: ${TENANT_ID}" \
-  -d "{\"account_id\":\"${ACCOUNT_ID}\",\"trigger_type\":\"SELLER_REQUEST\"}")
-
-DECISION_ID=$(echo $RESPONSE | jq -r '.decision_id')
-echo "✅ Decision created: ${DECISION_ID}"
-
-# Test 2: Get Account Decisions
-echo "2. Testing GET /accounts/${ACCOUNT_ID}/decisions..."
-curl -s -X GET \
-  "${API_URL}/accounts/${ACCOUNT_ID}/decisions" \
-  -H "x-api-key: ${API_KEY}" \
-  -H "x-tenant-id: ${TENANT_ID}" | jq '.'
-echo "✅ Account decisions retrieved"
-
-# Test 3: Approve Action (if decision has actions)
-echo "3. Testing POST /actions/{id}/approve..."
-# Get action_ref from decision proposal first
-# Then approve...
-
-echo "✅ All tests completed"
-```
+See `scripts/phase_3/test-phase3-api.sh` for a comprehensive test script (DECISION_API_URL, DECISION_API_KEY, tenant/account IDs).
 
 ---
 
 ## 6. Troubleshooting
 
-### Common Issues
+**API Gateway 403:** Check API key, usage plan, throttling.
 
-**1. API Gateway 403 Forbidden:**
-- Check API key is valid
-- Verify API key is associated with usage plan
-- Check throttling limits
+**Bedrock errors:** Verify VPC endpoint state, security groups, IAM, Lambda VPC.
 
-**2. Bedrock Connection Errors:**
-- Verify VPC endpoint is `available`
-- Check security group egress rules
-- Verify IAM permissions
-- Check Lambda is in correct VPC subnets
+**Decision evaluation fails:** CloudWatch Logs, test data (account/signals/posture), budget, EventBridge rules.
 
-**3. Decision Evaluation Fails:**
-- Check CloudWatch Logs for errors
-- Verify test data exists (account, signals, posture state)
-- Check budget hasn't been exhausted
-- Verify EventBridge rules are configured
-
-**4. Budget Reset Not Working:**
-- Check EventBridge rule schedule
-- Verify Lambda has permissions to read/write budget table
-- Check CloudWatch Logs for errors
+**Budget reset not working:** EventBridge schedule, Lambda permissions, CloudWatch Logs.
 
 ---
 
 ## 7. Success Criteria
 
-✅ **All tests pass when:**
-- [ ] All API endpoints return expected responses
-- [ ] Bedrock calls succeed via VPC endpoint (no internet required)
-- [ ] End-to-end decision flow completes successfully
-- [ ] Budget reset runs daily at midnight UTC
-- [ ] All ledger events are created correctly
-- [ ] Decision proposals are stored and retrievable
-- [ ] Action intents are created on approval
-- [ ] Policy gate correctly evaluates actions
+✅ All API endpoints return expected responses  
+✅ Bedrock calls succeed via VPC endpoint  
+✅ End-to-end decision flow completes  
+✅ Budget reset runs daily at midnight UTC  
+✅ Ledger events and decision proposals correct  
+✅ Policy gate evaluates actions correctly  
 
 ---
 
-## Next Steps After Testing
-
-1. **Performance Testing:** Load test API endpoints
-2. **Error Handling:** Test error scenarios and edge cases
-3. **Security Testing:** Verify Zero Trust compliance
-4. **UI Integration:** Connect frontend to API endpoints
-5. **Monitoring:** Set up CloudWatch alarms and dashboards
-
----
-
-**Last Updated:** 2026-01-25
+**Last Updated:** 2026-01-28

@@ -1,4 +1,7 @@
-# Phase 2 Integration Tests
+# Phase 2 Integration Test Plan
+
+**Last Updated:** 2026-01-28  
+**Parent:** [PHASE_2_TEST_PLAN.md](PHASE_2_TEST_PLAN.md)
 
 This guide shows you how to set up and run Phase 2 integration tests, which test the Situation Graph (Neptune) and Deterministic Synthesis engine. Since Neptune is deployed in **isolated VPC subnets** (no internet access), tests must run from within the VPC using an EC2 test runner instance.
 
@@ -207,36 +210,6 @@ The `run-phase2-integration-tests.sh` script supports various options:
 - `AWS_REGION` - AWS region
 
 **Note**: `GIT_REPO_URL` and `GIT_TOKEN` can be set in `.env.local` for convenience.
-
-## Repository Setup
-
-The test runner will clone your repository from GitHub (or other git host):
-
-```bash
-# Public repository
-./scripts/phase_2/run-phase2-integration-tests.sh --repo-url https://github.com/rpaturu/cc-native.git
-
-# Private repository with token
-./scripts/phase_2/run-phase2-integration-tests.sh \
-  --repo-url https://github.com/rpaturu/cc-native.git \
-  --git-token ghp_xxxxx
-
-# Private repository with SSH key
-./scripts/phase_2/run-phase2-integration-tests.sh \
-  --repo-url git@github.com:rpaturu/cc-native.git \
-  --git-ssh-key ~/.ssh/id_rsa
-```
-
-**Recommended**: Store your repository URL and token in `.env.local`:
-```bash
-GIT_REPO_URL=https://github.com/rpaturu/cc-native.git
-GIT_TOKEN=ghp_your_token_here
-```
-
-Then simply run:
-```bash
-./scripts/phase_2/run-phase2-integration-tests.sh
-```
 
 ## Manual Step-by-Step Workflow
 
