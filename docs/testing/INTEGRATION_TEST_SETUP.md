@@ -229,3 +229,17 @@ After setting up permissions:
 1. Run `npm test` to verify all tests pass
 2. Review test output to ensure no permission errors
 3. Check CloudWatch Logs if tests fail unexpectedly
+
+## Phase 4.4 Execution Integration Tests
+
+Phase 4.4 adds integration tests in `src/tests/integration/execution/`:
+
+- **execution-status-api.test.ts** — 11 tests; invokes the Execution Status API handler directly with real DynamoDB. Requires `.env` to contain `EXECUTION_OUTCOMES_TABLE_NAME`, `EXECUTION_ATTEMPTS_TABLE_NAME`, and `ACTION_INTENT_TABLE_NAME`. These are written to `.env` by `./deploy`.
+- **end-to-end-execution.test.ts** — Placeholder suite (skipped when env missing).
+
+**Run execution-status-api integration tests only:**
+```bash
+npm test -- --testPathPattern="execution/execution-status-api"
+```
+
+If the suite is skipped, ensure you have run `./deploy` at least once so `.env` includes the execution table names. To skip these tests (e.g. in CI without AWS), set `SKIP_EXECUTION_STATUS_API_INTEGRATION=1`. See **docs/implementation/phase_4/testing/PHASE_4_4_TEST_PLAN.md** for full details.

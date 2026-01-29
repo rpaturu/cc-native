@@ -196,6 +196,7 @@ DECISION_API_KEY_ID_OUTPUT=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.Output
 
 # Phase 4: Execution Infrastructure table outputs
 ACTION_TYPE_REGISTRY_TABLE_OUTPUT=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="ActionTypeRegistryTableName") | .OutputValue')
+ACTION_INTENT_TABLE_OUTPUT=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="ActionIntentTableName") | .OutputValue')
 EXECUTION_ATTEMPTS_TABLE_OUTPUT=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="ExecutionAttemptsTableName") | .OutputValue')
 EXECUTION_OUTCOMES_TABLE_OUTPUT=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="ExecutionOutcomesTableName") | .OutputValue')
 EXTERNAL_WRITE_DEDUPE_TABLE_OUTPUT=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="ExternalWriteDedupeTableName") | .OutputValue')
@@ -278,6 +279,7 @@ GRAPH_MATERIALIZATION_STATUS_TABLE_NAME=$GRAPH_MATERIALIZATION_STATUS_TABLE_OUTP
 
 # DynamoDB Tables (Phase 4: Execution Infrastructure)
 ACTION_TYPE_REGISTRY_TABLE_NAME=$ACTION_TYPE_REGISTRY_TABLE_OUTPUT
+ACTION_INTENT_TABLE_NAME=$ACTION_INTENT_TABLE_OUTPUT
 EXECUTION_ATTEMPTS_TABLE_NAME=$EXECUTION_ATTEMPTS_TABLE_OUTPUT
 EXECUTION_OUTCOMES_TABLE_NAME=$EXECUTION_OUTCOMES_TABLE_OUTPUT
 EXTERNAL_WRITE_DEDUPE_TABLE_NAME=$EXTERNAL_WRITE_DEDUPE_TABLE_OUTPUT

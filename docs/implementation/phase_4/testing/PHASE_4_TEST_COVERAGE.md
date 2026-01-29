@@ -1,7 +1,7 @@
 # Phase 4 Unit Test Coverage Status
 
-**Last Updated:** 2026-01-27  
-**Status:** 🟢 **MOSTLY COMPLETE** - 84% coverage (16/19 test files)
+**Last Updated:** 2026-01-29  
+**Status:** 🟢 **MOSTLY COMPLETE** - 95% unit coverage (18/19 test files); Phase 4.4 integration tests implemented
 
 ---
 
@@ -16,8 +16,8 @@
 | IdempotencyService | `IdempotencyService.test.ts` | ✅ Complete | 18 tests |
 | ExecutionOutcomeService | `ExecutionOutcomeService.test.ts` | ✅ Complete | 12 tests |
 | KillSwitchService | `KillSwitchService.test.ts` | ✅ Complete | 12 tests |
-| **execution-starter-handler** | ❌ **MISSING** | ⚠️ Not created | - |
-| **execution-validator-handler** | ❌ **MISSING** | ⚠️ Not created | - |
+| execution-starter-handler | `execution-starter-handler.test.ts` | ✅ Complete | 22 tests |
+| execution-validator-handler | `execution-validator-handler.test.ts` | ✅ Complete | 25 tests |
 
 ### ✅ Phase 4.2: Orchestration Tests (COMPLETE)
 
@@ -40,11 +40,13 @@
 | internal-adapter-handler | `internal-adapter-handler.test.ts` | ✅ Complete | 8 tests |
 | crm-adapter-handler | `crm-adapter-handler.test.ts` | ✅ Complete | 8 tests |
 
-### ❌ Phase 4.4: Safety & Outcomes Tests (MISSING)
+### 🟢 Phase 4.4: Safety & Outcomes Tests (INTEGRATION IMPLEMENTED)
 
 | Component | Test File | Status | Test Count |
 |-----------|-----------|--------|------------|
-| **execution-status-api-handler** | ❌ **MISSING** | ⚠️ Not created | - |
+| **execution-status-api-handler** (unit) | ❌ **MISSING** | ⚠️ Optional; handler covered by integration tests | - |
+| **execution-status-api** (integration) | `src/tests/integration/execution/execution-status-api.test.ts` | ✅ Complete | 11 tests |
+| **end-to-end-execution** (integration) | `src/tests/integration/execution/end-to-end-execution.test.ts` | ✅ Placeholder | 3 placeholder tests (skip when env missing) |
 
 ### ✅ Infrastructure Tests (NEW)
 
@@ -56,44 +58,43 @@
 
 ## Missing Tests Summary
 
-### Phase 4.1 Missing Tests (2)
-1. ❌ `execution-starter-handler.test.ts`
-2. ❌ `execution-validator-handler.test.ts`
+### Phase 4.1 Missing Tests (0)
+✅ All Phase 4.1 tests complete (including execution-starter-handler, execution-validator-handler)
 
 ### Phase 4.3 Missing Tests (0)
 ✅ All Phase 4.3 tests complete
 
-### Phase 4.4 Missing Tests (1)
-1. ❌ `execution-status-api-handler.test.ts`
+### Phase 4.4 Missing Tests (1 unit; integration done)
+1. ❌ `execution-status-api-handler.test.ts` (unit) — optional; handler covered by integration tests.
+2. ✅ Integration: `execution-status-api.test.ts` (11 tests) and `end-to-end-execution.test.ts` (placeholder) — implemented; see **PHASE_4_4_TEST_PLAN.md** for how to run.
 
-**Total Missing:** 3 test files (Phase 4.1: 2, Phase 4.4: 1)
+**Total Missing:** 1 optional unit test file.
 
 ---
 
 ## Test Coverage Statistics
 
-- **Total Test Files:** 16 existing + 3 missing = 19 expected
-- **Existing Tests:** 16 files ✅
-- **Missing Tests:** 3 files ❌
-- **Coverage:** ~84% (16/19)
+- **Total Test Files:** 18 existing + 1 missing = 19 expected
+- **Existing Tests:** 18 files ✅
+- **Missing Tests:** 1 file ❌
+- **Coverage:** ~95% (18/19)
 
 ---
 
 ## Priority for Missing Tests
 
-### Medium Priority (Phase 4.1 - Foundation)
-1. **execution-starter-handler.test.ts** - Handler validation, event processing
-2. **execution-validator-handler.test.ts** - Handler validation, preflight checks
-
-### Low Priority (Phase 4.4 - Not Yet Implemented)
-3. **execution-status-api-handler.test.ts** - Defer until Phase 4.4 implementation
+### Phase 4.4 (Safety & Outcomes)
+1. **execution-status-api-handler.test.ts** (unit) — optional; handler covered by integration tests.
+2. **Integration tests** — ✅ Implemented. Run: `npm test -- --testPathPattern="execution/execution-status-api"` (requires `.env` with execution table names from `./deploy`). See **PHASE_4_4_TEST_PLAN.md**.
 
 ---
 
 ## Notes
 
 - Phase 4.2 tests are complete (all orchestration handlers tested)
-- Phase 4.1 service layer tests are complete (all services tested)
+- Phase 4.1 tests are complete (services + execution-starter-handler, execution-validator-handler) ✅
 - Phase 4.3 adapter tests are complete (all adapters and handlers tested) ✅
 - Infrastructure test added to catch missing ExecutionInfrastructure instantiation
-- Phase 4.1 handler tests (execution-starter, execution-validator) are still missing but lower priority
+- execution-starter-handler.test.ts: Event validation (Zod), handler processing, error handling, execution vs decision trace (22 tests)
+- execution-validator-handler.test.ts: Event validation (Zod), preflight checks (expiration, kill switch), error handling, edge cases (25 tests)
+- Phase 4.4 integration: execution-status-api.test.ts (11 tests, handler-direct + real DynamoDB); end-to-end-execution.test.ts (placeholder). Deploy writes ACTION_INTENT_TABLE_NAME to .env so execution-status-api tests run after deploy.
