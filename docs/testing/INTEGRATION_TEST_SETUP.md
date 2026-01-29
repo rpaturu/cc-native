@@ -65,11 +65,23 @@ aws iam list-attached-role-policies --role-name MyTestRole --no-cli-pager
 
 ### Step 4: Run Tests
 
+**Unit tests only** (default; run before deploy):
 ```bash
 npm test
+# or: npm run test:unit
 ```
 
-All integration tests should now pass!
+**Integration tests only** (run after deploy; uses `.env` from deploy):
+```bash
+npm run test:integration
+```
+
+**All tests** (unit + integration):
+```bash
+npm run test:all
+```
+
+Integration tests are also run automatically **after** a successful `./deploy` (unless you pass `--skip-integration-tests`). Use `./deploy --skip-integration-tests` to deploy without running integration tests.
 
 ## Manual Setup (Alternative)
 

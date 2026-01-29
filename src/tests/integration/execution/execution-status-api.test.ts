@@ -4,7 +4,8 @@
  * Invokes the Execution Status API handler directly with real DynamoDB tables.
  * Requires deployed stack and env (EXECUTION_OUTCOMES_TABLE_NAME, etc.) from .env.
  *
- * Skip: Set SKIP_EXECUTION_STATUS_API_INTEGRATION=1 or omit required table env to skip.
+ * Skip only when explicitly requested: SKIP_EXECUTION_STATUS_API_INTEGRATION=1.
+ * If required env is missing and skip is not set, the suite fails (run ./deploy or set the skip flag).
  */
 
 import type { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
@@ -32,8 +33,7 @@ const requiredEnvVars = [
   'ACTION_INTENT_TABLE_NAME',
 ];
 const hasRequiredEnv = requiredEnvVars.every((name) => process.env[name]);
-const skipIntegration =
-  process.env.SKIP_EXECUTION_STATUS_API_INTEGRATION === '1' || !hasRequiredEnv;
+const skipIntegration = process.env.SKIP_EXECUTION_STATUS_API_INTEGRATION === '1';
 
 const region = process.env.AWS_REGION || 'us-west-2';
 const outcomesTable = process.env.EXECUTION_OUTCOMES_TABLE_NAME || 'cc-native-execution-outcomes';
@@ -116,6 +116,13 @@ function createListEvent(options: {
   const logger = new Logger('ExecutionStatusAPIIntegrationTest');
 
   beforeAll(async () => {
+    if (!hasRequiredEnv) {
+      const missing = requiredEnvVars.filter((name) => !process.env[name]);
+      throw new Error(
+        `[Execution Status API integration] Missing required env: ${missing.join(', ')}. ` +
+          'Set them (e.g. run ./deploy to write .env) or set SKIP_EXECUTION_STATUS_API_INTEGRATION=1 to skip this suite.'
+      );
+    }
     const mod = await import('../../../handlers/phase4/execution-status-api-handler');
     invoke = (mod.handler as (e: APIGatewayProxyEvent) => Promise<APIGatewayProxyResult>);
 

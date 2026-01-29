@@ -343,31 +343,40 @@ jest.mock('@aws-sdk/credential-provider-node', () => {
         });
       }),
     };
-  } else {
-    // No env credentials - try to fetch from EC2 instance metadata
+  }
+  // In Jest we never hit the network: use test credentials to avoid open TCP handles
+  // (fetchEC2Credentials uses http.request to 169.254.169.254 and leaves sockets open)
+  if (process.env.JEST_WORKER_ID !== undefined) {
     return {
       ...originalModule,
-      defaultProvider: jest.fn(async () => {
-        try {
-          const creds = await fetchEC2Credentials();
-          if (isVerbose) {
-            console.log('✓ Successfully fetched credentials from EC2 instance metadata');
-          }
-          return creds;
-        } catch (e: any) {
-          // Log the error for debugging
-          console.warn(`⚠ Failed to fetch credentials from EC2 metadata: ${e.message}`);
-          console.warn('  Falling back to test credentials (tests may fail with "invalid security token")');
-          // Not on EC2 or metadata unavailable - return test credentials
-          // This allows tests to run locally without EC2, but will fail on EC2
-          return {
-            accessKeyId: 'test-key',
-            secretAccessKey: 'test-secret',
-          };
-        }
-      }),
+      defaultProvider: jest.fn(() =>
+        Promise.resolve({
+          accessKeyId: 'test-key',
+          secretAccessKey: 'test-secret',
+        })
+      ),
     };
   }
+  // Not in Jest (e.g. real EC2) - try to fetch from EC2 instance metadata
+  return {
+    ...originalModule,
+    defaultProvider: jest.fn(async () => {
+      try {
+        const creds = await fetchEC2Credentials();
+        if (isVerbose) {
+          console.log('✓ Successfully fetched credentials from EC2 instance metadata');
+        }
+        return creds;
+      } catch (e: any) {
+        console.warn(`⚠ Failed to fetch credentials from EC2 metadata: ${e.message}`);
+        console.warn('  Falling back to test credentials (tests may fail with "invalid security token")');
+        return {
+          accessKeyId: 'test-key',
+          secretAccessKey: 'test-secret',
+        };
+      }
+    }),
+  };
 });
 
 // Suppress console output during tests to avoid "● Console" blocks in Jest output.

@@ -24,12 +24,14 @@ fi
 # Export CDK_DEFAULT_REGION
 export CDK_DEFAULT_REGION=$CDK_REGION
 SKIP_TESTS=false
+SKIP_INTEGRATION_TESTS=false
 while [[ "$#" -gt 0 ]]; do case $1 in
   --profile) CDK_PROFILE="$2"; shift;;
   --region) AWS_REGION="$2"; shift;;
   --env) DEPLOYMENT_ENV="$2"; shift;;
   --skip-tests) SKIP_TESTS=true;;
   --no-test) SKIP_TESTS=true;;
+  --skip-integration-tests) SKIP_INTEGRATION_TESTS=true;;
 esac; shift; done
 
 # Check if region is set
@@ -39,9 +41,10 @@ if [ -z "$AWS_REGION" ]; then
   
   if [ -z "$AWS_REGION" ]; then
     echo "Error: AWS region is required"
-    echo "Usage: ./deploy [--profile <aws_profile>] [--region <aws_region>] [--env <environment>] [--skip-tests]"
+    echo "Usage: ./deploy [--profile <aws_profile>] [--region <aws_region>] [--env <environment>] [--skip-tests] [--skip-integration-tests]"
     echo "Example: ./deploy --profile dev --region us-west-2 --env development"
     echo "         ./deploy --skip-tests  # Skip unit tests before deployment"
+    echo "         ./deploy --skip-integration-tests  # Skip integration tests after deployment"
     echo "You may also configure your region by running 'aws configure'"
     exit 1
   fi
@@ -325,6 +328,22 @@ else
   exit 1
 fi
 
+# Run integration tests after deployment (uses .env written above)
+if [ "$SKIP_INTEGRATION_TESTS" = false ]; then
+  echo ""
+  echo "🧪 Running integration tests (post-deploy)..."
+  if npm run test:integration; then
+    echo "✅ Integration tests passed"
+  else
+    echo "❌ Integration tests failed - check .env and deployed resources"
+    echo "   Use --skip-integration-tests to deploy without running integration tests"
+    exit 1
+  fi
+else
+  echo ""
+  echo "⏭️  Skipping integration tests (--skip-integration-tests flag provided)"
+fi
+
 echo ""
 echo "🎉 Autonomous Revenue Decision Loop deployment complete!"
 echo ""
@@ -364,6 +383,5 @@ echo "📝 Configuration saved to .env file"
 echo ""
 echo "🧪 Next Steps:"
 echo "   1. Review .env file for configuration"
-echo "   2. Start implementing Phase 0 services"
-echo "   3. Run integration tests"
+echo "   2. Run integration tests anytime: npm run test:integration"
 echo ""

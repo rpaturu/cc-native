@@ -1,7 +1,7 @@
 # Phase 4 Unit Test Coverage Status
 
 **Last Updated:** 2026-01-29  
-**Status:** 🟢 **MOSTLY COMPLETE** - 95% unit coverage (18/19 test files); Phase 4.4 integration tests implemented
+**Status:** 🟢 **COMPLETE** - 100% unit coverage (19/19 test files); Phase 4.4 integration tests implemented
 
 ---
 
@@ -44,7 +44,8 @@
 
 | Component | Test File | Status | Test Count |
 |-----------|-----------|--------|------------|
-| **execution-status-api-handler** (unit) | ❌ **MISSING** | ⚠️ Optional; handler covered by integration tests | - |
+| **execution-signal-helpers** (unit) | `src/tests/unit/utils/execution-signal-helpers.test.ts` | ✅ Complete | 6 tests |
+| **execution-status-api-handler** (unit) | `src/tests/unit/handlers/phase4/execution-status-api-handler.test.ts` | ✅ Complete | 23 tests |
 | **execution-status-api** (integration) | `src/tests/integration/execution/execution-status-api.test.ts` | ✅ Complete | 11 tests |
 | **end-to-end-execution** (integration) | `src/tests/integration/execution/end-to-end-execution.test.ts` | ✅ Placeholder | 3 placeholder tests (skip when env missing) |
 
@@ -64,27 +65,27 @@
 ### Phase 4.3 Missing Tests (0)
 ✅ All Phase 4.3 tests complete
 
-### Phase 4.4 Missing Tests (1 unit; integration done)
-1. ❌ `execution-status-api-handler.test.ts` (unit) — optional; handler covered by integration tests.
-2. ✅ Integration: `execution-status-api.test.ts` (11 tests) and `end-to-end-execution.test.ts` (placeholder) — implemented; see **PHASE_4_4_TEST_PLAN.md** for how to run.
+### Phase 4.4 Missing Tests (0)
+✅ Unit: `execution-status-api-handler.test.ts` (23 tests) and `execution-signal-helpers.test.ts` (6 tests).
+✅ Integration: `execution-status-api.test.ts` (11 tests) and `end-to-end-execution.test.ts` (placeholder) — see **PHASE_4_4_TEST_PLAN.md** for how to run.
 
-**Total Missing:** 1 optional unit test file.
+**Total Missing:** 0.
 
 ---
 
 ## Test Coverage Statistics
 
-- **Total Test Files:** 18 existing + 1 missing = 19 expected
-- **Existing Tests:** 18 files ✅
-- **Missing Tests:** 1 file ❌
-- **Coverage:** ~95% (18/19)
+- **Total Test Files:** 19 expected
+- **Existing Tests:** 19 files ✅
+- **Missing Tests:** 0
+- **Coverage:** 100% (19/19)
 
 ---
 
 ## Priority for Missing Tests
 
 ### Phase 4.4 (Safety & Outcomes)
-1. **execution-status-api-handler.test.ts** (unit) — optional; handler covered by integration tests.
+1. **execution-status-api-handler.test.ts** (unit) — ✅ Implemented (23 tests).
 2. **Integration tests** — ✅ Implemented. Run: `npm test -- --testPathPattern="execution/execution-status-api"` (requires `.env` with execution table names from `./deploy`). See **PHASE_4_4_TEST_PLAN.md**.
 
 ---

@@ -30,18 +30,33 @@ Phase 4.4 adds **signal emission**, **execution status API**, and **CloudWatch a
 
 **Prerequisites:** Deploy once (`./deploy`) so `.env` contains `EXECUTION_OUTCOMES_TABLE_NAME`, `EXECUTION_ATTEMPTS_TABLE_NAME`, and `ACTION_INTENT_TABLE_NAME`. Jest setup and the test file load `.env` from the project root.
 
+**Run all integration tests** (recommended; runs post-deploy automatically):
+```bash
+npm run test:integration
+```
+
 **Run Execution Status API integration tests only:**
 ```bash
 npm test -- --testPathPattern="execution/execution-status-api"
 ```
 
-**Run all tests (including Phase 4.4 integration):**
+**Run unit tests only** (default; excludes integration):
 ```bash
 npm test
+# or: npm run test:unit
 ```
 
+**Run all tests** (unit + integration):
+```bash
+npm run test:all
+```
+
+**Post-deploy:** `./deploy` runs integration tests after writing `.env` and seeding. Use `./deploy --skip-integration-tests` to skip.
+
 **Skip execution-status-api integration tests** (e.g. in CI without AWS): set `SKIP_EXECUTION_STATUS_API_INTEGRATION=1`.  
-**Skip E2E placeholder suite:** set `SKIP_E2E_EXECUTION=1` or omit `EXECUTION_OUTCOMES_TABLE_NAME` / `EVENT_BUS_NAME`.
+**Skip E2E placeholder suite:** set `SKIP_E2E_EXECUTION=1`.  
+
+If required env is missing and the skip flag is not set, the suite **fails** with a clear error (not skipped). Use the skip flag when you intend to omit integration tests.
 
 ---
 
