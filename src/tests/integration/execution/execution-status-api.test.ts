@@ -298,8 +298,10 @@ function createListEvent(options: {
 
   it('GET /executions/{id}/status — only intent, expired → 200 EXPIRED', async () => {
     const actionIntentId = `ai_expired_${Date.now()}`;
-    const pastEpoch = Math.floor(Date.now() / 1000) - 3600;
-    const expiresAt = new Date((pastEpoch - 3600) * 1000).toISOString();
+    // Expire 1s ago so intent is logically expired but TTL is less likely to have deleted it yet
+    // (table TTL on expires_at_epoch can remove items soon after they expire)
+    const pastEpoch = Math.floor(Date.now() / 1000) - 1;
+    const expiresAt = new Date(pastEpoch * 1000).toISOString();
     const pk = `TENANT#${testTenantId}#ACCOUNT#${testAccountId}`;
     const sk = `ACTION_INTENT#${actionIntentId}`;
 
