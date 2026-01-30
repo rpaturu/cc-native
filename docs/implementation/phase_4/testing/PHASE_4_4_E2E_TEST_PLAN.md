@@ -3,6 +3,7 @@
 **Status:** 🟢 **COMPLETE**  
 **Created:** 2026-01-30  
 **Last Updated:** 2026-01-30  
+**Last verified:** 2026-01-30 — E2E run passed as part of `./deploy` (steps 3–4, 6; step 5 skipped without URL+JWT).  
 **Parent:** [PHASE_4_4_INTEGRATION_TEST_PLAN.md](PHASE_4_4_INTEGRATION_TEST_PLAN.md)  
 **Prerequisites:** Deployed stack (./deploy); `.env` with `EVENT_BUS_NAME`, `ACTION_INTENT_TABLE_NAME`, `EXECUTION_ATTEMPTS_TABLE_NAME`, `EXECUTION_OUTCOMES_TABLE_NAME`
 
@@ -73,6 +74,19 @@ Phase 4.4 E2E validates the **full execution path**: seed action intent → Even
 | **ActionOutcome** | Row exists; status SUCCEEDED (step 4). |
 | **Execution Status API** | When URL + JWT set: GET status returns 200 and status SUCCEEDED (step 5). |
 | **Execution signal** | When SIGNALS_TABLE_NAME set: signal row exists for ACTION_EXECUTED (step 6). |
+
+---
+
+## Test results
+
+E2E has been run successfully as part of `./deploy`:
+
+- **Steps 3–4:** ExecutionAttempt and ActionOutcome (DynamoDB) — **PASSED** (status SUCCEEDED).
+- **Step 5:** Execution Status API — **Skipped** when `EXECUTION_STATUS_API_URL` and `EXECUTION_STATUS_API_AUTH_HEADER` are not set (expected).
+- **Step 6:** Execution signal — **PASSED** (signal row found, signalType=ACTION_EXECUTED).
+- **Step 7:** Cleanup — completed.
+
+To re-verify, run `./scripts/phase_4/test-phase4-execution.sh` or `./deploy` (without `--skip-e2e`).
 
 ---
 
