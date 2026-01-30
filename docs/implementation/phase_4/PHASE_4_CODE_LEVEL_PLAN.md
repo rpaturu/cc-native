@@ -3077,8 +3077,8 @@ export class CrmConnectorAdapter implements IConnectorAdapter {
 2. ✅ Code-level plan created
 3. ✅ Phase 4.1–4.4 implemented
 4. ✅ Phase 4.5A signed off (2026-01-28)
-5. **Phase 4 complete.** Proceed to Phase 5 (if defined) or production deployment.
+5. **Phase 4 complete.** Proceed to Phase 5 (Always-On Autonomy + Learning Loop) or production deployment. Outline: `../phase_5/PHASE_5_OUTLINE.md`.
 
 ---
 
-**Phase 4 is complete.** Sign-off details and 4.5B optional work: `PHASE_4_5_CODE_LEVEL_PLAN.md`.
+**Phase 4 is complete.** Sign-off details and 4.5B optional work: `PHASE_4_5_CODE_LEVEL_PLAN.md`. **Next:** Phase 5 outline at `docs/implementation/phase_5/PHASE_5_OUTLINE.md`.
