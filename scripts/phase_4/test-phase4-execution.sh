@@ -3,7 +3,7 @@
 # Follows production: seed puts ACTION_APPROVED to EventBridge; rule starts Step Functions. We discover the
 # execution via list-executions + describe-execution (match input.action_intent_id), then track with describe-execution until SUCCEEDED/FAILED.
 # Requires (fail fast): AWS_REGION, table names (EXECUTION_ATTEMPTS_TABLE or EXECUTION_ATTEMPTS_TABLE_NAME, same for OUTCOMES); for seed also EVENT_BUS_NAME, ACTION_INTENT_TABLE_NAME. jq.
-# Optional: EXECUTION_STATUS_API_URL + auth; EXECUTION_STATE_MACHINE_ARN (else resolved by name cc-native-execution-orchestrator).
+# Optional: EXECUTION_STATUS_API_URL + EXECUTION_STATUS_API_AUTH_HEADER (JWT) to verify Status API; SIGNALS_TABLE_NAME to verify signal emission; EXECUTION_STATE_MACHINE_ARN (else resolved by name).
 # After a successful verify, cleans up E2E seed data (intent, attempt, outcome).
 # See docs/implementation/phase_4/PHASE_4_5_CODE_LEVEL_PLAN.md §3.
 
@@ -30,6 +30,7 @@ OUTCOME_SK_PREFIX=${OUTCOME_SK_PREFIX:-OUTCOME#}
 STATUS_API_URL=${EXECUTION_STATUS_API_URL:-}
 AUTH_HEADER=${EXECUTION_STATUS_API_AUTH_HEADER:-}
 DECISION_API_URL=${DECISION_API_URL:-}
+SIGNALS_TABLE=${SIGNALS_TABLE:-${SIGNALS_TABLE_NAME:-}}
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -160,37 +161,61 @@ if [ "$ATTEMPT_STATUS" = "FAILED" ]; then
   exit 1
 fi
 
-# 3. Verify: prefer Execution Status API (primary); fallback to DynamoDB outcome
-if [ -n "$STATUS_API_URL" ]; then
-  echo "3. Verifying via Execution Status API..."
-  if [ -n "$AUTH_HEADER" ]; then
-    RESP=$(curl -s -w "\n%{http_code}" -X GET "$STATUS_API_URL/executions/$ACTION_INTENT_ID/status" -H "Authorization: $AUTH_HEADER" -H "x-tenant-id: $TENANT_ID" -H "x-account-id: $ACCOUNT_ID" 2>/dev/null || true)
-  else
-    RESP=$(curl -s -w "\n%{http_code}" -X GET "$STATUS_API_URL/executions/$ACTION_INTENT_ID/status" -H "x-tenant-id: $TENANT_ID" -H "x-account-id: $ACCOUNT_ID" 2>/dev/null || true)
-  fi
+# 3. Verify ExecutionAttempt (DynamoDB) — already have STATUS from wait
+echo "3. Verifying ExecutionAttempt (DynamoDB)..."
+echo "   ExecutionAttempt status: $STATUS"
+
+# 4. Verify ActionOutcome (DynamoDB)
+echo "4. Verifying ActionOutcome (DynamoDB)..."
+OUTCOME=$(aws dynamodb get-item \
+  --region "$REGION" \
+  --table-name "$OUTCOMES_TABLE" \
+  --key "{\"pk\":{\"S\":\"$PK\"},\"sk\":{\"S\":\"$SK_OUTCOME\"}}" \
+  --no-cli-pager 2>/dev/null || true)
+if [ -z "$OUTCOME" ] || ! echo "$OUTCOME" | jq -e '.Item' >/dev/null 2>&1; then
+  echo "   ActionOutcome not found (table=$OUTCOMES_TABLE, sk=$SK_OUTCOME)"
+  exit 1
+fi
+OUTCOME_STATUS=$(echo "$OUTCOME" | jq -r '.Item.status.S')
+echo "   ActionOutcome status: $OUTCOME_STATUS"
+
+# 5. Verify Execution Status API (optional; requires EXECUTION_STATUS_API_URL + auth)
+if [ -n "$STATUS_API_URL" ] && [ -n "$AUTH_HEADER" ]; then
+  echo "5. Verifying Execution Status API..."
+  STATUS_URL="${STATUS_API_URL%/}/executions/$ACTION_INTENT_ID/status?account_id=$ACCOUNT_ID"
+  RESP=$(curl -s -w "\n%{http_code}" -X GET "$STATUS_URL" -H "Authorization: $AUTH_HEADER" 2>/dev/null || true)
   HTTP_CODE=$(echo "$RESP" | tail -n1)
   BODY=$(echo "$RESP" | sed '$d')
   if [ "$HTTP_CODE" != "200" ]; then
     echo "   Execution Status API returned $HTTP_CODE: $BODY"
     exit 1
   fi
-  echo "   Execution status: $STATUS"
-else
-  echo "3. Verifying ExecutionAttempt (DynamoDB)..."
-  echo "   ExecutionAttempt status: $STATUS"
-
-  echo "4. Verifying ActionOutcome (DynamoDB)..."
-  OUTCOME=$(aws dynamodb get-item \
-    --region "$REGION" \
-    --table-name "$OUTCOMES_TABLE" \
-    --key "{\"pk\":{\"S\":\"$PK\"},\"sk\":{\"S\":\"$SK_OUTCOME\"}}" \
-    --no-cli-pager 2>/dev/null || true)
-  if [ -z "$OUTCOME" ] || ! echo "$OUTCOME" | jq -e '.Item' >/dev/null 2>&1; then
-    echo "   ActionOutcome not found (table=$OUTCOMES_TABLE, sk=$SK_OUTCOME)"
+  API_STATUS=$(echo "$BODY" | jq -r '.status // empty')
+  if [ "$API_STATUS" != "SUCCEEDED" ]; then
+    echo "   Execution Status API status expected SUCCEEDED, got: $API_STATUS"
     exit 1
   fi
-  OUTCOME_STATUS=$(echo "$OUTCOME" | jq -r '.Item.status.S')
-  echo "   ActionOutcome status: $OUTCOME_STATUS"
+  echo "   Execution Status API: 200, status=$API_STATUS"
+else
+  echo "5. Skipping Execution Status API (set EXECUTION_STATUS_API_URL and EXECUTION_STATUS_API_AUTH_HEADER to verify)."
+fi
+
+# 6. Verify execution signal (optional; requires SIGNALS_TABLE_NAME in .env)
+if [ -n "$SIGNALS_TABLE" ]; then
+  echo "6. Verifying execution signal (signals table)..."
+  SIGNAL_ID="exec-${ACTION_INTENT_ID}-${ACCOUNT_ID}-ACTION_EXECUTED"
+  SIGNAL=$(aws dynamodb get-item \
+    --region "$REGION" \
+    --table-name "$SIGNALS_TABLE" \
+    --key "{\"tenantId\":{\"S\":\"$TENANT_ID\"},\"signalId\":{\"S\":\"$SIGNAL_ID\"}}" \
+    --no-cli-pager 2>/dev/null || true)
+  if [ -z "$SIGNAL" ] || ! echo "$SIGNAL" | jq -e '.Item' >/dev/null 2>&1; then
+    echo "   Execution signal not found (table=$SIGNALS_TABLE, signalId=$SIGNAL_ID)"
+    exit 1
+  fi
+  echo "   Execution signal found: signalType=$(echo "$SIGNAL" | jq -r '.Item.signalType.S // empty')"
+else
+  echo "6. Skipping execution signal check (set SIGNALS_TABLE_NAME in .env to verify)."
 fi
 
 echo ""
@@ -198,7 +223,7 @@ echo "Phase 4 E2E (one path) PASSED"
 
 # Clean up E2E seed data (intent, attempt, outcome) after successful verify
 echo ""
-echo "5. Cleaning up E2E seed data..."
+echo "7. Cleaning up E2E seed data..."
 PK="TENANT#${TENANT_ID}#ACCOUNT#${ACCOUNT_ID}"
 SK_ATTEMPT="${ATTEMPT_SK_PREFIX}${ACTION_INTENT_ID}"
 SK_OUTCOME="${OUTCOME_SK_PREFIX}${ACTION_INTENT_ID}"

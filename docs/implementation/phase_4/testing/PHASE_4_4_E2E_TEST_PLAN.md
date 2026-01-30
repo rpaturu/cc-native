@@ -20,8 +20,10 @@ Phase 4.4 E2E validates the **full execution path**: seed action intent → Even
 
 | Item | Status | Notes |
 |------|--------|--------|
-| **test-phase4-execution.sh** | ✅ Implemented | Seed → wait → verify attempt/outcome → cleanup. |
+| **test-phase4-execution.sh** | ✅ Implemented | Seed → wait → verify attempt/outcome → (optional) Status API → (optional) signal → cleanup. |
 | **seed-phase4-e2e-intent.sh** | ✅ Implemented | Puts action intent (B2) and ACTION_APPROVED to EventBridge. |
+| **Status API check** | ✅ In script | Step 5 when EXECUTION_STATUS_API_URL + EXECUTION_STATUS_API_AUTH_HEADER set. |
+| **Signal check** | ✅ In script | Step 6 when SIGNALS_TABLE_NAME set (e.g. from deploy .env). |
 | **Run in deploy** | ✅ Yes | `./deploy` runs E2E after integration tests unless `--skip-e2e`. |
 
 ---
@@ -54,7 +56,9 @@ Phase 4.4 E2E validates the **full execution path**: seed action intent → Even
 3. **Verify** — Assert ExecutionAttempt status (e.g. SUCCEEDED) and ActionOutcome present and SUCCEEDED.
 4. **Cleanup** — Remove E2E seed data (attempt, outcome, intent if configured).
 
-Optional extensions (not required for status COMPLETE): verify Execution Status API returns 200 for the same `action_intent_id`; verify signal in signals table.
+**Step 5 — Execution Status API (optional):** When `EXECUTION_STATUS_API_URL` and `EXECUTION_STATUS_API_AUTH_HEADER` (JWT) are set, the script calls `GET .../executions/{action_intent_id}/status?account_id=...` and asserts 200 and `status: SUCCEEDED`. If either is unset, the step is skipped.
+
+**Step 6 — Execution signal (optional):** When `SIGNALS_TABLE_NAME` is set (e.g. from deploy `.env`), the script verifies a signal row exists in the signals table for the execution (`signalId = exec-{action_intent_id}-{account_id}-ACTION_EXECUTED`). If unset, the step is skipped.
 
 ---
 
@@ -65,8 +69,10 @@ Optional extensions (not required for status COMPLETE): verify Execution Status 
 | **EventBridge rule** | Rule forwards ACTION_APPROVED to Step Functions. |
 | **Step Functions** | Execution starts; MapActionToTool → ToolInvoker → ExecutionRecorder. |
 | **Gateway + Internal Adapter** | internal.create_task creates task in DynamoDB; Tool Invoker parses MCP response and passes external_object_refs. |
-| **ExecutionAttempt** | Row exists; status SUCCEEDED. |
-| **ActionOutcome** | Row exists; status SUCCEEDED. |
+| **ExecutionAttempt** | Row exists; status SUCCEEDED (step 3). |
+| **ActionOutcome** | Row exists; status SUCCEEDED (step 4). |
+| **Execution Status API** | When URL + JWT set: GET status returns 200 and status SUCCEEDED (step 5). |
+| **Execution signal** | When SIGNALS_TABLE_NAME set: signal row exists for ACTION_EXECUTED (step 6). |
 
 ---
 

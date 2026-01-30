@@ -24,6 +24,20 @@ Phase 4.4 implements safety controls and outcome visibility:
 
 ---
 
+## Implementation evidence (Phase 4.4 complete)
+
+| Capability | Evidence (file / path) |
+|------------|------------------------|
+| **Signal emission** | `src/services/perception/SignalService.ts` — `createExecutionSignal(signal)`; `src/utils/execution-signal-helpers.ts` — `buildExecutionOutcomeSignal(...)`; `src/handlers/phase4/execution-recorder-handler.ts` — calls both after outcome + ledger. Recorder env: `SIGNALS_TABLE_NAME`, `EVENT_BUS_NAME` (ExecutionInfrastructure). |
+| **Execution Status API** | `src/handlers/phase4/execution-status-api-handler.ts`; JWT auth (tenantId from authorizer claims), 404 when intent+attempt+outcome all null, pagination `next_token`. |
+| **Status API wiring** | `ExecutionInfrastructure`: `createExecutionStatusApiHandler`, `createExecutionStatusApiGateway`; props `apiGateway`, `executionStatusAuthorizer`, `executionsResource`, `accountsResource`. CCNativeStack passes authorizer + resources. |
+| **listOutcomes pagination** | `src/services/execution/ExecutionOutcomeService.ts` — `listOutcomes(tenantId, accountId, limit, nextToken?)` → `{ items, nextToken }`. |
+| **CloudWatch alarms** | `src/stacks/constructs/ExecutionInfrastructure.ts` — `createCloudWatchAlarms(config)`; state machine (Failed, Duration, Throttled); Lambda error alarms (toolInvoker, executionRecorder, executionFailureRecorder). |
+| **Integration tests** | `src/tests/integration/execution/execution-status-api.test.ts`, `src/tests/integration/execution/end-to-end-execution.test.ts`. |
+| **E2E (script)** | `scripts/phase_4/test-phase4-execution.sh`, `scripts/phase_4/seed-phase4-e2e-intent.sh`; run via `./deploy` or standalone. |
+
+---
+
 ## Alignment with 4.1–4.3 Implementation
 
 - **SignalTypes.ts:** `ACTION_EXECUTED`, `ACTION_FAILED`, `WINDOW_KEY_DERIVATION`, and `DEFAULT_SIGNAL_TTL` are already implemented. No changes required.
@@ -628,20 +642,20 @@ private createExecutionStatusAPI(
 ## 6. Implementation Checklist
 
 **Signal emission**
-- [ ] Extend SignalService with `createExecutionSignal()` (no lifecycle state; no accounts table).
-- [ ] Add shared helper `buildExecutionOutcomeSignal(outcome, intent, trace_id, now)` (e.g. in `src/utils/execution-signal-helpers.ts` or under perception).
-- [ ] Wire signal emission in execution-recorder-handler after outcome + attempt + ledger; use EventPublisher + SignalService.createExecutionSignal + buildExecutionOutcomeSignal.
-- [ ] ~~Verify SignalType enum~~ — **Already in SignalTypes.ts (4.1–4.3)**
+- [x] Extend SignalService with `createExecutionSignal()` (no lifecycle state; no accounts table).
+- [x] Add shared helper `buildExecutionOutcomeSignal(outcome, intent, trace_id, now)` in `src/utils/execution-signal-helpers.ts`.
+- [x] Wire signal emission in execution-recorder-handler after outcome + attempt + ledger; use SignalService.createExecutionSignal + buildExecutionOutcomeSignal.
+- [x] ~~Verify SignalType enum~~ — **Already in SignalTypes.ts (4.1–4.3)**
 
 **Status API**
-- [ ] Create execution status API handler with **JWT auth** (derive tenantId from authorizer claims; validate account access).
-- [ ] **404 rule:** If intent == null && attempt == null && outcome == null → return 404 (not PENDING/EXPIRED).
-- [ ] **Pagination:** Extend ExecutionOutcomeService.listOutcomes to accept nextToken and return `{ items, nextToken }`; add next_token query/response to list endpoint.
-- [ ] **AWS_REGION:** Do not use requireEnv for region; use process.env.AWS_REGION with a runtime-specific error message if missing.
-- [ ] Add execution status API Lambda; API Gateway integration with **reuse** of executionsResource/accountsResource (or accept as props); attach **JWT authorizer** to GET methods.
+- [x] Create execution status API handler with **JWT auth** (derive tenantId from authorizer claims; validate account access).
+- [x] **404 rule:** If intent == null && attempt == null && outcome == null → return 404 (not PENDING/EXPIRED).
+- [x] **Pagination:** ExecutionOutcomeService.listOutcomes accepts nextToken and returns `{ items, nextToken }`; list endpoint supports next_token query/response.
+- [x] **AWS_REGION:** Status API uses process.env.AWS_REGION with runtime-specific message if missing.
+- [x] Execution status API Lambda; API Gateway integration with **reuse** of executionsResource/accountsResource; **JWT authorizer** on GET methods.
 
 **Alarms**
-- [ ] CloudWatch alarms: period (e.g. 5 min), statistic (Sum); add Lambda error alarms for tool-invoker, execution-recorder, execution-failure-recorder (optional: adapters).
+- [x] CloudWatch alarms: createCloudWatchAlarms in ExecutionInfrastructure; state machine (Failed, Duration, Throttled); Lambda error alarms for tool-invoker, execution-recorder, execution-failure-recorder.
 
 **Other**
 - [x] Verify S3 bucket setup (from Phase 4.2). Bucket created/used in ExecutionInfrastructure; tool-invoker has EXECUTION_ARTIFACTS_BUCKET and grantWrite; recorder receives raw_response_artifact_ref only (no S3 env).
@@ -672,20 +686,20 @@ This appendix compares the Phase 4.4 doc with the **current codebase** for accur
 
 | Doc says | Current implementation | Accuracy / completeness |
 |----------|------------------------|--------------------------|
-| Add signal emission **after** outcome + attempt + ledger in execution-recorder-handler | Recorder has outcome + attempt + ledger; **no** SignalService or signal emission. Comment at ~line 204: "Signal emission for Phase 1 perception layer is implemented in Phase 4.4" | ✅ Doc accurate. **Not implemented.** |
-| Extend SignalService with `createExecutionSignal()` (no lifecycle, no accounts table) | SignalService has only `createSignal(signal: Signal)`; requires LifecycleStateService and accounts table. **No** `createExecutionSignal` | ✅ Doc accurate. **Not implemented.** |
-| Shared helper `buildExecutionOutcomeSignal(outcome, intent, trace_id, now)` | **No** such helper in `src/utils/` or perception. Only `src/utils/aws-client-config.ts` exists | ✅ Doc accurate. **Not implemented.** |
-| Recorder env: add SIGNALS_TABLE_NAME, EVENT_BUS_NAME | Recorder Lambda env (ExecutionInfrastructure) has only EXECUTION_OUTCOMES_TABLE_NAME, EXECUTION_ATTEMPTS_TABLE_NAME, ACTION_INTENT_TABLE_NAME, LEDGER_TABLE_NAME. **No** SIGNALS_TABLE_NAME or EVENT_BUS_NAME | ✅ Doc accurate. **Not implemented.** ExecutionInfrastructure already has `props.eventBus`; use `props.eventBus.eventBusName` for EVENT_BUS_NAME when adding. |
-| SignalTypes.ts ACTION_EXECUTED, ACTION_FAILED, WINDOW_KEY_DERIVATION, DEFAULT_SIGNAL_TTL | Present in `src/types/SignalTypes.ts` | ✅ Doc accurate. **Already implemented.** |
+| Add signal emission **after** outcome + attempt + ledger in execution-recorder-handler | Recorder calls `buildExecutionOutcomeSignal` and `signalService.createExecutionSignal(executionSignal)` after outcome + ledger | ✅ Implemented. |
+| Extend SignalService with `createExecutionSignal()` (no lifecycle, no accounts table) | `SignalService.createExecutionSignal(signal: Signal)` in `src/services/perception/SignalService.ts` (line ~215) | ✅ Implemented. |
+| Shared helper `buildExecutionOutcomeSignal(outcome, intent, trace_id, now)` | `src/utils/execution-signal-helpers.ts` — `buildExecutionOutcomeSignal` | ✅ Implemented. |
+| Recorder env: add SIGNALS_TABLE_NAME, EVENT_BUS_NAME | ExecutionInfrastructure passes `SIGNALS_TABLE_NAME: props.signalsTable.tableName`, `EVENT_BUS_NAME: props.eventBus.eventBusName` to recorder | ✅ Implemented. |
+| SignalTypes.ts ACTION_EXECUTED, ACTION_FAILED, WINDOW_KEY_DERIVATION, DEFAULT_SIGNAL_TTL | Present in `src/types/SignalTypes.ts` | ✅ Doc accurate. |
 | EventPublisher(logger, eventBusName, region) | Constructor in `src/services/events/EventPublisher.ts` is `(logger, eventBusName, region?)` | ✅ Doc accurate. |
 
 ### 2. Execution status API (§2)
 
 | Doc says | Current implementation | Accuracy / completeness |
 |----------|------------------------|--------------------------|
-| New handler `execution-status-api-handler.ts` | **File does not exist.** Handlers under `src/handlers/phase4/` do not include it | ✅ Doc accurate. **Not implemented.** |
-| JWT authorizer; tenantId from claims; accountIds validation; 404 when intent+attempt+outcome all null; pagination next_token | N/A (handler not implemented) | Doc is the spec. |
-| ExecutionOutcomeService.listOutcomes(tenantId, accountId, limit, nextToken?) → { items, nextToken } | `ExecutionOutcomeService.listOutcomes(tenantId, accountId, limit = 50)` returns `Promise<ActionOutcomeV1[]>`; **no** nextToken param or return shape | ⚠️ **Gap:** Doc requires extending listOutcomes. Current signature does not match. |
+| New handler `execution-status-api-handler.ts` | `src/handlers/phase4/execution-status-api-handler.ts` exists | ✅ Implemented. |
+| JWT authorizer; tenantId from claims; accountIds validation; 404 when intent+attempt+outcome all null; pagination next_token | Handler derives tenantId from authorizer claims; 404 when all null; list endpoint supports next_token query/response | ✅ Implemented. |
+| ExecutionOutcomeService.listOutcomes(tenantId, accountId, limit, nextToken?) → { items, nextToken } | `ExecutionOutcomeService.listOutcomes(..., nextToken?)` returns `{ items, nextToken }` in `ExecutionOutcomeService.ts` | ✅ Implemented. |
 | ExecutionAttemptService.getAttempt(actionIntentId, tenantId, accountId) | Exists with that signature in `ExecutionAttemptService.ts` | ✅ Doc accurate. |
 | ActionIntentService.getIntent(intentId, tenantId, accountId) | Exists as `getIntent(intentId, tenantId, accountId)` in `ActionIntentService.ts` | ✅ Doc accurate. |
 | ExecutionStatus type (status, started_at, completed_at, …) | Defined in `src/types/ExecutionTypes.ts` with status, started_at, completed_at, external_object_refs, error_message, error_class, attempt_count | ✅ Doc accurate. |
@@ -695,16 +709,16 @@ This appendix compares the Phase 4.4 doc with the **current codebase** for accur
 
 | Doc says | Current implementation | Accuracy / completeness |
 |----------|------------------------|--------------------------|
-| createCloudWatchAlarms(); period/statistic on metric; Lambda error alarms for toolInvoker, executionRecorder, executionFailureRecorder | **No** createCloudWatchAlarms in ExecutionInfrastructure. **No** cloudwatch import or alarms | ✅ Doc accurate. **Not implemented.** |
+| createCloudWatchAlarms(); period/statistic on metric; Lambda error alarms for toolInvoker, executionRecorder, executionFailureRecorder | `createCloudWatchAlarms(config)` in ExecutionInfrastructure (line ~660); state machine Failed/Duration/Throttle alarms; createLambdaErrorAlarm for toolInvoker, executionRecorder, executionFailureRecorder | ✅ Implemented. |
 | this.executionStateMachine, this.toolInvokerHandler, this.executionRecorderHandler, this.executionFailureRecorderHandler | All exist on ExecutionInfrastructure | ✅ Doc accurate. |
 
 ### 4. API Gateway integration (§4)
 
 | Doc says | Current implementation | Accuracy / completeness |
 |----------|------------------------|--------------------------|
-| Props: apiGateway?, executionStatusAuthorizer?, executionsResource?, accountsResource? | ExecutionInfrastructureProps has **none** of these. No apigateway import | ✅ Doc accurate. **Not implemented.** |
-| When apiGateway set, require executionsResource and accountsResource (no addResource fallback) | N/A | Doc is the spec. |
-| executionStatusApiHandler Lambda; entry execution-status-api-handler.ts | **No** executionStatusApiHandler on construct. Config has `functionNames.executionStatusApi` and timeout/memorySize | ✅ Doc accurate. **Not implemented.** |
+| Props: apiGateway?, executionStatusAuthorizer?, executionsResource?, accountsResource? | ExecutionInfrastructureProps has apiGateway, executionStatusAuthorizer, executionsResource, accountsResource; CCNativeStack passes them | ✅ Implemented. |
+| When apiGateway set, require executionsResource and accountsResource (no addResource fallback) | createExecutionStatusApiGateway throws if apiGateway set but resources missing | ✅ Implemented. |
+| executionStatusApiHandler Lambda; entry execution-status-api-handler.ts | `this.executionStatusApiHandler` created by `createExecutionStatusApiHandler`; entry `execution-status-api-handler.ts` | ✅ Implemented. |
 
 ### 5. Config and infrastructure
 
@@ -739,23 +753,22 @@ This appendix compares the Phase 4.4 doc with the **current codebase** for accur
 
 | Doc says | Current implementation | Accuracy / completeness |
 |----------|------------------------|--------------------------|
-| Create `src/tests/integration/execution/end-to-end-execution.test.ts`, `execution-status-api.test.ts` | **No** `src/tests/integration/execution/` directory. Integration tests exist only as methodology.test.ts, phase0.test.ts, phase2.test.ts | ✅ Doc accurate. **Not implemented.** |
+| Create `src/tests/integration/execution/end-to-end-execution.test.ts`, `execution-status-api.test.ts` | `src/tests/integration/execution/execution-status-api.test.ts` and `end-to-end-execution.test.ts` exist | ✅ Implemented. |
 
 ### 7. Recorder: AWS_REGION
 
 | Doc says | Current implementation | Accuracy / completeness |
 |----------|------------------------|--------------------------|
-| (Status API) Do not use requireEnv for AWS_REGION; use process.env + runtime-specific message | Status API not implemented. **Recorder** currently uses `requireEnv('AWS_REGION', 'ExecutionRecorderHandler')` | Doc applies to **status API** only. Recorder can keep requireEnv for region unless you standardize later. |
+| (Status API) Do not use requireEnv for AWS_REGION; use process.env + runtime-specific message | Status API handler uses process.env.AWS_REGION with runtime-specific message. Recorder may still use requireEnv for region | ✅ Status API implemented per spec. |
 
 ### 8. Event bus for signal emission
 
 | Doc says | Current implementation | Accuracy / completeness |
 |----------|------------------------|--------------------------|
-| EVENT_BUS_NAME for EventPublisher in recorder | ExecutionInfrastructure receives `props.eventBus` (EventBus); other constructs pass `EVENT_BUS_NAME: props.eventBus.eventBusName` to Lambdas. Recorder does **not** currently get EVENT_BUS_NAME | ✅ When implementing §1, add EVENT_BUS_NAME to recorder env from `props.eventBus.eventBusName` and grant eventBus.grantPutEventsTo(handler) if SignalService/EventPublisher publish to EventBridge. |
+| EVENT_BUS_NAME for EventPublisher in recorder | ExecutionInfrastructure passes `EVENT_BUS_NAME: props.eventBus.eventBusName` to recorder (with SIGNALS_TABLE_NAME) | ✅ Implemented. |
 
 ### Summary
 
-- **Accurate:** Doc matches existing types, services (getOutcome, getAttempt, getIntent), config, ExecutionInfrastructure shape, SignalTypes, EventPublisher, LedgerService, and placement of signal emission in the recorder. No contradictions found.
-- **Recently implemented (reflected in §4a, §4b, §5):** (1) Deploy script DynamoDB prefix list lookup + CDK context; (2) ExecutionInfrastructure Internal Adapter in VPC with required dynamoDbPrefixListId; (3) Tool Invoker MCP envelope parsing for external_object_refs; (4) Phase 4.4 E2E test plan and script-based E2E.
-- **Gaps (to implement):** (1) SignalService.createExecutionSignal + buildExecutionOutcomeSignal + recorder wiring; (2) execution-status-api-handler.ts + JWT auth, 404, pagination; (3) ExecutionOutcomeService.listOutcomes extended with nextToken; (4) CloudWatch alarms; (5) API Gateway props + executionStatusApiHandler Lambda + resource reuse; (6) integration tests under `execution/` (placeholder exists; script-based E2E is implemented).
-- **Completeness:** Doc does not reference any removed or renamed files. One implementation detail: API Gateway path parameter keys may be lowercased by the runtime (e.g. `action_intent_id` might appear as `action_intent_id` or in lowercase); the handler should read from `event.pathParameters` using the same key as in the API Gateway resource definition.
+- **Phase 4.4 implementation complete:** Signal emission (§1), Execution Status API (§2), CloudWatch alarms (§3), API Gateway integration (§4), deploy/VPC (§4a), Tool Invoker MCP parsing (§4b), integration tests and E2E (§5) are implemented. Appendix rows above reflect current codebase.
+- **Implementation evidence:** See the "Implementation evidence" section near the top of this document for file paths.
+- **No remaining gaps** for the scope of this plan. API Gateway path parameter keys may be lowercased by the runtime; the handler reads from `event.pathParameters` using the key defined in the API Gateway resource.
