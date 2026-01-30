@@ -245,9 +245,9 @@ Capture the following so the audit is reviewable:
 
 ### 4.5B — Optional (do not block sign-off)
 
-- [ ] Recommended: `idempotency.test.ts`, `kill-switches.test.ts`
+- [x] Recommended: `idempotency.test.ts`, `kill-switches.test.ts`
 - [ ] Other integration tests (orchestration, gateway, adapters)
-- [ ] Optional: `TESTING.md` entry point, `PHASE_4_TROUBLESHOOTING.md`
+- [x] Optional: `TESTING.md` entry point, `PHASE_4_TROUBLESHOOTING.md`
 - [ ] Performance tuning beyond minimal targets
 - [ ] Additional E2E coverage
 

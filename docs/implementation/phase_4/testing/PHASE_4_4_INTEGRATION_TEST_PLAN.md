@@ -56,6 +56,8 @@ npm run test:all
 **Skip flags:**
 - **Skip execution-status-api integration** (e.g. CI without AWS): set `SKIP_EXECUTION_STATUS_API_INTEGRATION=1`.
 - **Skip E2E placeholder suite:** set `SKIP_E2E_EXECUTION=1`.
+- **Skip idempotency integration (4.5B):** set `SKIP_IDEMPOTENCY_INTEGRATION=1`.
+- **Skip kill-switches integration (4.5B):** set `SKIP_KILL_SWITCHES_INTEGRATION=1`.
 
 If required env is missing and the skip flag is not set, the suite **fails** with a clear error (not skipped). Use the skip flag when you intend to omit integration tests.
 
@@ -100,6 +102,8 @@ Ensure the stack completes and no resources fail.
 |------|--------|--------|
 | `src/tests/integration/execution/execution-status-api.test.ts` | Execution Status API: GET status, GET list, auth, 404, pagination. Handler invoked directly; real DynamoDB. | ✅ Implemented (11 tests) |
 | `src/tests/integration/execution/end-to-end-execution.test.ts` | Full execution flow: EventBridge → Step Functions → starter → … → recorder. | ✅ Placeholder (skip when env missing) |
+| `src/tests/integration/execution/idempotency.test.ts` | Dual-layer idempotency: ExecutionAttemptService.startAttempt (conditional write), ExecutionOutcomeService.recordOutcome (idempotent). Real DynamoDB. | ✅ Implemented (4.5B; 4 tests) |
+| `src/tests/integration/execution/kill-switches.test.ts` | Kill switch behavior: GLOBAL_EXECUTION_STOP, tenant execution_enabled, disabled_action_types. Real DynamoDB (tenants table). | ✅ Implemented (4.5B; 5 tests) |
 
 ---
 
