@@ -20,6 +20,8 @@ import { DecisionInfrastructure } from './constructs/DecisionInfrastructure';
 import { createDecisionInfrastructureConfig } from './constructs/DecisionInfrastructureConfig';
 import { ExecutionInfrastructure } from './constructs/ExecutionInfrastructure';
 import { createExecutionInfrastructureConfig } from './constructs/ExecutionInfrastructureConfig';
+import { AutonomyInfrastructure } from './constructs/AutonomyInfrastructure';
+import { DecisionSchedulingInfrastructure } from './constructs/DecisionSchedulingInfrastructure';
 
 export interface CCNativeStackProps extends cdk.StackProps {
   // Add any custom props here
@@ -677,6 +679,16 @@ export class CCNativeStack extends cdk.Stack {
       accountsResource,
     });
 
+    // Phase 5.1: Autonomy Infrastructure (autonomy config, budget, admin API)
+    const autonomyInfrastructure = new AutonomyInfrastructure(this, 'AutonomyInfrastructure', {
+      userPool: this.userPool,
+    });
+
+    // Phase 5.2: Decision Scheduling (CostGate, RunState, IdempotencyStore, Requeue)
+    const decisionSchedulingInfrastructure = new DecisionSchedulingInfrastructure(this, 'DecisionSchedulingInfrastructure', {
+      eventBus: this.eventBus,
+    });
+
     // Stack Outputs
     // World Model S3 Buckets
     new cdk.CfnOutput(this, 'EvidenceLedgerBucketName', {
@@ -935,6 +947,11 @@ export class CCNativeStack extends cdk.Stack {
       description: 'API Gateway URL for execution status API (JWT auth: GET /executions/{id}/status, GET /accounts/{id}/executions)',
     });
 
+    new cdk.CfnOutput(this, 'AutonomyApiUrl', {
+      value: autonomyInfrastructure.autonomyApi.url,
+      description: 'API Gateway URL for autonomy admin API (Phase 5.1: GET/PUT /config, GET/PUT /budget, GET /budget/state)',
+    });
+
     // Phase 4: Execution Infrastructure Outputs
     new cdk.CfnOutput(this, 'ActionTypeRegistryTableName', {
       value: executionInfrastructure.actionTypeRegistryTable.tableName,
@@ -969,6 +986,16 @@ export class CCNativeStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'InternalTasksTableName', {
       value: executionInfrastructure.internalTasksTable.tableName,
       description: 'DynamoDB table for internal tasks',
+    });
+
+    // Phase 5.2: Decision Scheduling (RunState, IdempotencyStore)
+    new cdk.CfnOutput(this, 'DecisionRunStateTableName', {
+      value: decisionSchedulingInfrastructure.decisionRunStateTable.tableName,
+      description: 'DynamoDB table for decision run state (debounce/cooldown)',
+    });
+    new cdk.CfnOutput(this, 'IdempotencyStoreTableName', {
+      value: decisionSchedulingInfrastructure.idempotencyStoreTable.tableName,
+      description: 'DynamoDB table for RUN_DECISION idempotency',
     });
   }
 
