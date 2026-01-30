@@ -1,6 +1,6 @@
 # Phase 4 — Bounded Execution & AI-Native Action Fulfillment
 
-**Status:** 🟡 **4.1–4.4 COMPLETE; 4.5A IN PROGRESS** (sign-off gate: `PHASE_4_5_CODE_LEVEL_PLAN.md`; remaining: docs, security audit, performance)  
+**Status:** 🟢 **PHASE 4 COMPLETE** (4.5A signed off 2026-01-28). Sign-off: `PHASE_4_5_CODE_LEVEL_PLAN.md`.  
 **Prerequisites:** Phase 0 ✅ Complete | Phase 1 ✅ Complete | Phase 2 ✅ Complete | Phase 3 ✅ Complete  
 **Dependencies:** Phase 3 produces approved `ActionIntentV1` objects that need execution
 
@@ -403,12 +403,8 @@ Phase 4 ensures Phase 5 is **safe to expand autonomy**.
 ## Next Steps
 
 1. ✅ Phase 4 plan documented
-2. ⏳ Create Phase 4 code-level implementation plan
-3. ⏳ Choose initial execution actions to implement
-4. ⏳ Design Step Functions state machine
-5. ⏳ Design connector adapter interface
-6. ⏳ Begin EPIC 4.1 implementation
+2. ✅ Phase 4 code-level plans (4.1–4.5) implemented and signed off
+3. ✅ Step Functions state machine, connector adapters, execution status API, kill switches, E2E path
+4. **Phase 4 complete.** Proceed to Phase 5 (Always-On Autonomy + Learning Loop) or production deployment.
 
----
-
-**Ready to proceed?** Start with EPIC 4.1 (Execution Orchestrator) to establish the foundation for safe, bounded execution.
+**Sign-off:** `PHASE_4_5_CODE_LEVEL_PLAN.md`. **Next:** Phase 5 outline at `../phase_5/PHASE_5_OUTLINE.md`.
