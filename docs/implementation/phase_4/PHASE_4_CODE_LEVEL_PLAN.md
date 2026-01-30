@@ -1,8 +1,9 @@
 # Phase 4 — Code-Level Implementation Plan
 
-**Status:** 🟡 **PLANNING**  
+**Status:** 🟢 **COMPLETE** (4.5A signed off 2026-01-28)  
 **Created:** 2026-01-26  
-**Last Updated:** 2026-01-26  
+**Last Updated:** 2026-01-28  
+**Sign-off:** See `PHASE_4_5_CODE_LEVEL_PLAN.md` — Definition of Done (§8) met.  
 **Note:** All corrections from initial review have been incorporated into sub-phase documents (Phase 4.1, 4.2, 4.3, 4.4, 4.5)
 
 ---
@@ -3066,12 +3067,7 @@ export class CrmConnectorAdapter implements IConnectorAdapter {
 - [ ] End-to-end tests
 
 ### Phase 4.5: Testing & Polish
-- [ ] Complete unit test coverage
-- [ ] Complete integration test coverage
-- [ ] End-to-end test suite
-- [ ] Update documentation
-- [ ] Performance testing
-- [ ] Security audit
+- [x] **4.5A complete (signed off 2026-01-28).** Unit tests, Status API integration, one deterministic E2E path, docs, security audit + evidence, performance explicitly deferred w/ ticket. See `PHASE_4_5_CODE_LEVEL_PLAN.md` for checklist and 4.5B status.
 
 ---
 
@@ -3079,10 +3075,10 @@ export class CrmConnectorAdapter implements IConnectorAdapter {
 
 1. ✅ Architecture defined
 2. ✅ Code-level plan created
-3. ⏳ Begin Phase 4.1 implementation (Foundation)
-4. ⏳ Set up initial ActionTypeRegistry entries
-5. ⏳ Implement first connector adapter (Internal)
+3. ✅ Phase 4.1–4.4 implemented
+4. ✅ Phase 4.5A signed off (2026-01-28)
+5. **Phase 4 complete.** Proceed to Phase 5 (if defined) or production deployment.
 
 ---
 
-**Ready to begin implementation?** Start with Phase 4.1 (Foundation) to establish the execution infrastructure.
+**Phase 4 is complete.** Sign-off details and 4.5B optional work: `PHASE_4_5_CODE_LEVEL_PLAN.md`.
