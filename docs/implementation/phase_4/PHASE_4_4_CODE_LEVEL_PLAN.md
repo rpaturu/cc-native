@@ -2,11 +2,11 @@
 
 **Status:** 🟢 **COMPLETE**  
 **Created:** 2026-01-26  
-**Last Updated:** 2026-01-28  
+**Last Updated:** 2026-01-30  
 **Parent Document:** `PHASE_4_CODE_LEVEL_PLAN.md`  
 **Prerequisites:** Phase 4.1, 4.2, and 4.3 complete
 
-Signal emission, execution status API (JWT auth, 404 semantics, pagination), CloudWatch alarms, and unit/integration tests are implemented. See `testing/PHASE_4_4_TEST_PLAN.md` and `testing/PHASE_4_4_INTEGRATION_TEST_PLAN.md`.
+Signal emission, execution status API (JWT auth, 404 semantics, pagination), CloudWatch alarms, and unit/integration/E2E tests are implemented. **Recent updates:** Deploy script looks up DynamoDB prefix list and passes `dynamoDbPrefixListId` via CDK context; Internal Adapter Lambda is in VPC with zero-trust security group; Tool Invoker extracts `external_object_refs` from raw MCP envelope when Gateway returns `result.content[].text`; Phase 4.4 E2E test plan and script-based E2E documented. See `testing/PHASE_4_4_TEST_PLAN.md`, `testing/PHASE_4_4_INTEGRATION_TEST_PLAN.md`, and `testing/PHASE_4_4_E2E_TEST_PLAN.md`.
 
 ---
 
@@ -28,7 +28,7 @@ Phase 4.4 implements safety controls and outcome visibility:
 
 - **SignalTypes.ts:** `ACTION_EXECUTED`, `ACTION_FAILED`, `WINDOW_KEY_DERIVATION`, and `DEFAULT_SIGNAL_TTL` are already implemented. No changes required.
 - **ExecutionInfrastructureConfig:** `executionStatusApi` (function name), `defaults.timeout.executionStatusApi`, and `defaults.memorySize?.executionStatusApi` already exist.
-- **ExecutionInfrastructure:** Exposes `executionStateMachine`, `executionAttemptsTable`, `executionOutcomesTable`; `actionIntentTable` comes from props. No `apiGateway` prop yet — add in 4.4.
+- **ExecutionInfrastructure:** Exposes `executionStateMachine`, `executionAttemptsTable`, `executionOutcomesTable`; `actionIntentTable` comes from props. **Internal Adapter Lambda** is in VPC with security group that requires CDK context `dynamoDbPrefixListId` (supplied by deploy script; see §4a). No `apiGateway` prop yet — add in 4.4.
 - **execution-recorder-handler:** Uses `requireEnv`, Zod, and records outcome + ledger; does not yet call SignalService. **Decision (4.4):** Signal emission uses **Option A** — extend SignalService with `createExecutionSignal()` that does **not** require lifecycle state; execution outcomes are not coupled to lifecycle state. Use shared helper `buildExecutionOutcomeSignal(outcome, intent, trace_id, now)` for consistent signal shape.
 - **ExecutionStatus / ExecutionOutcomeService / ExecutionAttemptService:** Types and `getOutcome` / `getAttempt` signatures match. **listOutcomes** currently returns `Promise<ActionOutcomeV1[]>` with no `nextToken`; doc requires extending to `(tenantId, accountId, limit, nextToken?)` and `{ items, nextToken }` (see §2.3).
 
@@ -577,13 +577,51 @@ private createExecutionStatusAPI(
 
 ---
 
+## 4a. Deploy script and ExecutionInfrastructure (VPC, prefix list) — implemented
+
+**Purpose:** Internal Adapter Lambda runs in VPC; DynamoDB prefix list ID is resolved at deploy time (no hardcoded region IDs).
+
+**Deploy script (`deploy`):**
+- Before CDK deploy, looks up the AWS-managed DynamoDB prefix list for the deploy region:
+  - `aws ec2 describe-managed-prefix-lists --filters "Name=prefix-list-name,Values=com.amazonaws.$AWS_REGION.dynamodb" --query 'PrefixLists[0].PrefixListId' --output text`
+- Passes the value to CDK as `-c dynamoDbPrefixListId=pl-xxx`. If the lookup fails, a warning is printed and deploy may fail when the Internal Adapter security group is created.
+
+**ExecutionInfrastructure:**
+- **Internal Adapter Lambda** is in VPC: `vpc`, `vpcSubnets: PRIVATE_WITH_EGRESS`, `securityGroups: [internalAdapterSecurityGroup]`.
+- **Internal Adapter security group** uses zero-trust egress: (1) DynamoDB via prefix list (TCP 443), (2) VPC CIDR for interface endpoints (CloudWatch Logs, STS, KMS, Secrets Manager).
+- **`dynamoDbPrefixListId`** is required from CDK context (`this.node.tryGetContext('dynamoDbPrefixListId')`). No fallback; synthesis throws with a clear message if missing. Run `./deploy` (which performs the lookup) or pass `-c dynamoDbPrefixListId=pl-xxx` when running CDK directly.
+
+**Unit test:** `CCNativeStack.test.ts` sets `app.node.setContext('dynamoDbPrefixListId', 'pl-00a54069')` so stack synthesis succeeds in tests.
+
+---
+
+## 4b. Tool Invoker — MCP response and external_object_refs — implemented
+
+**Purpose:** When the Gateway returns the raw MCP envelope (e.g. `result.content[].text` containing a JSON string with `success` and `external_object_refs`), the Tool Invoker must still extract `external_object_refs` for the execution recorder and contract compliance.
+
+**File:** `src/handlers/phase4/tool-invoker-handler.ts`
+
+**Implementation:**
+- **`getPayloadFromResponse(parsedResponse)`** — Resolves the effective payload: (1) if the response already has `external_object_refs` (or legacy `external_object_id` + `object_type`) at top level, use it; (2) otherwise, if the response has `result.content[]`, find the first `type: 'text'` item, parse `text` as JSON, and use that object as the payload. Returns `{ payload, success }`.
+- **`extractExternalObjectRefs(parsedResponse, toolName)`** — Uses `getPayloadFromResponse` to get the payload, then reads `external_object_refs` (or legacy single ref) from the payload. This fixes `InvalidToolResponseError` when the Gateway forwards the adapter response in the raw MCP envelope shape.
+
+**Contract:** All execution tools must return `external_object_refs` when `success=true`; the Tool Invoker now supports both a direct payload and the raw MCP envelope.
+
+---
+
 ## 5. Testing
 
-### End-to-End Tests
+### Unit and integration tests
 
-**Files to Create:**
-- `src/tests/integration/execution/end-to-end-execution.test.ts` - Full execution flow
-- `src/tests/integration/execution/execution-status-api.test.ts` - Status API tests
+- **Unit:** See `testing/PHASE_4_4_TEST_PLAN.md` (execution-signal-helpers, execution-status-api-handler, CCNativeStack).
+- **Integration:** See `testing/PHASE_4_4_INTEGRATION_TEST_PLAN.md` (execution-status-api.test.ts, end-to-end-execution placeholder).
+
+### End-to-end (script-based) — implemented
+
+- **Plan:** `testing/PHASE_4_4_E2E_TEST_PLAN.md` (status COMPLETE).
+- **Scripts:** `scripts/phase_4/test-phase4-execution.sh` (seed → EventBridge → Step Functions → verify attempt/outcome → cleanup), `scripts/phase_4/seed-phase4-e2e-intent.sh`.
+- **Run:** `./scripts/phase_4/test-phase4-execution.sh` or as part of `./deploy` (use `--skip-e2e` to skip).
+- **Jest E2E placeholder:** `src/tests/integration/execution/end-to-end-execution.test.ts` — skip when env missing; full flow can be extended there or kept as script-based.
 
 ---
 
@@ -607,7 +645,10 @@ private createExecutionStatusAPI(
 
 **Other**
 - [x] Verify S3 bucket setup (from Phase 4.2). Bucket created/used in ExecutionInfrastructure; tool-invoker has EXECUTION_ARTIFACTS_BUCKET and grantWrite; recorder receives raw_response_artifact_ref only (no S3 env).
-- [ ] End-to-end tests.
+- [x] Deploy script: look up DynamoDB prefix list for region and pass `-c dynamoDbPrefixListId` to CDK (§4a).
+- [x] ExecutionInfrastructure: Internal Adapter in VPC; require `dynamoDbPrefixListId` context; zero-trust SG egress (§4a).
+- [x] Tool Invoker: extract `external_object_refs` from raw MCP envelope (`result.content[].text`) when present (§4b).
+- [x] Phase 4.4 E2E test plan and script-based E2E (`testing/PHASE_4_4_E2E_TEST_PLAN.md`, `scripts/phase_4/test-phase4-execution.sh`).
 
 ---
 
@@ -673,6 +714,27 @@ This appendix compares the Phase 4.4 doc with the **current codebase** for accur
 | executionStateMachine, executionAttemptsTable, executionOutcomesTable, actionIntentTable | All exist on ExecutionInfrastructure / props | ✅ Doc accurate. |
 | S3 bucket (Phase 4.2) | executionArtifactsBucket created in ExecutionInfrastructure if !props.artifactsBucket | ✅ Doc accurate. |
 
+### 5a. Deploy and VPC (§4a) — implemented
+
+| Doc says | Current implementation | Accuracy / completeness |
+|----------|------------------------|--------------------------|
+| Deploy script looks up DynamoDB prefix list and passes `-c dynamoDbPrefixListId` | `deploy` runs `aws ec2 describe-managed-prefix-lists` for `com.amazonaws.$AWS_REGION.dynamodb` and adds to CDK_CONTEXT_PARAMS | ✅ Implemented. |
+| ExecutionInfrastructure requires `dynamoDbPrefixListId` context; Internal Adapter in VPC with zero-trust SG | `createInternalAdapterSecurityGroup` uses `this.node.tryGetContext('dynamoDbPrefixListId')`; throws if missing; Internal Adapter Lambda has vpc, vpcSubnets, securityGroups | ✅ Implemented. |
+| CCNativeStack.test sets dynamoDbPrefixListId in context | `app.node.setContext('dynamoDbPrefixListId', 'pl-00a54069')` in beforeEach | ✅ Implemented. |
+
+### 5b. Tool Invoker MCP parsing (§4b) — implemented
+
+| Doc says | Current implementation | Accuracy / completeness |
+|----------|------------------------|--------------------------|
+| getPayloadFromResponse: resolve payload from top-level or result.content[].text | `tool-invoker-handler.ts` has `getPayloadFromResponse(parsedResponse)`; parses inner JSON when envelope has result.content | ✅ Implemented. |
+| extractExternalObjectRefs uses payload so external_object_refs found when Gateway returns raw envelope | `extractExternalObjectRefs` calls `getPayloadFromResponse` and reads refs from payload | ✅ Implemented. |
+
+### 5c. E2E test plan (§5) — implemented
+
+| Doc says | Current implementation | Accuracy / completeness |
+|----------|------------------------|--------------------------|
+| Phase 4.4 E2E test plan doc; script-based E2E | `testing/PHASE_4_4_E2E_TEST_PLAN.md` (status COMPLETE); `scripts/phase_4/test-phase4-execution.sh`, `seed-phase4-e2e-intent.sh`; run via `./deploy` or standalone | ✅ Implemented. |
+
 ### 6. Testing (§5)
 
 | Doc says | Current implementation | Accuracy / completeness |
@@ -694,5 +756,6 @@ This appendix compares the Phase 4.4 doc with the **current codebase** for accur
 ### Summary
 
 - **Accurate:** Doc matches existing types, services (getOutcome, getAttempt, getIntent), config, ExecutionInfrastructure shape, SignalTypes, EventPublisher, LedgerService, and placement of signal emission in the recorder. No contradictions found.
-- **Gaps (to implement):** (1) SignalService.createExecutionSignal + buildExecutionOutcomeSignal + recorder wiring; (2) execution-status-api-handler.ts + JWT auth, 404, pagination; (3) ExecutionOutcomeService.listOutcomes extended with nextToken; (4) CloudWatch alarms; (5) API Gateway props + executionStatusApiHandler Lambda + resource reuse; (6) integration tests under `execution/`.
+- **Recently implemented (reflected in §4a, §4b, §5):** (1) Deploy script DynamoDB prefix list lookup + CDK context; (2) ExecutionInfrastructure Internal Adapter in VPC with required dynamoDbPrefixListId; (3) Tool Invoker MCP envelope parsing for external_object_refs; (4) Phase 4.4 E2E test plan and script-based E2E.
+- **Gaps (to implement):** (1) SignalService.createExecutionSignal + buildExecutionOutcomeSignal + recorder wiring; (2) execution-status-api-handler.ts + JWT auth, 404, pagination; (3) ExecutionOutcomeService.listOutcomes extended with nextToken; (4) CloudWatch alarms; (5) API Gateway props + executionStatusApiHandler Lambda + resource reuse; (6) integration tests under `execution/` (placeholder exists; script-based E2E is implemented).
 - **Completeness:** Doc does not reference any removed or renamed files. One implementation detail: API Gateway path parameter keys may be lowercased by the runtime (e.g. `action_intent_id` might appear as `action_intent_id` or in lowercase); the handler should read from `event.pathParameters` using the same key as in the API Gateway resource definition.

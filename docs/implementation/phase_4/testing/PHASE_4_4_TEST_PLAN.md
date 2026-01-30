@@ -12,7 +12,7 @@
 
 Phase 4.4 adds **signal emission**, **execution status API**, and **CloudWatch alarms**. This document covers **unit tests** for Phase 4.4. For **integration tests** (execution-status-api, E2E placeholder), see **[PHASE_4_4_INTEGRATION_TEST_PLAN.md](PHASE_4_4_INTEGRATION_TEST_PLAN.md)**.
 
-**Testing philosophy:** Unit tests lock handler and utility behavior; integration tests (separate plan) validate against deployed stack.
+**Testing philosophy:** Unit tests lock handler and utility behavior; integration tests (separate plan) validate against deployed stack; E2E (script-based) validates the full execution path and is documented in [PHASE_4_4_E2E_TEST_PLAN.md](PHASE_4_4_E2E_TEST_PLAN.md).
 
 ---
 
@@ -55,6 +55,7 @@ npm test -- --coverage --testPathIgnorePattern="integration"
 
 ## References
 
+- **Phase 4.4 E2E test plan:** [PHASE_4_4_E2E_TEST_PLAN.md](PHASE_4_4_E2E_TEST_PLAN.md)
 - **Phase 4.4 integration tests:** [PHASE_4_4_INTEGRATION_TEST_PLAN.md](PHASE_4_4_INTEGRATION_TEST_PLAN.md)
 - **Phase 4.4 code plan:** `docs/implementation/phase_4/PHASE_4_4_CODE_LEVEL_PLAN.md`
 - **Phase 4.2 / 4.3 test plans:** `PHASE_4_2_TEST_PLAN.md`, `PHASE_4_3_TEST_PLAN.md` (same folder)
