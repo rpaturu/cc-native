@@ -27,6 +27,7 @@ describe('CCNativeStack Infrastructure', () => {
     app.node.setContext('awsRegion', 'us-west-2');
     app.node.setContext('nodeEnv', 'test');
     app.node.setContext('logLevel', 'info');
+    app.node.setContext('dynamoDbPrefixListId', 'pl-00a54069'); // us-west-2 DynamoDB prefix list (deploy script looks this up)
     
     // Create stack with required environment
     stack = new CCNativeStack(app, 'TestStack', {

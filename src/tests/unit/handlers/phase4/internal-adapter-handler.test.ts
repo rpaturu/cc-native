@@ -308,12 +308,20 @@ describe('InternalAdapterHandler', () => {
       expect(response).toEqual(mockResponse);
     });
 
-    it('should handle ValidationError from adapter', async () => {
+    it('should return MCP error response when adapter throws ValidationError', async () => {
       const validationError = new ValidationError('Missing required field: content');
       mockAdapter.execute.mockRejectedValue(validationError);
 
-      await expect(handler(gatewayEventInternal, mockContext, jest.fn())).rejects.toThrow(ValidationError);
-      await expect(handler(gatewayEventInternal, mockContext, jest.fn())).rejects.toThrow('Missing required field');
+      const response = await handler(gatewayEventInternal, mockContext, jest.fn());
+
+      expect(response.jsonrpc).toBe('2.0');
+      expect(response.id).toBe('mcp_message_123');
+      expect(response.result?.content).toHaveLength(1);
+      const parsed = JSON.parse(response.result!.content[0].text);
+      expect(parsed.success).toBe(false);
+      expect(parsed.error_message).toBe('Missing required field: content');
+      expect(parsed.error_code).toBe('VALIDATION_FAILED');
+      expect(parsed.error_class).toBe('VALIDATION');
     });
   });
 });

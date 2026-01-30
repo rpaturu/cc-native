@@ -5,17 +5,16 @@
  * 
  * Contract: See "Execution Contract (Canonical)" section in PHASE_4_2_CODE_LEVEL_PLAN.md
  * 
- * Step Functions input: {
- *   action_intent_id, tenant_id, account_id, trace_id, registry_version,
- *   status: "FAILED", error: { Error?: string, Cause?: string }
- * }
- * 
+ * Step Functions input: state from failed step + Catch resultPath $.error.
+ * So: action_intent_id, tenant_id, account_id, trace_id, error: { Error?, Cause? };
+ * when failure is after StartExecution also: idempotency_key, registry_version, attempt_count, started_at.
+ * Note: Catch does not add "status"; handler is only invoked on failure path.
+ *
  * Note: This handler is called from Step Functions Catch blocks for Start/Validate/Map errors.
  * Note: trace_id is execution_trace_id (from starter handler), not decision_trace_id.
  */
 
 import { Handler } from 'aws-lambda';
-import { z } from 'zod';
 import { Logger } from '../../services/core/Logger';
 import { TraceService } from '../../services/core/TraceService';
 import { ExecutionOutcomeService } from '../../services/execution/ExecutionOutcomeService';
@@ -85,19 +84,8 @@ const ledgerService = new LedgerService(
   region
 );
 
-// Zod schema for SFN input validation (fail fast with precise errors)
-const StepFunctionsInputSchema = z.object({
-  action_intent_id: z.string().min(1, 'action_intent_id is required'),
-  tenant_id: z.string().min(1, 'tenant_id is required'),
-  account_id: z.string().min(1, 'account_id is required'),
-  trace_id: z.string().min(1, 'trace_id is required'), // execution_trace_id
-  registry_version: z.number().int().positive('registry_version must be positive integer').optional(), // May be missing if failure in starter
-  status: z.literal('FAILED'),
-  error: z.object({
-    Error: z.string().optional(),
-    Cause: z.string().optional(),
-  }).optional(),
-}).strict();
+import { FailureRecorderInputSchema } from './execution-state-schemas';
+export const StepFunctionsInputSchema = FailureRecorderInputSchema;
 
 export const handler: Handler = async (event: unknown) => {
   // Validate SFN input with Zod (fail fast with precise errors)
@@ -105,7 +93,7 @@ export const handler: Handler = async (event: unknown) => {
   if (!validationResult.success) {
     const error = new Error(
       `[ExecutionFailureRecorderHandler] Invalid Step Functions input: ${validationResult.error.message}. ` +
-      `Expected: { action_intent_id: string, tenant_id: string, account_id: string, trace_id: string, registry_version?: number, status: "FAILED", error?: { Error?: string, Cause?: string } }. ` +
+      `Expected: state from failed step + error (action_intent_id, tenant_id, account_id, trace_id, error?; optional: registry_version, idempotency_key, attempt_count, started_at). ` +
       `Received: ${JSON.stringify(event)}.`
     );
     error.name = 'ValidationError';

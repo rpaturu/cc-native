@@ -21,11 +21,19 @@ import * as bedrockagentcore from 'aws-cdk-lib/aws-bedrockagentcore';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
+import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
+import * as cr from 'aws-cdk-lib/custom-resources';
 import { Construct } from 'constructs';
 import {
   ExecutionInfrastructureConfig,
   DEFAULT_EXECUTION_INFRASTRUCTURE_CONFIG,
 } from './ExecutionInfrastructureConfig';
+
+import {
+  INTERNAL_CREATE_NOTE,
+  INTERNAL_CREATE_TASK,
+  CRM_CREATE_TASK,
+} from '../../constants/ExecutionToolNames';
 
 export interface ExecutionInfrastructureProps {
   readonly eventBus: events.EventBus;
@@ -143,7 +151,7 @@ export class ExecutionInfrastructure extends Construct {
 
     // Phase 4.3: Connectors VPC (create before security groups and Lambdas)
     this.connectorsVpc = this.createConnectorsVpc(config);
-    this.internalAdapterSecurityGroup = this.createInternalAdapterSecurityGroup();
+    this.internalAdapterSecurityGroup = this.createInternalAdapterSecurityGroup(config);
     this.crmAdapterSecurityGroup = this.createCrmAdapterSecurityGroup();
 
     // Phase 4.3: AgentCore Gateway (create before adapter handlers and ToolMapper)
@@ -166,7 +174,12 @@ export class ExecutionInfrastructure extends Construct {
     // Phase 4.2: Additional Lambda Functions (ToolMapper now uses this.gatewayUrl)
     // Note: ToolInvokerHandler needs executionArtifactsBucket, so bucket must be created first
     this.toolMapperHandler = this.createToolMapperHandler(props, config);
-    this.toolInvokerHandler = this.createToolInvokerHandler(props, config);
+    // JWT gateway service user + secret (per JWT_SERVICE_USER_STACK_PLAN.md); ToolInvoker gets COGNITO_SERVICE_USER_SECRET_ARN
+    const gatewayServiceSecret =
+      props.userPool && props.userPoolClient
+        ? this.createJwtGatewayServiceUserSecretAndResource(props)
+        : undefined;
+    this.toolInvokerHandler = this.createToolInvokerHandler(props, config, gatewayServiceSecret);
     this.executionRecorderHandler = this.createExecutionRecorderHandler(props, config);
     this.executionFailureRecorderHandler = this.createExecutionFailureRecorderHandler(props, config);
     this.compensationHandler = this.createCompensationHandler(props, config);
@@ -186,10 +199,10 @@ export class ExecutionInfrastructure extends Construct {
 
     // Phase 4.3: Register adapters as Gateway targets (after Lambdas and Gateway created)
     // Internal adapters use GATEWAY_IAM_ROLE (no external credentials needed)
-    this.registerGatewayTarget(this.internalAdapterHandler, 'internal.create_note', this.getInternalNoteToolSchema(), 'GATEWAY_IAM_ROLE');
-    this.registerGatewayTarget(this.internalAdapterHandler, 'internal.create_task', this.getInternalTaskToolSchema(), 'GATEWAY_IAM_ROLE');
+    this.registerGatewayTarget(this.internalAdapterHandler, INTERNAL_CREATE_NOTE, this.getInternalNoteToolSchema(), 'GATEWAY_IAM_ROLE');
+    this.registerGatewayTarget(this.internalAdapterHandler, INTERNAL_CREATE_TASK, this.getInternalTaskToolSchema(), 'GATEWAY_IAM_ROLE');
     // CRM adapter also uses GATEWAY_IAM_ROLE for now (OAuth credential provider will be added in Phase 4.4)
-    this.registerGatewayTarget(this.crmAdapterHandler, 'crm.create_task', this.getCrmTaskToolSchema(), 'GATEWAY_IAM_ROLE');
+    this.registerGatewayTarget(this.crmAdapterHandler, CRM_CREATE_TASK, this.getCrmTaskToolSchema(), 'GATEWAY_IAM_ROLE');
 
     // Phase 4.4: Execution Status API Lambda (always create; API Gateway wiring optional)
     this.executionStatusApiHandler = this.createExecutionStatusApiHandler(props, config);
@@ -401,7 +414,8 @@ export class ExecutionInfrastructure extends Construct {
 
   private createToolInvokerHandler(
     props: ExecutionInfrastructureProps,
-    config: ExecutionInfrastructureConfig
+    config: ExecutionInfrastructureConfig,
+    gatewayServiceSecret?: secretsmanager.ISecret
   ): lambda.Function {
     const handler = new lambdaNodejs.NodejsFunction(this, 'ToolInvokerHandler', {
       functionName: config.functionNames.toolInvoker,
@@ -418,6 +432,14 @@ export class ExecutionInfrastructure extends Construct {
             'This bucket is used to store large tool invocation responses.'
           );
         })(),
+        // Cognito JWT: pool/client set when userPool/userPoolClient provided; secret ARN when stack provisions gateway service user (JWT_SERVICE_USER_STACK_PLAN.md)
+        ...(props.userPool && props.userPoolClient
+          ? {
+              COGNITO_USER_POOL_ID: props.userPool.userPoolId,
+              COGNITO_CLIENT_ID: props.userPoolClient.userPoolClientId,
+              ...(gatewayServiceSecret ? { COGNITO_SERVICE_USER_SECRET_ARN: gatewayServiceSecret.secretArn } : {}),
+            }
+          : {}),
         // Note: AWS_REGION is automatically set by Lambda runtime and should not be set manually
       },
       deadLetterQueue: this.toolInvokerDlq,
@@ -431,7 +453,6 @@ export class ExecutionInfrastructure extends Construct {
     }
     
     // Grant Cognito permissions for JWT token retrieval (if userPool provided)
-    // Note: JWT token retrieval is done in ToolInvoker (not ToolMapper) to keep mapping deterministic
     if (props.userPool) {
       handler.addToRolePolicy(new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
@@ -440,7 +461,50 @@ export class ExecutionInfrastructure extends Construct {
       }));
     }
     
+    // Grant Secrets Manager GetSecretValue on JWT gateway service secret (least privilege: this secret only)
+    if (gatewayServiceSecret) {
+      gatewayServiceSecret.grantRead(handler);
+    }
+    
     return handler;
+  }
+
+  /**
+   * Creates Secrets Manager secret and custom resource that provisions Cognito gateway-service user and fills the secret.
+   * Per JWT_SERVICE_USER_STACK_PLAN.md: AdminGetUser first; PutSecretValue only on create or ForceRecreate.
+   */
+  private createJwtGatewayServiceUserSecretAndResource(
+    props: ExecutionInfrastructureProps
+  ): secretsmanager.ISecret {
+    const secret = new secretsmanager.Secret(this, 'JwtGatewayServiceCredentials', {
+      description: 'Cognito gateway-service user credentials for ToolInvoker JWT (execution/gateway-service).',
+      secretName: 'execution/gateway-service-credentials',
+    });
+    const customResourceHandler = new lambdaNodejs.NodejsFunction(this, 'CognitoGatewayServiceUserCustomResource', {
+      entry: 'src/custom-resources/cognito-gateway-service-user.ts',
+      handler: 'handler',
+      runtime: lambda.Runtime.NODEJS_20_X,
+      timeout: cdk.Duration.minutes(2),
+    });
+    customResourceHandler.addToRolePolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: ['cognito-idp:AdminGetUser', 'cognito-idp:AdminCreateUser', 'cognito-idp:AdminSetUserPassword'],
+      resources: [props.userPool!.userPoolArn],
+    }));
+    secret.grantWrite(customResourceHandler);
+    const provider = new cr.Provider(this, 'CognitoGatewayServiceUserProvider', {
+      onEventHandler: customResourceHandler,
+    });
+    new cdk.CustomResource(this, 'CognitoGatewayServiceUser', {
+      serviceToken: provider.serviceToken,
+      properties: {
+        UserPoolId: props.userPool!.userPoolId,
+        ClientId: props.userPoolClient!.userPoolClientId,
+        SecretArn: secret.secretArn,
+        Username: 'gateway-service@cc-native.local',
+      },
+    });
+    return secret;
   }
 
   private createExecutionRecorderHandler(
@@ -658,10 +722,11 @@ export class ExecutionInfrastructure extends Construct {
       payloadResponseOnly: true, // Return payload only (not Lambda response envelope)
     });
     
-    // VALIDATE_PREFLIGHT
+    // VALIDATE_PREFLIGHT: merge output so MapActionToTool receives execution context + validation_result
     const validatePreflight = new stepfunctionsTasks.LambdaInvoke(this, 'ValidatePreflight', {
       lambdaFunction: this.executionValidatorHandler,
       payloadResponseOnly: true,
+      resultPath: '$.validation_result', // Preserve execution context (action_intent_id, idempotency_key, etc.)
     });
     
     // MAP_ACTION_TO_TOOL
@@ -855,13 +920,34 @@ export class ExecutionInfrastructure extends Construct {
     return vpc;
   }
 
-  private createInternalAdapterSecurityGroup(): ec2.SecurityGroup {
-    // VPC is already created at this point in constructor
-    return new ec2.SecurityGroup(this, 'InternalAdapterSecurityGroup', {
+  /**
+   * Internal Adapter security group with zero-trust egress:
+   * - DynamoDB via Gateway Endpoint (prefix list only, no internet)
+   * - CloudWatch Logs etc. via Interface Endpoints (VPC CIDR only)
+   */
+  private createInternalAdapterSecurityGroup(config: ExecutionInfrastructureConfig): ec2.SecurityGroup {
+    const sg = new ec2.SecurityGroup(this, 'InternalAdapterSecurityGroup', {
       vpc: this.connectorsVpc,
       description: 'Security group for Internal adapter',
-      allowAllOutbound: false, // Explicit egress control
+      allowAllOutbound: false,
     });
+    const dynamoDbPrefixListId = this.node.tryGetContext('dynamoDbPrefixListId') as string | undefined;
+    if (!dynamoDbPrefixListId) {
+      throw new Error(
+        'dynamoDbPrefixListId is required. Run ./deploy (which looks up the DynamoDB prefix list for your region) or pass -c dynamoDbPrefixListId=pl-xxx'
+      );
+    }
+    sg.addEgressRule(
+      ec2.Peer.prefixList(dynamoDbPrefixListId),
+      ec2.Port.tcp(443),
+      'Allow HTTPS to DynamoDB via Gateway endpoint only (no internet)'
+    );
+    sg.addEgressRule(
+      ec2.Peer.ipv4(this.connectorsVpc.vpcCidrBlock),
+      ec2.Port.tcp(443),
+      'Allow HTTPS to VPC interface endpoints (CloudWatch Logs, STS, KMS, Secrets Manager)'
+    );
+    return sg;
   }
 
   private createCrmAdapterSecurityGroup(): ec2.SecurityGroup {
@@ -982,7 +1068,7 @@ export class ExecutionInfrastructure extends Construct {
       entry: 'src/handlers/phase4/internal-adapter-handler.ts',
       handler: 'handler',
       runtime: lambda.Runtime.NODEJS_20_X,
-      timeout: cdk.Duration.seconds(30),
+      timeout: cdk.Duration.seconds(config.defaults.timeout.internalAdapter ?? 60),
       environment: {
         INTERNAL_NOTES_TABLE_NAME: this.internalNotesTable.tableName,
         INTERNAL_TASKS_TABLE_NAME: this.internalTasksTable.tableName,
@@ -1107,7 +1193,7 @@ export class ExecutionInfrastructure extends Construct {
 
   private getInternalNoteToolSchema(): bedrockagentcore.CfnGatewayTarget.ToolDefinitionProperty {
     return {
-      name: 'create_note',
+      name: INTERNAL_CREATE_NOTE,
       description: 'Create an internal note in the system',
       inputSchema: {
         type: 'object',
@@ -1123,7 +1209,7 @@ export class ExecutionInfrastructure extends Construct {
 
   private getInternalTaskToolSchema(): bedrockagentcore.CfnGatewayTarget.ToolDefinitionProperty {
     return {
-      name: 'create_task',
+      name: INTERNAL_CREATE_TASK,
       description: 'Create an internal task in the system',
       inputSchema: {
         type: 'object',
@@ -1140,7 +1226,7 @@ export class ExecutionInfrastructure extends Construct {
 
   private getCrmTaskToolSchema(): bedrockagentcore.CfnGatewayTarget.ToolDefinitionProperty {
     return {
-      name: 'create_task',
+      name: CRM_CREATE_TASK,
       description: 'Create a task in CRM system',
       inputSchema: {
         type: 'object',

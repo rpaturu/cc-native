@@ -2,13 +2,72 @@
  * ToolInvokerHandler Validation and Error Classification Tests - Phase 4.2
  * 
  * Tests Zod schema validation and error classification logic.
- * Full handler integration tests deferred to Phase 4.3 (requires Gateway).
+ * Includes a handler-invocation test that fails when JWT retrieval is not implemented
+ * (so CI catches "JWT token retrieval not implemented" before deploy). See JWT_NOT_CAUGHT_ASSESSMENT.md.
  */
 
 import { z } from 'zod';
 import { AxiosError } from 'axios';
 
-// Import schemas and functions from handler (we'll test them in isolation)
+// Mock Secrets Manager for COGNITO_SERVICE_USER_SECRET_ARN path (JWT_SERVICE_USER_STACK_PLAN.md)
+const mockSecretsManagerSend = jest.fn().mockResolvedValue({
+  SecretString: JSON.stringify({
+    username: 'test-service-user',
+    password: 'test-service-pass',
+    userPoolId: 'test-pool-id',
+    clientId: 'test-client-id',
+    createdAt: new Date().toISOString(),
+  }),
+});
+jest.mock('@aws-sdk/client-secrets-manager', () => ({
+  SecretsManagerClient: jest.fn().mockImplementation(() => ({ send: mockSecretsManagerSend })),
+  GetSecretValueCommand: jest.fn(),
+}));
+
+// Mock Cognito so handler can obtain a JWT in tests (when env is set)
+const mockCognitoSend = jest.fn().mockResolvedValue({
+  AuthenticationResult: { IdToken: 'mock-jwt-for-tests' },
+});
+jest.mock('@aws-sdk/client-cognito-identity-provider', () => ({
+  CognitoIdentityProviderClient: jest.fn().mockImplementation(() => ({ send: mockCognitoSend })),
+  InitiateAuthCommand: jest.fn(),
+  NotAuthorizedException: class NotAuthorizedException extends Error {
+    constructor(message: string) {
+      super(message);
+      this.name = 'NotAuthorizedException';
+    }
+  },
+}));
+
+// Mock axios.post so gateway call returns valid MCP response; keep real axios exports (e.g. AxiosError) for other tests
+jest.mock('axios', () => {
+  const actual = jest.requireActual<typeof import('axios')>('axios');
+  return {
+    ...actual,
+    default: {
+      ...actual.default,
+      post: jest.fn().mockResolvedValue({
+        data: {
+          result: {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({
+                  success: true,
+                  external_object_refs: [{ object_id: 'mock-id', object_type: 'Task' }],
+                }),
+              },
+            ],
+          },
+        },
+      }),
+    },
+  };
+});
+
+import { handler } from '../../../handlers/phase4/tool-invoker-handler';
+
+// Mirror handler schema: state from MapActionToTool (tool-mapper output)
 const ToolInvocationRequestSchema = z.object({
   gateway_url: z.string().url('gateway_url must be a valid URL'),
   tool_name: z.string().min(1, 'tool_name is required'),
@@ -35,6 +94,10 @@ const ToolInvocationRequestSchema = z.object({
   account_id: z.string().min(1, 'account_id is required'),
   trace_id: z.string().min(1, 'trace_id is required'),
   attempt_count: z.number().int().positive().optional(),
+  tool_schema_version: z.string().min(1).optional(),
+  registry_version: z.number().int().positive().optional(),
+  compensation_strategy: z.string().min(1).optional(),
+  started_at: z.string().min(1).optional(),
 }).strict();
 
 // Error classification functions (extracted for testing)
@@ -146,6 +209,27 @@ describe('ToolInvokerHandler - ToolInvocationRequestSchema Validation', () => {
         account_id: 'account_test_1',
         trace_id: 'trace_123',
         attempt_count: 1,
+      };
+
+      const result = ToolInvocationRequestSchema.safeParse(validInput);
+      expect(result.success).toBe(true);
+    });
+
+    it('should accept valid input with tool_schema_version, registry_version, compensation_strategy, started_at (state from MapActionToTool)', () => {
+      const validInput = {
+        gateway_url: 'https://gateway.example.com',
+        tool_name: 'internal.create_task',
+        tool_arguments: { title: 'E2E test', description: 'Phase 4 E2E seed' },
+        tool_schema_version: 'v1.0',
+        registry_version: 1,
+        compensation_strategy: 'AUTOMATIC',
+        idempotency_key: 'key_123',
+        action_intent_id: 'ai_test_123',
+        tenant_id: 'tenant_test_1',
+        account_id: 'account_test_1',
+        trace_id: 'trace_123',
+        attempt_count: 1,
+        started_at: '2026-01-29T05:40:10.304Z',
       };
 
       const result = ToolInvocationRequestSchema.safeParse(validInput);
@@ -477,5 +561,97 @@ describe('ToolInvokerHandler - Error Classification', () => {
 
       expect(() => classifyError(response)).toThrow('Tool invocation failed but no error message was provided');
     });
+  });
+});
+
+describe('ToolInvokerHandler - Handler invocation (integration)', () => {
+  /**
+   * Valid Step Functions input (same shape as MapActionToTool output).
+   * Used to invoke the real handler so we hit getJwtToken and catch "JWT not implemented".
+   */
+  const validStepFunctionsEvent = {
+    gateway_url: 'https://gateway.example.com',
+    tool_name: 'create_task',
+    tool_arguments: { title: 'Test', idempotency_key: 'key-1', action_intent_id: 'intent-1' },
+    idempotency_key: 'key-1',
+    action_intent_id: 'intent-1',
+    tenant_id: 'tenant-1',
+    account_id: 'account-1',
+    trace_id: 'trace-1',
+    attempt_count: 1,
+  };
+
+  /**
+   * Asserts the handler does not throw "JWT token retrieval not implemented".
+   * With JWT implemented, we set Cognito env vars and use mocks (Cognito + axios) so the handler runs to completion.
+   * See JWT_NOT_CAUGHT_ASSESSMENT.md.
+   */
+  it('must not throw JWT token retrieval not implemented when invoked with valid input', async () => {
+    const orig = {
+      COGNITO_USER_POOL_ID: process.env.COGNITO_USER_POOL_ID,
+      COGNITO_CLIENT_ID: process.env.COGNITO_CLIENT_ID,
+      COGNITO_SERVICE_USERNAME: process.env.COGNITO_SERVICE_USERNAME,
+      COGNITO_SERVICE_PASSWORD: process.env.COGNITO_SERVICE_PASSWORD,
+    };
+    process.env.COGNITO_USER_POOL_ID = 'test-pool-id';
+    process.env.COGNITO_CLIENT_ID = 'test-client-id';
+    process.env.COGNITO_SERVICE_USERNAME = 'test-service-user';
+    process.env.COGNITO_SERVICE_PASSWORD = 'test-service-pass';
+    try {
+      let thrown: unknown;
+      try {
+        await handler(validStepFunctionsEvent, {} as any, () => {});
+      } catch (e) {
+        thrown = e;
+      }
+      const message = (thrown as Error)?.message ?? '';
+      expect(message).not.toContain('JWT token retrieval not implemented');
+    } finally {
+      process.env.COGNITO_USER_POOL_ID = orig.COGNITO_USER_POOL_ID;
+      process.env.COGNITO_CLIENT_ID = orig.COGNITO_CLIENT_ID;
+      process.env.COGNITO_SERVICE_USERNAME = orig.COGNITO_SERVICE_USERNAME;
+      process.env.COGNITO_SERVICE_PASSWORD = orig.COGNITO_SERVICE_PASSWORD;
+      delete process.env.COGNITO_SERVICE_USER_SECRET_ARN;
+    }
+  });
+
+  /**
+   * When COGNITO_SERVICE_USER_SECRET_ARN is set, handler uses Secrets Manager for JWT credentials (JWT_SERVICE_USER_STACK_PLAN.md).
+   * Asserts secret path is used (GetSecretValue called) and no JWT config error; does not require gateway mock to succeed.
+   */
+  it('uses secret for JWT when COGNITO_SERVICE_USER_SECRET_ARN is set', async () => {
+    mockSecretsManagerSend.mockClear();
+    const orig = {
+      COGNITO_USER_POOL_ID: process.env.COGNITO_USER_POOL_ID,
+      COGNITO_CLIENT_ID: process.env.COGNITO_CLIENT_ID,
+      COGNITO_SERVICE_USER_SECRET_ARN: process.env.COGNITO_SERVICE_USER_SECRET_ARN,
+      COGNITO_SERVICE_USERNAME: process.env.COGNITO_SERVICE_USERNAME,
+      COGNITO_SERVICE_PASSWORD: process.env.COGNITO_SERVICE_PASSWORD,
+    };
+    process.env.COGNITO_USER_POOL_ID = 'test-pool-id';
+    process.env.COGNITO_CLIENT_ID = 'test-client-id';
+    process.env.COGNITO_SERVICE_USER_SECRET_ARN = 'arn:aws:secretsmanager:us-east-1:123456789012:secret:execution/gateway-service';
+    delete process.env.COGNITO_SERVICE_USERNAME;
+    delete process.env.COGNITO_SERVICE_PASSWORD;
+    try {
+      let thrown: unknown;
+      try {
+        await handler(validStepFunctionsEvent, {} as any, () => {});
+      } catch (e) {
+        thrown = e;
+      }
+      expect(mockSecretsManagerSend).toHaveBeenCalled();
+      const message = (thrown as Error)?.message ?? '';
+      expect(message).not.toContain('JWT token retrieval not implemented');
+      expect(message).not.toContain('JWT credentials not configured');
+      expect(message).not.toContain('JWT secret');
+    } finally {
+      process.env.COGNITO_USER_POOL_ID = orig.COGNITO_USER_POOL_ID;
+      process.env.COGNITO_CLIENT_ID = orig.COGNITO_CLIENT_ID;
+      if (orig.COGNITO_SERVICE_USER_SECRET_ARN) process.env.COGNITO_SERVICE_USER_SECRET_ARN = orig.COGNITO_SERVICE_USER_SECRET_ARN;
+      else delete process.env.COGNITO_SERVICE_USER_SECRET_ARN;
+      if (orig.COGNITO_SERVICE_USERNAME) process.env.COGNITO_SERVICE_USERNAME = orig.COGNITO_SERVICE_USERNAME;
+      if (orig.COGNITO_SERVICE_PASSWORD) process.env.COGNITO_SERVICE_PASSWORD = orig.COGNITO_SERVICE_PASSWORD;
+    }
   });
 });

@@ -24,7 +24,8 @@
     "deploy": "npm run build && npm run cdk:deploy",
     "seed:methodologies": "ts-node src/scripts/seed-methodologies.ts",
     "seed:action-types": "ts-node src/scripts/seed-action-type-registry.ts",
-    "seed:all": "ts-node src/scripts/seed-all.ts"
+    "seed:all": "ts-node src/scripts/seed-all.ts",
+    "invoke:internal-adapter": "ts-node scripts/phase_4/invoke-internal-adapter.ts"
   },
   "keywords": [
     "autonomous",
@@ -50,6 +51,7 @@
     "@aws-sdk/client-eventbridge": "^3.848.0",
     "@aws-sdk/client-iam": "^3.840.0",
     "@aws-sdk/client-kms": "^3.848.0",
+    "@aws-sdk/client-lambda": "^3.840.0",
     "@aws-sdk/client-neptune": "^3.848.0",
     "@aws-sdk/client-qldb": "^3.848.0",
     "@aws-sdk/client-s3": "^3.883.0",

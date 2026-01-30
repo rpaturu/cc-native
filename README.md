@@ -51,7 +51,7 @@ See `docs/strategy/IMPLEMENTATION_APPROACH.md` for detailed phased implementatio
   - Policy gate for deterministic action evaluation
   - Human approval routing
   - Decision audit and explainability
-- **Phase 4**: Action Execution (bounded execution, connector write-backs)
+- **Phase 4**: Action Execution (bounded execution, connector write-backs) — 4.1–4.4 complete; 4.5 (testing & polish) in progress. See `docs/implementation/phase_4/PHASE_4_5_CODE_LEVEL_PLAN.md` for sign-off gate.
 - **Phase 5**: Enhanced Tool Plane (AgentCore Gateway)
 - **Phase 6**: Trust, Quality, and Cost Controls
 
@@ -77,9 +77,19 @@ npm run build
 
 ### Deploy
 
+Use the project deploy script (builds and deploys; writes stack outputs to `.env`):
+
 ```bash
-npm run deploy
+./deploy
 ```
+
+After deploy, `.env` contains table names, event bus name, and API URLs required for tests and E2E.
+
+### Running tests
+
+- **Unit tests:** `npm test` (or `npm test -- --testPathPattern="phase4|execution"` for Phase 4 only).
+- **Integration tests:** Require deployed stack and `.env` from deploy. See `docs/implementation/phase_4/TESTING.md` for commands and links to per-phase test plans.
+- **Phase 4 E2E (one deterministic path):** If the stack is already deployed, ensure `.env` is populated (e.g. from a prior `./deploy` or re-run `./deploy` to refresh). Then run `./scripts/phase_4/test-phase4-execution.sh`. It loads `.env`, seeds an action intent, puts ACTION_APPROVED to EventBridge, waits for execution, and verifies via DynamoDB (or Execution Status API if configured). Prerequisites: AWS CLI v2, jq; all required vars must be set (no fallbacks outside dev). See `docs/implementation/phase_4/PHASE_4_5_CODE_LEVEL_PLAN.md` §3.
 
 ## Documentation
 

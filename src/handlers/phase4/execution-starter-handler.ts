@@ -12,7 +12,6 @@
  */
 
 import { Handler } from 'aws-lambda';
-import { z } from 'zod';
 import { Logger } from '../../services/core/Logger';
 import { TraceService } from '../../services/core/TraceService';
 import { ExecutionAttemptService } from '../../services/execution/ExecutionAttemptService';
@@ -49,12 +48,8 @@ function requireEnv(name: string, handlerName: string): string {
   return value;
 }
 
-// Zod schema for SFN input validation (fail fast with precise errors)
-const StepFunctionsInputSchema = z.object({
-  action_intent_id: z.string().min(1, 'action_intent_id is required'),
-  tenant_id: z.string().min(1, 'tenant_id is required'),
-  account_id: z.string().min(1, 'account_id is required'),
-}).strict();
+import { StartExecutionInputSchema } from './execution-state-schemas';
+export const StepFunctionsInputSchema = StartExecutionInputSchema;
 
 /**
  * Create handler function with dependency injection for testability
@@ -177,7 +172,7 @@ export function createHandler(
         },
       });
       
-      // 6. Return for Step Functions (include registry_version for downstream handlers)
+      // 6. Return for Step Functions (include registry_version, attempt_count, started_at for downstream handlers)
       return {
         action_intent_id,
         idempotency_key: idempotencyKey,
@@ -185,6 +180,8 @@ export function createHandler(
         account_id: intent.account_id,
         trace_id: executionTraceId, // Use execution trace (single trace for execution lifecycle)
         registry_version: toolMapping.registry_version, // Pass to downstream handlers
+        attempt_count: attempt.attempt_count,
+        started_at: attempt.started_at,
       };
     } catch (error: any) {
       logger.error('Execution starter failed', { 

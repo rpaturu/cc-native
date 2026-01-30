@@ -4,7 +4,7 @@
  * Manage action intents (create, approve, reject, edit).
  */
 
-import { DynamoDBDocumentClient, PutCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, GetCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
 import { ActionIntentV1, ActionProposalV1, ActionTypeV1, validateProvenanceInvariant } from '../../types/DecisionTypes';
 import { Logger } from '../core/Logger';
 
@@ -169,41 +169,27 @@ export class ActionIntentService {
   }
   
   /**
-   * Get intent by action_intent_id (uses GSI)
-   * CRITICAL: Verifies tenant and account match to prevent cross-scope access
-   * 
-   * Phase 4: Made public for execution-starter-handler to fetch intent
+   * Get intent by action_intent_id (GetItem on pk/sk for consistent read).
+   * CRITICAL: Verifies tenant and account match to prevent cross-scope access.
+   *
+   * Phase 4: Made public for execution-starter-handler and execution-status-api to fetch intent.
+   * Uses GetItem instead of GSI Query so integration tests and status API get consistent reads
+   * immediately after intent creation (GSI is eventually consistent).
    */
   public async getIntent(intentId: string, tenantId: string, accountId: string): Promise<ActionIntentV1 | null> {
-    // Use GSI for direct lookup
-    const result = await this.dynamoClient.send(new QueryCommand({
+    const pk = `TENANT#${tenantId}#ACCOUNT#${accountId}`;
+    const sk = `ACTION_INTENT#${intentId}`;
+
+    const result = await this.dynamoClient.send(new GetCommand({
       TableName: this.intentTableName,
-      IndexName: 'action-intent-id-index',
-      KeyConditionExpression: 'action_intent_id = :intentId',
-      ExpressionAttributeValues: {
-        ':intentId': intentId
-      },
-      Limit: 1
+      Key: { pk, sk },
     }));
-    
-    if (!result.Items || result.Items.length === 0) {
+
+    if (!result.Item) {
       return null;
     }
-    
-    const intent = result.Items[0] as ActionIntentV1;
-    
-    // Verify tenant and account match (security check - prevents cross-scope access)
-    if (intent.tenant_id !== tenantId || intent.account_id !== accountId) {
-      this.logger.warn('Tenant/account mismatch in intent lookup', { 
-        intentId, 
-        tenantId, 
-        accountId,
-        intentTenantId: intent.tenant_id,
-        intentAccountId: intent.account_id
-      });
-      return null;
-    }
-    
+
+    const intent = result.Item as ActionIntentV1;
     return intent;
   }
   

@@ -4,7 +4,7 @@
 
 import { ActionIntentService } from '../../../services/decision/ActionIntentService';
 import { Logger } from '../../../services/core/Logger';
-import { DynamoDBDocumentClient, PutCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, GetCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
 import { mockDynamoDBDocumentClient, resetAllMocks } from '../../__mocks__/aws-sdk-clients';
 import { ActionProposalV1, ActionIntentV1 } from '../../../types/DecisionTypes';
 
@@ -12,8 +12,8 @@ jest.mock('@aws-sdk/lib-dynamodb', () => ({
   DynamoDBDocumentClient: {
     from: jest.fn(() => mockDynamoDBDocumentClient),
   },
+  GetCommand: jest.fn(),
   PutCommand: jest.fn(),
-  QueryCommand: jest.fn(),
 }));
 
 describe('ActionIntentService', () => {
@@ -115,7 +115,7 @@ describe('ActionIntentService', () => {
       };
 
       mockDynamoDBDocumentClient.send
-        .mockResolvedValueOnce({ Items: [originalIntent] }) // getIntent query
+        .mockResolvedValueOnce({ Item: originalIntent }) // getIntent GetItem
         .mockResolvedValueOnce({}); // storeIntent put
 
       const editedIntent = await service.editIntent(
@@ -152,7 +152,7 @@ describe('ActionIntentService', () => {
         registry_version: 1,
       };
 
-      mockDynamoDBDocumentClient.send.mockResolvedValue({ Items: [originalIntent] });
+      mockDynamoDBDocumentClient.send.mockResolvedValue({ Item: originalIntent });
 
       await expect(
         service.editIntent(
@@ -189,7 +189,7 @@ describe('ActionIntentService', () => {
       const expectedEpoch = Math.floor(new Date(newExpiresAt).getTime() / 1000);
 
       mockDynamoDBDocumentClient.send
-        .mockResolvedValueOnce({ Items: [originalIntent] })
+        .mockResolvedValueOnce({ Item: originalIntent })
         .mockResolvedValueOnce({});
 
       const editedIntent = await service.editIntent(

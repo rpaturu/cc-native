@@ -23,15 +23,18 @@ fi
 
 # Export CDK_DEFAULT_REGION
 export CDK_DEFAULT_REGION=$CDK_REGION
-SKIP_TESTS=false
+SKIP_UNIT_TESTS=false
 SKIP_INTEGRATION_TESTS=false
+SKIP_E2E=false
 while [[ "$#" -gt 0 ]]; do case $1 in
   --profile) CDK_PROFILE="$2"; shift;;
   --region) AWS_REGION="$2"; shift;;
   --env) DEPLOYMENT_ENV="$2"; shift;;
-  --skip-tests) SKIP_TESTS=true;;
-  --no-test) SKIP_TESTS=true;;
+  --skip-unit-tests) SKIP_UNIT_TESTS=true;;
   --skip-integration-tests) SKIP_INTEGRATION_TESTS=true;;
+  --skip-e2e) SKIP_E2E=true;;
+  --skip-tests) SKIP_UNIT_TESTS=true; SKIP_INTEGRATION_TESTS=true; SKIP_E2E=true;;
+  --no-test) SKIP_UNIT_TESTS=true; SKIP_INTEGRATION_TESTS=true; SKIP_E2E=true;;
 esac; shift; done
 
 # Check if region is set
@@ -41,10 +44,12 @@ if [ -z "$AWS_REGION" ]; then
   
   if [ -z "$AWS_REGION" ]; then
     echo "Error: AWS region is required"
-    echo "Usage: ./deploy [--profile <aws_profile>] [--region <aws_region>] [--env <environment>] [--skip-tests] [--skip-integration-tests]"
+    echo "Usage: ./deploy [--profile <aws_profile>] [--region <aws_region>] [--env <environment>] [--skip-unit-tests] [--skip-integration-tests] [--skip-e2e] [--skip-tests] [--no-test]"
     echo "Example: ./deploy --profile dev --region us-west-2 --env development"
-    echo "         ./deploy --skip-tests  # Skip unit tests before deployment"
+    echo "         ./deploy --skip-unit-tests  # Skip unit tests before deployment"
     echo "         ./deploy --skip-integration-tests  # Skip integration tests after deployment"
+    echo "         ./deploy --skip-e2e  # Skip Phase 4 E2E test after deployment"
+    echo "         ./deploy --skip-tests  # Skip all tests (unit, integration, E2E)"
     echo "You may also configure your region by running 'aws configure'"
     exit 1
   fi
@@ -70,19 +75,19 @@ fi
 npm run build
 
 # Run unit tests before deployment (unless skipped)
-if [ "$SKIP_TESTS" = false ]; then
+if [ "$SKIP_UNIT_TESTS" = false ]; then
   echo ""
   echo "🧪 Running unit tests..."
   if npm test; then
     echo "✅ All unit tests passed"
   else
     echo "❌ Unit tests failed - deployment aborted"
-    echo "   Use --skip-tests to deploy without running tests"
+    echo "   Use --skip-unit-tests to deploy without running unit tests"
     exit 1
   fi
 else
   echo ""
-  echo "⏭️  Skipping unit tests (--skip-tests flag provided)"
+  echo "⏭️  Skipping unit tests"
 fi
 
 # Prepare CDK context parameters
@@ -133,6 +138,21 @@ if [ ! -z "$LEDGER_ARCHIVES_BUCKET" ]; then
 fi
 
 echo "Using Log Level: $LOG_LEVEL"
+
+# Look up DynamoDB managed prefix list ID for this region (Internal Adapter VPC egress)
+DYNAMODB_PREFIX_LIST_ID=$(aws ec2 describe-managed-prefix-lists \
+  --profile $CDK_PROFILE \
+  --region $AWS_REGION \
+  --no-cli-pager \
+  --filters "Name=prefix-list-name,Values=com.amazonaws.$AWS_REGION.dynamodb" \
+  --query 'PrefixLists[0].PrefixListId' \
+  --output text) || DYNAMODB_PREFIX_LIST_ID=""
+if [ -n "$DYNAMODB_PREFIX_LIST_ID" ]; then
+  CDK_CONTEXT_PARAMS="$CDK_CONTEXT_PARAMS -c dynamoDbPrefixListId=$DYNAMODB_PREFIX_LIST_ID"
+  echo "Using DynamoDB prefix list (VPC): $DYNAMODB_PREFIX_LIST_ID"
+else
+  echo "Warning: Could not look up DynamoDB prefix list for $AWS_REGION; deploy may fail if Internal Adapter is in VPC"
+fi
 
 # Find existing stack
 echo "Finding existing CC Native stack..."
@@ -341,7 +361,24 @@ if [ "$SKIP_INTEGRATION_TESTS" = false ]; then
   fi
 else
   echo ""
-  echo "⏭️  Skipping integration tests (--skip-integration-tests flag provided)"
+  echo "⏭️  Skipping integration tests"
+fi
+
+# Run Phase 4 E2E test (one deterministic path: seed -> EventBridge -> verify)
+if [ "$SKIP_E2E" = false ]; then
+  echo ""
+  echo "🧪 Running Phase 4 E2E test (seed -> execution -> verify -> cleanup)..."
+  chmod +x scripts/phase_4/test-phase4-execution.sh scripts/phase_4/seed-phase4-e2e-intent.sh 2>/dev/null || true
+  if ./scripts/phase_4/test-phase4-execution.sh; then
+    echo "✅ Phase 4 E2E test passed"
+  else
+    echo "❌ Phase 4 E2E test failed - check .env (EVENT_BUS_NAME, execution tables), EventBridge rule, and Step Functions"
+    echo "   Use --skip-e2e to complete deploy without running E2E"
+    exit 1
+  fi
+else
+  echo ""
+  echo "⏭️  Skipping Phase 4 E2E test"
 fi
 
 echo ""
@@ -384,4 +421,5 @@ echo ""
 echo "🧪 Next Steps:"
 echo "   1. Review .env file for configuration"
 echo "   2. Run integration tests anytime: npm run test:integration"
+echo "   3. Run Phase 4 E2E anytime: ./scripts/phase_4/test-phase4-execution.sh"
 echo ""

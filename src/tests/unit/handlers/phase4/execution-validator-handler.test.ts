@@ -23,6 +23,30 @@ import {
 } from '../../../../types/ExecutionErrors';
 import { ActionIntentV1 } from '../../../../types/DecisionTypes';
 
+// State from StartExecution (execution-starter output) — validator receives this as input
+function stateFromStartExecution(overrides?: Partial<{
+  action_intent_id: string;
+  tenant_id: string;
+  account_id: string;
+  idempotency_key: string;
+  trace_id: string;
+  registry_version: number;
+  attempt_count: number;
+  started_at: string;
+}>): { action_intent_id: string; tenant_id: string; account_id: string; idempotency_key: string; trace_id: string; registry_version: number; attempt_count: number; started_at: string } {
+  return {
+    action_intent_id: 'ai_test_123',
+    tenant_id: 'tenant_test_1',
+    account_id: 'account_test_1',
+    idempotency_key: 'idem_key_test_123',
+    trace_id: 'trace_test_123',
+    registry_version: 1,
+    attempt_count: 1,
+    started_at: '2026-01-29T05:00:00.000Z',
+    ...overrides,
+  };
+}
+
 // Helper to create complete ActionIntentV1 from fixture
 function createActionIntentV1(overrides?: Partial<ActionIntentV1>): ActionIntentV1 {
   return {
@@ -106,11 +130,7 @@ describe('ExecutionValidatorHandler', () => {
 
   describe('Event Validation', () => {
     it('should validate Step Functions input with required fields', async () => {
-      const validEvent = {
-        action_intent_id: 'ai_test_123',
-        tenant_id: 'tenant_test_1',
-        account_id: 'account_test_1',
-      };
+      const validEvent = stateFromStartExecution();
 
       const intent = createActionIntentV1();
       // Set expires_at_epoch to future
@@ -128,6 +148,11 @@ describe('ExecutionValidatorHandler', () => {
       const invalidEvent = {
         tenant_id: 'tenant_test_1',
         account_id: 'account_test_1',
+        idempotency_key: 'idem_key_test_123',
+        trace_id: 'trace_test_123',
+        registry_version: 1,
+        attempt_count: 1,
+        started_at: '2026-01-29T05:00:00.000Z',
       };
 
       await expect(handler(invalidEvent, {} as any, jest.fn())).rejects.toThrow(ValidationError);
@@ -138,6 +163,11 @@ describe('ExecutionValidatorHandler', () => {
       const invalidEvent = {
         action_intent_id: 'ai_test_123',
         account_id: 'account_test_1',
+        idempotency_key: 'idem_key_test_123',
+        trace_id: 'trace_test_123',
+        registry_version: 1,
+        attempt_count: 1,
+        started_at: '2026-01-29T05:00:00.000Z',
       };
 
       await expect(handler(invalidEvent, {} as any, jest.fn())).rejects.toThrow(ValidationError);
@@ -147,28 +177,24 @@ describe('ExecutionValidatorHandler', () => {
       const invalidEvent = {
         action_intent_id: 'ai_test_123',
         tenant_id: 'tenant_test_1',
+        idempotency_key: 'idem_key_test_123',
+        trace_id: 'trace_test_123',
+        registry_version: 1,
+        attempt_count: 1,
+        started_at: '2026-01-29T05:00:00.000Z',
       };
 
       await expect(handler(invalidEvent, {} as any, jest.fn())).rejects.toThrow(ValidationError);
     });
 
     it('should throw error for empty action_intent_id', async () => {
-      const invalidEvent = {
-        action_intent_id: '',
-        tenant_id: 'tenant_test_1',
-        account_id: 'account_test_1',
-      };
+      const invalidEvent = stateFromStartExecution({ action_intent_id: '' });
 
       await expect(handler(invalidEvent, {} as any, jest.fn())).rejects.toThrow(ValidationError);
     });
 
     it('should reject extra fields (strict validation)', async () => {
-      const invalidEvent = {
-        action_intent_id: 'ai_test_123',
-        tenant_id: 'tenant_test_1',
-        account_id: 'account_test_1',
-        extra_field: 'should_not_be_here',
-      };
+      const invalidEvent = { ...stateFromStartExecution(), extra_field: 'should_not_be_here' };
 
       await expect(handler(invalidEvent, {} as any, jest.fn())).rejects.toThrow(ValidationError);
     });
@@ -185,11 +211,7 @@ describe('ExecutionValidatorHandler', () => {
   });
 
   describe('Preflight Checks', () => {
-    const validEvent = {
-      action_intent_id: 'ai_test_123',
-      tenant_id: 'tenant_test_1',
-      account_id: 'account_test_1',
-    };
+    const validEvent = stateFromStartExecution();
 
     it('should fetch ActionIntent from ActionIntentService', async () => {
       const intent = createActionIntentV1();
@@ -269,11 +291,7 @@ describe('ExecutionValidatorHandler', () => {
   });
 
   describe('Error Handling', () => {
-    const validEvent = {
-      action_intent_id: 'ai_test_123',
-      tenant_id: 'tenant_test_1',
-      account_id: 'account_test_1',
-    };
+    const validEvent = stateFromStartExecution();
 
     it('should throw IntentNotFoundError when intent not found', async () => {
       mockActionIntentService.getIntent.mockResolvedValue(null);
@@ -328,11 +346,7 @@ describe('ExecutionValidatorHandler', () => {
   });
 
   describe('Integration with Services', () => {
-    const validEvent = {
-      action_intent_id: 'ai_test_123',
-      tenant_id: 'tenant_test_1',
-      account_id: 'account_test_1',
-    };
+    const validEvent = stateFromStartExecution();
 
     it('should check kill switch for specific action_type', async () => {
       const intent = createActionIntentV1({
@@ -380,11 +394,7 @@ describe('ExecutionValidatorHandler', () => {
   });
 
   describe('Edge Cases', () => {
-    const validEvent = {
-      action_intent_id: 'ai_test_123',
-      tenant_id: 'tenant_test_1',
-      account_id: 'account_test_1',
-    };
+    const validEvent = stateFromStartExecution();
 
     it('should handle intent expiring exactly now', async () => {
       const intent = createActionIntentV1();

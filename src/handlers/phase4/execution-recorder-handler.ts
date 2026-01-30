@@ -15,7 +15,6 @@
  */
 
 import { Handler } from 'aws-lambda';
-import { z } from 'zod';
 import { Logger } from '../../services/core/Logger';
 import { TraceService } from '../../services/core/TraceService';
 import { ExecutionOutcomeService } from '../../services/execution/ExecutionOutcomeService';
@@ -108,27 +107,8 @@ const signalService = new SignalService({
   region,
 });
 
-// Zod schema for SFN input validation (fail fast with precise errors)
-const StepFunctionsInputSchema = z.object({
-  action_intent_id: z.string().min(1, 'action_intent_id is required'),
-  tenant_id: z.string().min(1, 'tenant_id is required'),
-  account_id: z.string().min(1, 'account_id is required'),
-  trace_id: z.string().min(1, 'trace_id is required'), // execution_trace_id
-  tool_invocation_response: z.object({
-    success: z.boolean(),
-    external_object_refs: z.array(z.any()).optional(),
-    tool_run_ref: z.string(),
-    raw_response_artifact_ref: z.string().optional(),
-    error_code: z.string().optional(),
-    error_class: z.string().optional(),
-    error_message: z.string().optional(),
-  }),
-  tool_name: z.string().min(1, 'tool_name is required'),
-  tool_schema_version: z.string().min(1, 'tool_schema_version is required'),
-  registry_version: z.number().int().positive('registry_version must be positive integer'), // From starter handler
-  attempt_count: z.number().int().positive('attempt_count must be positive integer'),
-  started_at: z.string().min(1, 'started_at is required'),
-}).strict();
+import { RecorderInputSchema } from './execution-state-schemas';
+export const StepFunctionsInputSchema = RecorderInputSchema;
 
 export const handler: Handler = async (event: unknown) => {
   // Validate SFN input with Zod (fail fast with precise errors)

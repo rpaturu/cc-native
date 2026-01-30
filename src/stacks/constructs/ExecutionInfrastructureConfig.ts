@@ -75,6 +75,8 @@ export interface ExecutionInfrastructureConfig {
       readonly executionRecorder: number; // seconds
       readonly compensation: number; // seconds
       readonly executionStatusApi: number; // seconds
+      readonly internalAdapter: number; // seconds (VPC + DynamoDB; 60s for cold start)
+      readonly crmAdapter?: number; // seconds
     };
     readonly memorySize?: {
       readonly executionStarter?: number;
@@ -161,6 +163,7 @@ export const DEFAULT_EXECUTION_INFRASTRUCTURE_CONFIG: ExecutionInfrastructureCon
       executionRecorder: 30, // seconds
       compensation: 60, // seconds
       executionStatusApi: 30, // seconds
+      internalAdapter: 60, // seconds (VPC + DynamoDB; cold start can exceed 30s)
     },
   },
   

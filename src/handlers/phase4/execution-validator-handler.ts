@@ -5,7 +5,7 @@
  * 
  * Contract: See "Execution Contract (Canonical)" section in PHASE_4_1_CODE_LEVEL_PLAN.md
  * 
- * Input: { action_intent_id, tenant_id, account_id } (from Step Functions)
+ * Input: state from StartExecution: { action_intent_id, tenant_id, account_id, idempotency_key, trace_id, registry_version, attempt_count, started_at }
  * Output: { valid: true, action_intent: {...} } or throws typed error
  * 
  * Error Taxonomy: See error taxonomy table in PHASE_4_1_CODE_LEVEL_PLAN.md
@@ -13,7 +13,6 @@
  */
 
 import { Handler } from 'aws-lambda';
-import { z } from 'zod';
 import { Logger } from '../../services/core/Logger';
 import { TraceService } from '../../services/core/TraceService';
 import { ActionIntentService } from '../../services/decision/ActionIntentService';
@@ -46,12 +45,8 @@ function requireEnv(name: string, handlerName: string): string {
   return value;
 }
 
-// Zod schema for SFN input validation (fail fast with precise errors)
-const StepFunctionsInputSchema = z.object({
-  action_intent_id: z.string().min(1, 'action_intent_id is required'),
-  tenant_id: z.string().min(1, 'tenant_id is required'),
-  account_id: z.string().min(1, 'account_id is required'),
-}).strict();
+import { ValidatorInputSchema } from './execution-state-schemas';
+export const StepFunctionsInputSchema = ValidatorInputSchema;
 
 /**
  * Create handler function with dependency injection for testability
@@ -69,16 +64,14 @@ export function createHandler(
   if (!validationResult.success) {
     throw new ValidationError(
       `Invalid Step Functions input: ${validationResult.error.message}. ` +
-      `Expected: { action_intent_id: string, tenant_id: string, account_id: string }. ` +
-      `Received: ${JSON.stringify(event)}. ` +
-      `Check EventBridge rule configuration in ExecutionInfrastructure.createExecutionTriggerRule().`
+      `Expected: state from StartExecution (action_intent_id, tenant_id, account_id, idempotency_key, trace_id, registry_version, attempt_count, started_at). ` +
+      `Received: ${JSON.stringify(event)}.`
     );
   }
-  
-    const { action_intent_id, tenant_id, account_id } = validationResult.data;
-    const traceId = traceService.generateTraceId();
-    
-    logger.info('Execution validator invoked', { action_intent_id, tenant_id, account_id, traceId });
+
+  const { action_intent_id, tenant_id, account_id, trace_id } = validationResult.data;
+
+  logger.info('Execution validator invoked', { action_intent_id, tenant_id, account_id, trace_id });
     
     try {
       // 1. Fetch ActionIntentV1

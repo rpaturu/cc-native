@@ -12,65 +12,112 @@ import { InternalConnectorAdapter } from '../../adapters/internal/InternalConnec
 import { IConnectorAdapter } from '../../adapters/IConnectorAdapter';
 import { MCPToolInvocation, MCPResponse } from '../../types/MCPTypes';
 import { Logger } from '../../services/core/Logger';
+import { ExecutionError } from '../../types/ExecutionErrors';
 
 /**
  * Create handler function with dependency injection for testability
  * Exported for unit testing
  */
+/**
+ * Build MCP error response so Tool Invoker always gets a descriptive message (not Gateway generic "An internal error occurred").
+ */
+function toMCPErrorResponse(
+  err: unknown,
+  invocationId: string,
+  toolName: string | undefined,
+  logger: Logger
+): MCPResponse {
+  const message = err instanceof Error ? err.message : String(err);
+  const errorName = err instanceof Error ? err.name : 'Error';
+  const errorCode =
+    err instanceof ExecutionError ? err.error_code : 'ADAPTER_ERROR';
+  const errorClass =
+    err instanceof ExecutionError ? err.error_class : 'UNKNOWN';
+  logger.error(`Internal adapter error: ${errorName} - ${message}`, {
+    toolName,
+    message,
+    errorName,
+    errorCode,
+    errorClass,
+    stack: err instanceof Error ? err.stack : undefined,
+  });
+  const errorPayload = {
+    success: false,
+    error_message: message,
+    error_code: errorCode,
+    error_class: errorClass,
+  };
+  return {
+    jsonrpc: '2.0',
+    id: invocationId,
+    result: {
+      content: [{ type: 'text', text: JSON.stringify(errorPayload) }],
+    },
+  };
+}
+
 export function createHandler(adapter: IConnectorAdapter, logger: Logger): Handler {
   return async (event: any, context: Context): Promise<MCPResponse> => {
-  // ✅ Extract MCP context from Lambda context (per article pattern)
-  // Gateway injects MCP metadata into context.clientContext.custom
-  const customContext = context.clientContext?.custom || {};
-  const toolNameWithPrefix = customContext.bedrockAgentCoreToolName || '';
-  const gatewayId = customContext.bedrockAgentCoreGatewayId || '';
-  const targetId = customContext.bedrockAgentCoreTargetId || '';
-  const mcpMessageId = customContext.bedrockAgentCoreMcpMessageId || '';
+  // Use mcpMessageId when present; otherwise fall back to gateway-* so invocation id is predictable for tests
+  const invocationId =
+    (context?.clientContext as any)?.custom?.bedrockAgentCoreMcpMessageId ??
+    `gateway-${Date.now()}`;
+  let toolName: string | undefined;
 
-  // ✅ Extract actual tool name (remove target prefix, preserve namespace)
-  // Format: target_name___tool_name (e.g., "internal-adapter___internal.create_note" or "internal-adapter___create_note")
-  // Important: Tool name may already be namespaced (e.g., "internal.create_note") or not (e.g., "create_note")
-  // Adapter expects namespaced format (e.g., "internal.create_note"), so preserve namespace if present
-  const delimiter = '___';
-  let toolName: string;
-  if (toolNameWithPrefix.includes(delimiter)) {
-    const suffix = toolNameWithPrefix.split(delimiter)[1];
-    // If suffix already contains namespace (has '.'), use as-is
-    // Otherwise, prefix with adapter namespace (e.g., "internal." for internal adapter)
-    toolName = suffix.includes('.') ? suffix : `internal.${suffix}`;
-  } else {
-    // No prefix found, assume it's already the full tool name or add namespace
-    toolName = toolNameWithPrefix.includes('.') ? toolNameWithPrefix : `internal.${toolNameWithPrefix}`;
-  }
+  try {
+    // ✅ Extract MCP context from Lambda context (per article pattern)
+    const customContext = context?.clientContext?.custom ?? {};
+    const toolNameWithPrefix = customContext.bedrockAgentCoreToolName ?? '';
+    const gatewayId = customContext.bedrockAgentCoreGatewayId ?? '';
+    const targetId = customContext.bedrockAgentCoreTargetId ?? '';
+    const mcpMessageId = customContext.bedrockAgentCoreMcpMessageId ?? '';
 
-  // ✅ Convert Gateway Lambda event to MCPToolInvocation format
-  // Event contains inputSchema data (e.g., { content: "...", tenant_id: "...", account_id: "..." })
-  const invocation: MCPToolInvocation = {
-    jsonrpc: '2.0',
-    id: mcpMessageId || `gateway-${Date.now()}`,
-    method: 'tools/call',
-    params: {
-      name: toolName, // e.g., "internal.create_note" (namespaced)
-      arguments: event, // Event data matches inputSchema
-    },
-    // ✅ Extract identity context if available (for tenant binding validation)
-    identity: customContext.bedrockAgentCoreIdentity ? {
-      accessToken: customContext.bedrockAgentCoreIdentity.accessToken,
-      tenantId: customContext.bedrockAgentCoreIdentity.tenantId,
-      userId: customContext.bedrockAgentCoreIdentity.userId,
-    } : undefined,
-  };
+    // ✅ Extract actual tool name (remove target prefix, preserve namespace)
+    const delimiter = '___';
+    if (toolNameWithPrefix.includes(delimiter)) {
+      const suffix = toolNameWithPrefix.split(delimiter)[1];
+      toolName = suffix?.includes('.') ? suffix : `internal.${suffix ?? ''}`;
+    } else {
+      toolName = toolNameWithPrefix.includes('.') ? toolNameWithPrefix : `internal.${toolNameWithPrefix}`;
+    }
 
-  logger.info('Gateway Lambda invocation', {
-    toolName,
-    gatewayId,
-    targetId,
-    mcpMessageId,
-    eventKeys: Object.keys(event),
-  });
+    const invocation: MCPToolInvocation = {
+      jsonrpc: '2.0',
+      id: mcpMessageId || invocationId,
+      method: 'tools/call',
+      params: {
+        name: toolName ?? 'internal.unknown',
+        arguments: event ?? {},
+      },
+      identity: customContext.bedrockAgentCoreIdentity
+        ? {
+            accessToken: customContext.bedrockAgentCoreIdentity.accessToken,
+            tenantId: customContext.bedrockAgentCoreIdentity.tenantId,
+            userId: customContext.bedrockAgentCoreIdentity.userId,
+          }
+        : undefined,
+    };
 
-    // ✅ Call adapter execute() method
+    logger.info('Gateway Lambda invocation', {
+      toolName,
+      gatewayId,
+      targetId,
+      mcpMessageId,
+      eventKeys: event && typeof event === 'object' ? Object.keys(event) : [],
+    });
+
     return await adapter.execute(invocation);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    const name = err instanceof Error ? err.name : 'Error';
+    logger.error(`Adapter execute() failed: ${name} - ${message}`, {
+      toolName,
+      invocationId,
+      errorName: name,
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    return toMCPErrorResponse(err, invocationId, toolName, logger);
+  }
   };
 }
 

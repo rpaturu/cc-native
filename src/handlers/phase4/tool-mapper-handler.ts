@@ -5,7 +5,7 @@
  * 
  * Contract: See "Execution Contract (Canonical)" section in PHASE_4_2_CODE_LEVEL_PLAN.md
  * 
- * Step Functions input: { action_intent_id, tenant_id, account_id, idempotency_key, trace_id, registry_version, attempt_count, started_at }
+ * Step Functions input: state after ValidatePreflight (execution context + optional validation_result from resultPath)
  * Step Functions output: { gateway_url, tool_name, tool_arguments, tool_schema_version, registry_version, compensation_strategy, idempotency_key, action_intent_id, tenant_id, account_id, trace_id, attempt_count, started_at }
  * 
  * Note: jwt_token is retrieved in ToolInvoker handler (not in ToolMapper) to keep mapping deterministic.
@@ -14,7 +14,6 @@
  */
 
 import { Handler } from 'aws-lambda';
-import { z } from 'zod';
 import { Logger } from '../../services/core/Logger';
 import { TraceService } from '../../services/core/TraceService';
 import { ActionIntentService } from '../../services/decision/ActionIntentService';
@@ -22,6 +21,7 @@ import { ActionTypeRegistryService } from '../../services/execution/ActionTypeRe
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
 import { getAWSClientConfig } from '../../utils/aws-client-config';
+import { toGatewayToolName } from '../../constants/ExecutionToolNames';
 
 const logger = new Logger('ToolMapperHandler');
 const traceService = new TraceService(logger);
@@ -70,17 +70,8 @@ const actionTypeRegistryService = new ActionTypeRegistryService(
   logger
 );
 
-// Zod schema for SFN input validation (fail fast with precise errors)
-const StepFunctionsInputSchema = z.object({
-  action_intent_id: z.string().min(1, 'action_intent_id is required'),
-  tenant_id: z.string().min(1, 'tenant_id is required'),
-  account_id: z.string().min(1, 'account_id is required'),
-  idempotency_key: z.string().min(1, 'idempotency_key is required'),
-  trace_id: z.string().min(1, 'trace_id is required'), // execution_trace_id from starter handler
-  registry_version: z.number().int().positive('registry_version must be positive integer'), // From starter handler output
-  attempt_count: z.number().int().positive('attempt_count must be positive integer'), // From starter handler output
-  started_at: z.string().min(1, 'started_at is required'), // From starter handler output
-}).strict();
+import { ToolMapperInputSchema } from './execution-state-schemas';
+export const StepFunctionsInputSchema = ToolMapperInputSchema;
 
 export const handler: Handler = async (event: unknown) => {
   // Validate SFN input with Zod (fail fast with precise errors)
@@ -142,14 +133,17 @@ export const handler: Handler = async (event: unknown) => {
     // 4. Add execution metadata to tool arguments (for adapter-level idempotency and audit)
     toolArguments.idempotency_key = idempotency_key;
     toolArguments.action_intent_id = action_intent_id; // Required for recordExternalWriteDedupe()
+    toolArguments.tenant_id = tenant_id; // Required for adapter tenant binding (InternalConnectorAdapter)
+    toolArguments.account_id = account_id;
     
     // 5. Return for Step Functions (JWT token retrieval moved to ToolInvoker)
     // Note: trace_id is execution_trace_id (from starter handler), not decision_trace_id
     // Note: registry_version, attempt_count, started_at are passed through for execution recorder
     // Note: compensation_strategy is included for SFN Choice state to determine if compensation is needed
+    // Gateway expects {target-name}___{tool-name} for MCP tools/call (see gateway-tool-naming docs)
     return {
       gateway_url: gatewayUrl,
-      tool_name: toolMapping.tool_name,
+      tool_name: toGatewayToolName(toolMapping.tool_name),
       tool_arguments: toolArguments,
       tool_schema_version: toolMapping.tool_schema_version,
       registry_version: registry_version, // Pass through for execution recorder

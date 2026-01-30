@@ -535,6 +535,7 @@ export class CCNativeStack extends cdk.Stack {
     }));
 
     // Cognito User Pool for user authentication
+    // Username = email (signInAliases.email: true). Gateway service user: gateway-service@cc-native.local (no custom attributes).
     this.userPool = new cognito.UserPool(this, 'UserPool', {
       userPoolName: 'cc-native-users',
       selfSignUpEnabled: false, // Admin-controlled user creation

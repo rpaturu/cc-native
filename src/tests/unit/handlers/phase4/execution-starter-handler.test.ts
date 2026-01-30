@@ -451,6 +451,7 @@ describe('ExecutionStarterHandler', () => {
     });
 
     it('should return correct output format for Step Functions', async () => {
+      const startedAt = new Date().toISOString();
       const intent = createActionIntentV1();
       mockActionIntentService.getIntent.mockResolvedValue(intent);
       mockActionTypeRegistryService.getToolMapping.mockResolvedValue(actionTypeRegistryV1 as any);
@@ -465,8 +466,8 @@ describe('ExecutionStarterHandler', () => {
         status: 'RUNNING',
         attempt_count: 1,
         last_attempt_id: 'attempt_123',
-        started_at: Date.now(),
-        updated_at: Date.now(),
+        started_at: startedAt,
+        updated_at: startedAt,
         ttl: Date.now() + 3600,
       } as any);
       mockLedgerService.append.mockResolvedValue({
@@ -488,6 +489,8 @@ describe('ExecutionStarterHandler', () => {
         account_id: 'account_test_1',
         trace_id: 'execution_trace_123',
         registry_version: 1,
+        attempt_count: 1,
+        started_at: startedAt,
       });
     });
   });
