@@ -23,9 +23,9 @@ Phase 4.5 E2E implements the **one deterministic path** required by 4.5A: seed a
 
 | Item | Status | Notes |
 |------|--------|--------|
-| **test-phase4-execution.sh** | ✅ Implemented | Seed → wait → verify attempt/outcome → (optional) Status API → (optional) signal → cleanup. |
+| **test-phase4-execution.sh** | ✅ Implemented | Seed → wait → verify attempt/outcome → (optional; recommended when URL+JWT) Status API → (optional) signal → cleanup. |
 | **seed-phase4-e2e-intent.sh** | ✅ Implemented | Puts action intent (B2) and ACTION_APPROVED to EventBridge. |
-| **Status API check** | ✅ In script | Step 5 when EXECUTION_STATUS_API_URL + EXECUTION_STATUS_API_AUTH_HEADER set. |
+| **Status API check** | ✅ In script | Step 5 when EXECUTION_STATUS_API_URL + EXECUTION_STATUS_API_AUTH_HEADER set. **Recommended** when deploy pipeline provides URL+JWT. |
 | **Signal check** | ✅ In script | Step 6 when SIGNALS_TABLE_NAME set (e.g. from deploy .env). |
 | **Run in deploy** | ✅ Yes | `./deploy` runs E2E after integration tests unless `--skip-e2e`. |
 
@@ -59,7 +59,7 @@ Phase 4.5 E2E implements the **one deterministic path** required by 4.5A: seed a
 3. **Verify** — Assert ExecutionAttempt status (e.g. SUCCEEDED) and ActionOutcome present and SUCCEEDED.
 4. **Cleanup** — Remove E2E seed data (attempt, outcome, intent if configured).
 
-**Step 5 — Execution Status API (optional):** When `EXECUTION_STATUS_API_URL` and `EXECUTION_STATUS_API_AUTH_HEADER` (JWT) are set, the script calls `GET .../executions/{action_intent_id}/status?account_id=...` and asserts 200 and `status: SUCCEEDED`. If either is unset, the step is skipped.
+**Step 5 — Execution Status API (optional; recommended when URL+JWT available):** When `EXECUTION_STATUS_API_URL` and `EXECUTION_STATUS_API_AUTH_HEADER` (JWT) are set, the script calls `GET .../executions/{action_intent_id}/status?account_id=...` and asserts 200 and `status: SUCCEEDED`. If either is unset, the step is skipped. Once your deploy pipeline provides URL and JWT, running Step 5 is **recommended** to validate the Status API path.
 
 **Step 6 — Execution signal (optional):** When `SIGNALS_TABLE_NAME` is set (e.g. from deploy `.env`), the script verifies a signal row exists in the signals table for the execution (`signalId = exec-{action_intent_id}-{account_id}-ACTION_EXECUTED`). If unset, the step is skipped.
 

@@ -6,7 +6,7 @@
 **Parent Document:** `PHASE_4_CODE_LEVEL_PLAN.md`  
 **Prerequisites:** Phase 4.1, 4.2, 4.3, and 4.4 complete ✅ (all complete as of 2026-01-28)
 
-**Progress summary (4.5A):** Unit tests ✅ | Status API integration ✅ | One deterministic E2E path ✅ | README/architecture ✅ | Security audit + evidence ✅ | Performance (deferred to 4.5B) ✅  
+**Progress summary (4.5A):** Unit tests ✅ | Status API integration ✅ | One deterministic E2E path ✅ | README/architecture ✅ | Security audit + evidence ✅ | Performance explicitly deferred w/ ticket ✅  
 
 **Progress summary (4.5B):** Idempotency ✅ | Kill-switches ✅ | Execution-flow ✅ | Connector-adapters ✅ | Tool-invocation ✅ | PHASE_4_TROUBLESHOOTING.md ✅ | Performance tuning ⬜ | Additional E2E ⬜
 
