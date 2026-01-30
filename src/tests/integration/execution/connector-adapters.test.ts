@@ -11,7 +11,7 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { getAWSClientConfig } from '../../../utils/aws-client-config';
-import type { Handler } from 'aws-lambda';
+import type { Context, Handler } from 'aws-lambda';
 import { InternalConnectorAdapter } from '../../../adapters/internal/InternalConnectorAdapter';
 import { createHandler } from '../../../handlers/phase4/internal-adapter-handler';
 import { Logger } from '../../../services/core/Logger';
@@ -90,7 +90,7 @@ const testAccountId = `test-account-ca-${Date.now()}`;
         getRemainingTimeInMillis: () => 30000,
       };
 
-      const response = await handler(event, context);
+      const response = await handler(event, context as unknown as Context, () => {});
 
       expect(response).toBeDefined();
       expect(response.jsonrpc).toBe('2.0');
@@ -138,7 +138,7 @@ const testAccountId = `test-account-ca-${Date.now()}`;
         getRemainingTimeInMillis: () => 30000,
       };
 
-      const response = await handler(event, context);
+      const response = await handler(event, context as unknown as Context, () => {});
 
       expect(response).toBeDefined();
       expect(response.result?.content).toBeDefined();

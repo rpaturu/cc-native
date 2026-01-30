@@ -41,39 +41,60 @@ jest.mock('@aws-sdk/client-cognito-identity-provider', () => ({
   },
 }));
 
-// Mock axios (Gateway response)
-jest.mock('axios', () => {
-  const actual = jest.requireActual<typeof import('axios')>('axios');
-  return {
-    ...actual,
-    default: {
-      ...actual.default,
-      post: jest.fn().mockResolvedValue({
-        data: {
-          result: {
-            content: [
-              {
-                type: 'text',
-                text: JSON.stringify({
-                  success: true,
-                  external_object_refs: [
-                    { object_id: 'mock-obj-1', object_type: 'Task', system: 'INTERNAL' },
-                  ],
-                }),
-              },
-            ],
-          },
+// Mock axios so handler never hits the network (no spread of actual to avoid real implementation)
+jest.mock('axios', () => ({
+  __esModule: true,
+  default: {
+    post: jest.fn().mockResolvedValue({
+      data: {
+        result: {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                success: true,
+                external_object_refs: [
+                  { object_id: 'mock-obj-1', object_type: 'Task', system: 'INTERNAL' },
+                ],
+              }),
+            },
+          ],
         },
-      }),
-    },
-  };
-});
+      },
+    }),
+  },
+}));
 
 import { handler } from '../../../handlers/phase4/tool-invoker-handler';
 
 (skipIntegration ? describe.skip : describe)(
   'Tool Invocation Integration (Tool Invoker with mocked Gateway)',
   () => {
+    const originalEnv: Record<string, string | undefined> = {};
+
+    beforeAll(() => {
+      // getJwtToken requires these or it throws before calling Cognito/Secrets (which we mock)
+      originalEnv.COGNITO_USER_POOL_ID = process.env.COGNITO_USER_POOL_ID;
+      originalEnv.COGNITO_CLIENT_ID = process.env.COGNITO_CLIENT_ID;
+      originalEnv.COGNITO_SERVICE_USERNAME = process.env.COGNITO_SERVICE_USERNAME;
+      originalEnv.COGNITO_SERVICE_PASSWORD = process.env.COGNITO_SERVICE_PASSWORD;
+      process.env.COGNITO_USER_POOL_ID = process.env.COGNITO_USER_POOL_ID || 'test-pool-id';
+      process.env.COGNITO_CLIENT_ID = process.env.COGNITO_CLIENT_ID || 'test-client-id';
+      process.env.COGNITO_SERVICE_USERNAME = process.env.COGNITO_SERVICE_USERNAME || 'test-user';
+      process.env.COGNITO_SERVICE_PASSWORD = process.env.COGNITO_SERVICE_PASSWORD || 'test-pass';
+    });
+
+    afterAll(() => {
+      if (originalEnv.COGNITO_USER_POOL_ID !== undefined) process.env.COGNITO_USER_POOL_ID = originalEnv.COGNITO_USER_POOL_ID;
+      else delete process.env.COGNITO_USER_POOL_ID;
+      if (originalEnv.COGNITO_CLIENT_ID !== undefined) process.env.COGNITO_CLIENT_ID = originalEnv.COGNITO_CLIENT_ID;
+      else delete process.env.COGNITO_CLIENT_ID;
+      if (originalEnv.COGNITO_SERVICE_USERNAME !== undefined) process.env.COGNITO_SERVICE_USERNAME = originalEnv.COGNITO_SERVICE_USERNAME;
+      else delete process.env.COGNITO_SERVICE_USERNAME;
+      if (originalEnv.COGNITO_SERVICE_PASSWORD !== undefined) process.env.COGNITO_SERVICE_PASSWORD = originalEnv.COGNITO_SERVICE_PASSWORD;
+      else delete process.env.COGNITO_SERVICE_PASSWORD;
+    });
+
     it('invoke handler with valid SFN state, assert ToolInvocationResponse shape', async () => {
       const event = {
         gateway_url: 'https://gateway.example.com/integration',
