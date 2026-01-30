@@ -1,8 +1,10 @@
 # Phase 4.5 — Testing & Polish: Code-Level Implementation Plan
 
-**Status:** 🟢 **4.5A READY FOR SIGN-OFF** (all checklist items complete); **4.5B partial** (recommended integration tests + troubleshooting done)  
+**Status:** 🟢 **4.5A SIGN-OFF** (Phase 4 complete per §8 DoD)  
+**4.5B:** Partial (recommended integration tests + troubleshooting done)  
 **Created:** 2026-01-26  
 **Last Updated:** 2026-01-28  
+**Signed off:** 2026-01-28 — 4.5A Definition of Done met; Phase 4 complete.  
 **Parent Document:** `PHASE_4_CODE_LEVEL_PLAN.md`  
 **Prerequisites:** Phase 4.1, 4.2, 4.3, and 4.4 complete ✅ (all complete as of 2026-01-28)
 
@@ -273,9 +275,9 @@ Phase 4 is **complete** when **all** of the following are true (4.5A only):
 
 ## 9. Next Steps
 
-### 4.5A complete
+### 4.5A complete — Phase 4 signed off
 
-All required items are done: docs (README, PHASE_4_ARCHITECTURE, PHASE_4_IMPLEMENTATION_PLAN), security audit (checklist + evidence in **SECURITY_AUDIT.md**), performance (deferred to 4.5B via **PERFORMANCE_DEFERRAL.md**). Phase 4 is **ready for sign-off** per Definition of Done (§8).
+All required items are done: docs (README, PHASE_4_ARCHITECTURE, PHASE_4_IMPLEMENTATION_PLAN), security audit (checklist + evidence in **SECURITY_AUDIT.md**), performance (deferred to 4.5B via **PERFORMANCE_DEFERRAL.md**). Phase 4 is **signed off** per Definition of Done (§8); see **Signed off** in the header.
 
 ### After sign-off
 
