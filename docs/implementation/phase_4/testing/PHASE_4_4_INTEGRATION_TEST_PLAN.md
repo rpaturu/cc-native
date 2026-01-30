@@ -140,13 +140,13 @@ Events are constructed with mock authorizer claims; real DynamoDB tables are use
 
 **Skip conditions:** If EventBridge/Step Functions or Cognito are not configured, skip (e.g. `SKIP_E2E_EXECUTION` or missing `EXECUTION_STATUS_API_URL`).
 
-**Note:** A separate **Phase 4.4 E2E test plan** documents the script-based E2E run by `./deploy`: seed → EventBridge → Step Functions → outcome → cleanup. See [PHASE_4_4_E2E_TEST_PLAN.md](PHASE_4_4_E2E_TEST_PLAN.md).
+**Note:** The **Phase 4.5 E2E test plan (4.5A)** documents the script-based E2E run by `./deploy`: seed → EventBridge → Step Functions → outcome → cleanup. See [PHASE_4_5_E2E_TEST_PLAN.md](PHASE_4_5_E2E_TEST_PLAN.md).
 
 ---
 
 ## References
 
-- **Phase 4.4 E2E test plan:** [PHASE_4_4_E2E_TEST_PLAN.md](PHASE_4_4_E2E_TEST_PLAN.md)
+- **Phase 4.5 E2E test plan (4.5A):** [PHASE_4_5_E2E_TEST_PLAN.md](PHASE_4_5_E2E_TEST_PLAN.md)
 - **Phase 4.4 test plan (unit):** [PHASE_4_4_TEST_PLAN.md](PHASE_4_4_TEST_PLAN.md)
 - **Phase 4.4 code plan:** `docs/implementation/phase_4/PHASE_4_4_CODE_LEVEL_PLAN.md`
 - **Integration test setup:** `docs/testing/INTEGRATION_TEST_SETUP.md`

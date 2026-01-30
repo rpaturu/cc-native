@@ -94,6 +94,8 @@ All listed files exist and are covered by Phase 4.2, 4.3, and 4.4 test plans. No
 
 ## 3. End-to-End: One Deterministic Path Required (4.5A)
 
+**Status:** ✅ **Done.** B2 (seed + verify) is implemented: `scripts/phase_4/seed-phase4-e2e-intent.sh`, `scripts/phase_4/test-phase4-execution.sh`. Plan: [testing/PHASE_4_5_E2E_TEST_PLAN.md](testing/PHASE_4_5_E2E_TEST_PLAN.md). Run as part of `./deploy` unless `--skip-e2e`; verifies attempt, outcome, optional Status API, optional signal, then cleanup.
+
 **Requirement (4.5A):** At least **one** deterministic E2E path must exist. Choose **either**:
 
 - **(a)** Expand `end-to-end-execution.test.ts` so one full path (e.g. ACTION_APPROVED → Step Functions → outcome recorded) runs and passes when env is present, **or**
@@ -164,7 +166,8 @@ Phase 4 adds: **EventBridge put-events** to trigger execution (ACTION_APPROVED),
   - `testing/PHASE_4_2_TEST_PLAN.md` (unit 4.1+4.2)
   - `testing/PHASE_4_3_TEST_PLAN.md` (unit 4.3)
   - `testing/PHASE_4_4_TEST_PLAN.md` (unit 4.4)
-  - `testing/PHASE_4_4_INTEGRATION_TEST_PLAN.md` (integration + E2E placeholder)
+  - `testing/PHASE_4_4_INTEGRATION_TEST_PLAN.md` (integration)
+  - `testing/PHASE_4_5_E2E_TEST_PLAN.md` (E2E script-based; 4.5A one deterministic path)
 
 ### 4.5B Optional
 
@@ -231,7 +234,7 @@ Capture the following so the audit is reviewable:
 
 - [x] Unit test coverage complete (4.1–4.4)
 - [x] Execution-status-api integration tests pass
-- [ ] **One** deterministic E2E path: either expanded `end-to-end-execution.test.ts` **or** executable script (e.g. `test-phase4-execution.sh`) — choose one
+- [x] **One** deterministic E2E path: executable script (B2) — `scripts/phase_4/test-phase4-execution.sh` + `seed-phase4-e2e-intent.sh`; plan: [testing/PHASE_4_5_E2E_TEST_PLAN.md](testing/PHASE_4_5_E2E_TEST_PLAN.md). Run as part of `./deploy` unless `--skip-e2e`.
 - [ ] README + architecture/implementation docs updated
 - [ ] Security audit checklist completed **and** evidence documented (see §6)
 - [ ] Performance targets defined **and** met, or explicitly deferred to 4.5B with rationale + ticket
@@ -271,4 +274,4 @@ After 4.5A is complete and Phase 4 is signed off:
 
 ---
 
-**See also:** `PHASE_4_CODE_LEVEL_PLAN.md`, `PHASE_4_4_CODE_LEVEL_PLAN.md`, `testing/PHASE_4_2_TEST_PLAN.md`, `testing/PHASE_4_3_TEST_PLAN.md`, `testing/PHASE_4_4_TEST_PLAN.md`, `testing/PHASE_4_4_INTEGRATION_TEST_PLAN.md`.
+**See also:** `PHASE_4_CODE_LEVEL_PLAN.md`, `PHASE_4_4_CODE_LEVEL_PLAN.md`, `testing/PHASE_4_2_TEST_PLAN.md`, `testing/PHASE_4_3_TEST_PLAN.md`, `testing/PHASE_4_4_TEST_PLAN.md`, `testing/PHASE_4_4_INTEGRATION_TEST_PLAN.md`, `testing/PHASE_4_5_E2E_TEST_PLAN.md`.

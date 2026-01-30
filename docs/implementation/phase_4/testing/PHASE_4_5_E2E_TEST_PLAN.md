@@ -1,17 +1,19 @@
-# Phase 4.4 E2E Test Plan
+# Phase 4.5 E2E Test Plan (4.5A — One Deterministic Path)
 
 **Status:** 🟢 **COMPLETE**  
 **Created:** 2026-01-30  
 **Last Updated:** 2026-01-30  
 **Last verified:** 2026-01-30 — E2E run passed as part of `./deploy` (steps 3–4, 6; step 5 skipped without URL+JWT).  
-**Parent:** [PHASE_4_4_INTEGRATION_TEST_PLAN.md](PHASE_4_4_INTEGRATION_TEST_PLAN.md)  
+**Parent:** [PHASE_4_5_CODE_LEVEL_PLAN.md](../PHASE_4_5_CODE_LEVEL_PLAN.md) §3  
+**Satisfies:** Phase 4.5A "one deterministic E2E path". **Validates:** 4.4 execution/safety layer (recorder, signals, status API).  
+**Related:** [PHASE_4_4_INTEGRATION_TEST_PLAN.md](PHASE_4_4_INTEGRATION_TEST_PLAN.md)  
 **Prerequisites:** Deployed stack (./deploy); `.env` with `EVENT_BUS_NAME`, `ACTION_INTENT_TABLE_NAME`, `EXECUTION_ATTEMPTS_TABLE_NAME`, `EXECUTION_OUTCOMES_TABLE_NAME`
 
 ---
 
 ## Overview
 
-Phase 4.4 E2E validates the **full execution path**: seed action intent → EventBridge (ACTION_APPROVED) → Step Functions → Tool Mapper → Gateway → Internal Adapter (create task) → Tool Invoker → Execution Recorder → outcome and signals. One deterministic path is implemented and run as part of `./deploy` unless skipped.
+Phase 4.5 E2E implements the **one deterministic path** required by 4.5A: seed action intent → EventBridge (ACTION_APPROVED) → Step Functions → Tool Mapper → Gateway → Internal Adapter (create task) → Tool Invoker → Execution Recorder → outcome and signals. Run as part of `./deploy` unless skipped.
 
 **Scope:** Single happy path (internal.create_task). No CRM or external adapters required.
 
@@ -92,7 +94,8 @@ To re-verify, run `./scripts/phase_4/test-phase4-execution.sh` or `./deploy` (wi
 
 ## References
 
+- **Phase 4.5 code plan:** [PHASE_4_5_CODE_LEVEL_PLAN.md](../PHASE_4_5_CODE_LEVEL_PLAN.md) §3
 - **Phase 4.4 integration tests:** [PHASE_4_4_INTEGRATION_TEST_PLAN.md](PHASE_4_4_INTEGRATION_TEST_PLAN.md)
 - **Phase 4.4 unit tests:** [PHASE_4_4_TEST_PLAN.md](PHASE_4_4_TEST_PLAN.md)
-- **Phase 4.4 code plan:** `../PHASE_4_4_CODE_LEVEL_PLAN.md`
+- **Phase 4.4 code plan:** [PHASE_4_4_CODE_LEVEL_PLAN.md](../PHASE_4_4_CODE_LEVEL_PLAN.md)
 - **Scripts:** `scripts/phase_4/test-phase4-execution.sh`, `scripts/phase_4/seed-phase4-e2e-intent.sh`

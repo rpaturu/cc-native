@@ -6,7 +6,7 @@
 **Parent Document:** `PHASE_4_CODE_LEVEL_PLAN.md`  
 **Prerequisites:** Phase 4.1, 4.2, and 4.3 complete
 
-Signal emission, execution status API (JWT auth, 404 semantics, pagination), CloudWatch alarms, and unit/integration/E2E tests are implemented. **Recent updates:** Deploy script looks up DynamoDB prefix list and passes `dynamoDbPrefixListId` via CDK context; Internal Adapter Lambda is in VPC with zero-trust security group; Tool Invoker extracts `external_object_refs` from raw MCP envelope when Gateway returns `result.content[].text`; Phase 4.4 E2E test plan and script-based E2E documented. See `testing/PHASE_4_4_TEST_PLAN.md`, `testing/PHASE_4_4_INTEGRATION_TEST_PLAN.md`, and `testing/PHASE_4_4_E2E_TEST_PLAN.md`.
+Signal emission, execution status API (JWT auth, 404 semantics, pagination), CloudWatch alarms, and unit/integration/E2E tests are implemented. **Recent updates:** Deploy script looks up DynamoDB prefix list and passes `dynamoDbPrefixListId` via CDK context; Internal Adapter Lambda is in VPC with zero-trust security group; Tool Invoker extracts `external_object_refs` from raw MCP envelope when Gateway returns `result.content[].text`; Phase 4.5 E2E test plan (4.5A) and script-based E2E documented. See `testing/PHASE_4_4_TEST_PLAN.md`, `testing/PHASE_4_4_INTEGRATION_TEST_PLAN.md`, and `testing/PHASE_4_5_E2E_TEST_PLAN.md`.
 
 ---
 
@@ -632,7 +632,7 @@ private createExecutionStatusAPI(
 
 ### End-to-end (script-based) — implemented
 
-- **Plan:** `testing/PHASE_4_4_E2E_TEST_PLAN.md` (status COMPLETE).
+- **Plan:** `testing/PHASE_4_5_E2E_TEST_PLAN.md` (4.5A; status COMPLETE).
 - **Scripts:** `scripts/phase_4/test-phase4-execution.sh` (seed → EventBridge → Step Functions → verify attempt/outcome → cleanup), `scripts/phase_4/seed-phase4-e2e-intent.sh`.
 - **Run:** `./scripts/phase_4/test-phase4-execution.sh` or as part of `./deploy` (use `--skip-e2e` to skip).
 - **Jest E2E placeholder:** `src/tests/integration/execution/end-to-end-execution.test.ts` — skip when env missing; full flow can be extended there or kept as script-based.
@@ -662,7 +662,7 @@ private createExecutionStatusAPI(
 - [x] Deploy script: look up DynamoDB prefix list for region and pass `-c dynamoDbPrefixListId` to CDK (§4a).
 - [x] ExecutionInfrastructure: Internal Adapter in VPC; require `dynamoDbPrefixListId` context; zero-trust SG egress (§4a).
 - [x] Tool Invoker: extract `external_object_refs` from raw MCP envelope (`result.content[].text`) when present (§4b).
-- [x] Phase 4.4 E2E test plan and script-based E2E (`testing/PHASE_4_4_E2E_TEST_PLAN.md`, `scripts/phase_4/test-phase4-execution.sh`).
+- [x] Phase 4.5 E2E test plan (4.5A) and script-based E2E (`testing/PHASE_4_5_E2E_TEST_PLAN.md`, `scripts/phase_4/test-phase4-execution.sh`).
 
 ---
 
@@ -747,7 +747,7 @@ This appendix compares the Phase 4.4 doc with the **current codebase** for accur
 
 | Doc says | Current implementation | Accuracy / completeness |
 |----------|------------------------|--------------------------|
-| Phase 4.4 E2E test plan doc; script-based E2E | `testing/PHASE_4_4_E2E_TEST_PLAN.md` (status COMPLETE); `scripts/phase_4/test-phase4-execution.sh`, `seed-phase4-e2e-intent.sh`; run via `./deploy` or standalone | ✅ Implemented. |
+| Phase 4.5 E2E test plan (4.5A); script-based E2E | `testing/PHASE_4_5_E2E_TEST_PLAN.md` (status COMPLETE); `scripts/phase_4/test-phase4-execution.sh`, `seed-phase4-e2e-intent.sh`; run via `./deploy` or standalone | ✅ Implemented. |
 
 ### 6. Testing (§5)
 
