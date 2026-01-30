@@ -1,6 +1,6 @@
 # Phase 4 Architecture: Bounded Execution & AI-Native Action Fulfillment
 
-**Status:** 🟢 **4.1–4.4 IMPLEMENTED; 4.5 READY** (sign-off gate: `PHASE_4_5_CODE_LEVEL_PLAN.md`)  
+**Status:** 🟡 **4.1–4.4 IMPLEMENTED; 4.5A IN PROGRESS** (sign-off gate: `PHASE_4_5_CODE_LEVEL_PLAN.md`; docs, security audit, performance remain)  
 **Created:** 2026-01-26  
 **Last Updated:** 2026-01-28
 

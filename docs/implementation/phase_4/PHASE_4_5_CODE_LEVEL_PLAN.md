@@ -1,10 +1,12 @@
 # Phase 4.5 — Testing & Polish: Code-Level Implementation Plan
 
-**Status:** 🟢 **READY** (use **IN IMPLEMENTATION** when actively running the checklist)  
+**Status:** 🟢 **4.5A READY FOR SIGN-OFF** (all checklist items complete)  
 **Created:** 2026-01-26  
 **Last Updated:** 2026-01-28  
 **Parent Document:** `PHASE_4_CODE_LEVEL_PLAN.md`  
 **Prerequisites:** Phase 4.1, 4.2, 4.3, and 4.4 complete ✅ (all complete as of 2026-01-28)
+
+**Progress summary:** Unit tests ✅ | Status API integration ✅ | One deterministic E2E path ✅ | README/architecture ✅ | Security audit + evidence ✅ | Performance (deferred to 4.5B) ✅
 
 ---
 
@@ -202,16 +204,18 @@ Define and meet **at least** these so “performance meets requirements” is ob
 
 ## 6. Security Audit (4.5A Required + Evidence)
 
-### Checklist (unchanged)
+### Checklist
 
-- [ ] IAM permissions follow Zero Trust (least privilege per role)
-- [ ] No hardcoded secrets or credentials
-- [ ] External API calls use OAuth tokens (not stored credentials)
-- [ ] DynamoDB conditional writes prevent race conditions
-- [ ] Step Functions execution names enforce idempotency
-- [ ] Error messages don’t leak sensitive information
-- [ ] All handlers validate tenant/account scope
-- [ ] Kill switches are accessible without redeploy
+Completed and evidenced in **`SECURITY_AUDIT.md`** (all items checked with code/location references):
+
+- [x] IAM permissions follow Zero Trust (least privilege per role)
+- [x] No hardcoded secrets or credentials
+- [x] External API calls use OAuth tokens (not stored credentials)
+- [x] DynamoDB conditional writes prevent race conditions
+- [x] Step Functions execution names enforce idempotency
+- [x] Error messages don’t leak sensitive information
+- [x] All handlers validate tenant/account scope
+- [x] Kill switches are accessible without redeploy
 
 ### 4.5A — Audit evidence (required for sign-off)
 
@@ -224,7 +228,7 @@ Capture the following so the audit is reviewable:
 | Kill switches | Proof kill switches work without redeploy (screenshot or log of toggle + behavior). |
 | DynamoDB conditional writes | Code references or test names that demonstrate conditional writes (e.g. ExecutionAttemptService, idempotency). |
 
-**Action:** Store evidence in `docs/implementation/phase_4/SECURITY_AUDIT.md` (checklist + evidence table; created) or `audit/phase4-evidence/`, and reference it in the DoD sign-off.
+**Done:** Evidence stored in `docs/implementation/phase_4/SECURITY_AUDIT.md` (checklist completed, evidence table filled). Reference this doc in the DoD sign-off.
 
 ---
 
@@ -235,9 +239,9 @@ Capture the following so the audit is reviewable:
 - [x] Unit test coverage complete (4.1–4.4)
 - [x] Execution-status-api integration tests pass
 - [x] **One** deterministic E2E path: executable script (B2) — `scripts/phase_4/test-phase4-execution.sh` + `seed-phase4-e2e-intent.sh`; plan: [testing/PHASE_4_5_E2E_TEST_PLAN.md](testing/PHASE_4_5_E2E_TEST_PLAN.md). Run as part of `./deploy` unless `--skip-e2e`.
-- [ ] README + architecture/implementation docs updated
-- [ ] Security audit checklist completed **and** evidence documented (see §6)
-- [ ] Performance targets defined **and** met, or explicitly deferred to 4.5B with rationale + ticket
+- [x] README + architecture/implementation docs updated
+- [x] Security audit checklist completed **and** evidence documented (see §6; `SECURITY_AUDIT.md`)
+- [x] Performance targets defined **and** met, or explicitly deferred to 4.5B with rationale + ticket (`PERFORMANCE_DEFERRAL.md`)
 
 ### 4.5B — Optional (do not block sign-off)
 
@@ -266,11 +270,14 @@ Phase 4 is **complete** when **all** of the following are true (4.5A only):
 
 ## 9. Next Steps
 
-After 4.5A is complete and Phase 4 is signed off:
+### 4.5A complete
 
-- Phase 4 is production-ready.
-- Proceed to Phase 5 (if defined) or production deployment.
-- 4.5B can be done in parallel or later for hardening.
+All required items are done: docs (README, PHASE_4_ARCHITECTURE, PHASE_4_IMPLEMENTATION_PLAN), security audit (checklist + evidence in **SECURITY_AUDIT.md**), performance (deferred to 4.5B via **PERFORMANCE_DEFERRAL.md**). Phase 4 is **ready for sign-off** per Definition of Done (§8).
+
+### After sign-off
+
+- Phase 4 is production-ready; proceed to Phase 5 (if defined) or production deployment.
+- 4.5B (idempotency/kill-switch tests, troubleshooting guide, performance SLOs) can be done in parallel or later for hardening.
 
 ---
 

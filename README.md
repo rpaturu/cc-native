@@ -51,7 +51,7 @@ See `docs/strategy/IMPLEMENTATION_APPROACH.md` for detailed phased implementatio
   - Policy gate for deterministic action evaluation
   - Human approval routing
   - Decision audit and explainability
-- **Phase 4**: Action Execution (bounded execution, connector write-backs) — 4.1–4.4 complete; 4.5 (testing & polish) in progress. See `docs/implementation/phase_4/PHASE_4_5_CODE_LEVEL_PLAN.md` for sign-off gate.
+- **Phase 4**: Action Execution (bounded execution, connector write-backs) — 4.1–4.4 complete; 4.5A (testing & polish) in progress. Execution flow: EventBridge (ACTION_APPROVED) → Step Functions → Tool Mapper → AgentCore Gateway → Connector Adapters (e.g. Internal Adapter) → Tool Invoker → Execution Recorder (outcome + signals). Status API and E2E script available. See `docs/implementation/phase_4/PHASE_4_5_CODE_LEVEL_PLAN.md` for sign-off gate and `docs/implementation/phase_4/PHASE_4_ARCHITECTURE.md` for architecture.
 - **Phase 5**: Enhanced Tool Plane (AgentCore Gateway)
 - **Phase 6**: Trust, Quality, and Cost Controls
 
