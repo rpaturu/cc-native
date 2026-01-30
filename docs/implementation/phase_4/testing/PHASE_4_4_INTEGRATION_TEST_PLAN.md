@@ -58,6 +58,9 @@ npm run test:all
 - **Skip E2E placeholder suite:** set `SKIP_E2E_EXECUTION=1`.
 - **Skip idempotency integration (4.5B):** set `SKIP_IDEMPOTENCY_INTEGRATION=1`.
 - **Skip kill-switches integration (4.5B):** set `SKIP_KILL_SWITCHES_INTEGRATION=1`.
+- **Skip execution-flow integration (4.5B):** set `SKIP_EXECUTION_FLOW_INTEGRATION=1`.
+- **Skip connector-adapters integration (4.5B):** set `SKIP_CONNECTOR_ADAPTERS_INTEGRATION=1`.
+- **Skip tool-invocation integration (4.5B):** set `SKIP_TOOL_INVOCATION_INTEGRATION=1`.
 
 If required env is missing and the skip flag is not set, the suite **fails** with a clear error (not skipped). Use the skip flag when you intend to omit integration tests.
 
@@ -104,6 +107,9 @@ Ensure the stack completes and no resources fail.
 | `src/tests/integration/execution/end-to-end-execution.test.ts` | Full execution flow: EventBridge → Step Functions → starter → … → recorder. | ✅ Placeholder (skip when env missing) |
 | `src/tests/integration/execution/idempotency.test.ts` | Dual-layer idempotency: ExecutionAttemptService.startAttempt (conditional write), ExecutionOutcomeService.recordOutcome (idempotent). Real DynamoDB. | ✅ Implemented (4.5B; 4 tests) |
 | `src/tests/integration/execution/kill-switches.test.ts` | Kill switch behavior: GLOBAL_EXECUTION_STOP, tenant execution_enabled, disabled_action_types. Real DynamoDB (tenants table). | ✅ Implemented (4.5B; 5 tests) |
+| `src/tests/integration/execution/execution-flow.test.ts` | Execution-starter handler: seed ActionIntent + ActionTypeRegistry, invoke starter, assert attempt created. Real DynamoDB. | ✅ Implemented (4.5B; 1 test) |
+| `src/tests/integration/execution/connector-adapters.test.ts` | Internal adapter handler: internal.create_task and internal.create_note; assert response and DynamoDB (tasks/notes). Real DynamoDB. | ✅ Implemented (4.5B; 2 tests) |
+| `src/tests/integration/execution/tool-invocation.test.ts` | Tool Invoker handler with mocked Gateway (axios) and JWT (Cognito/Secrets); assert ToolInvocationResponse shape. | ✅ Implemented (4.5B; 1 test) |
 
 ---
 

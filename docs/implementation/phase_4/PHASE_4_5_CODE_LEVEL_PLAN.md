@@ -1,12 +1,14 @@
 # Phase 4.5 — Testing & Polish: Code-Level Implementation Plan
 
-**Status:** 🟢 **4.5A READY FOR SIGN-OFF** (all checklist items complete)  
+**Status:** 🟢 **4.5A READY FOR SIGN-OFF** (all checklist items complete); **4.5B partial** (recommended integration tests + troubleshooting done)  
 **Created:** 2026-01-26  
 **Last Updated:** 2026-01-28  
 **Parent Document:** `PHASE_4_CODE_LEVEL_PLAN.md`  
 **Prerequisites:** Phase 4.1, 4.2, 4.3, and 4.4 complete ✅ (all complete as of 2026-01-28)
 
-**Progress summary:** Unit tests ✅ | Status API integration ✅ | One deterministic E2E path ✅ | README/architecture ✅ | Security audit + evidence ✅ | Performance (deferred to 4.5B) ✅
+**Progress summary (4.5A):** Unit tests ✅ | Status API integration ✅ | One deterministic E2E path ✅ | README/architecture ✅ | Security audit + evidence ✅ | Performance (deferred to 4.5B) ✅  
+
+**Progress summary (4.5B):** Idempotency ✅ | Kill-switches ✅ | Execution-flow ✅ | Connector-adapters ✅ | Tool-invocation ✅ | PHASE_4_TROUBLESHOOTING.md ✅ | Performance tuning ⬜ | Additional E2E ⬜
 
 ---
 
@@ -246,7 +248,8 @@ Capture the following so the audit is reviewable:
 ### 4.5B — Optional (do not block sign-off)
 
 - [x] Recommended: `idempotency.test.ts`, `kill-switches.test.ts`
-- [ ] Other integration tests (orchestration, gateway, adapters)
+- [x] Other integration tests: `execution-flow.test.ts`, `connector-adapters.test.ts`, `tool-invocation.test.ts`
+- [ ] Orchestration-flow / gateway-integration (deferred; overlaps E2E script or requires real Gateway)
 - [x] Optional: `TESTING.md` entry point, `PHASE_4_TROUBLESHOOTING.md`
 - [ ] Performance tuning beyond minimal targets
 - [ ] Additional E2E coverage
@@ -277,7 +280,7 @@ All required items are done: docs (README, PHASE_4_ARCHITECTURE, PHASE_4_IMPLEME
 ### After sign-off
 
 - Phase 4 is production-ready; proceed to Phase 5 (if defined) or production deployment.
-- 4.5B (idempotency/kill-switch tests, troubleshooting guide, performance SLOs) can be done in parallel or later for hardening.
+- **4.5B done so far:** Idempotency and kill-switches integration tests, PHASE_4_TROUBLESHOOTING.md. Remaining optional: other integration tests (orchestration, gateway, adapters), performance tuning, additional E2E coverage.
 
 ---
 
