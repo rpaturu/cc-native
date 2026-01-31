@@ -379,6 +379,17 @@ jest.mock('@aws-sdk/credential-provider-node', () => {
   };
 });
 
+// Phase 4 execution handlers: required env so handler modules can load (requireEnv at top-level)
+process.env.AWS_REGION = process.env.AWS_REGION || 'us-east-1';
+process.env.EXECUTION_OUTCOMES_TABLE_NAME = process.env.EXECUTION_OUTCOMES_TABLE_NAME || 'test-outcomes';
+process.env.EXECUTION_ATTEMPTS_TABLE_NAME = process.env.EXECUTION_ATTEMPTS_TABLE_NAME || 'test-attempts';
+process.env.ACTION_INTENT_TABLE_NAME = process.env.ACTION_INTENT_TABLE_NAME || 'test-intents';
+process.env.LEDGER_TABLE_NAME = process.env.LEDGER_TABLE_NAME || 'test-ledger';
+process.env.SIGNALS_TABLE_NAME = process.env.SIGNALS_TABLE_NAME || 'test-signals';
+process.env.EVENT_BUS_NAME = process.env.EVENT_BUS_NAME || 'test-bus';
+process.env.ACTION_TYPE_REGISTRY_TABLE_NAME = process.env.ACTION_TYPE_REGISTRY_TABLE_NAME || 'test-registry';
+process.env.AGENTCORE_GATEWAY_URL = process.env.AGENTCORE_GATEWAY_URL || 'https://test.example.com';
+
 // Suppress console output during tests to avoid "● Console" blocks in Jest output.
 // Runs after setup file's own console usage. Tests that assert on console (e.g. Logger.test.ts)
 // can use jest.spyOn(console, 'warn') etc. and will override this noop.
