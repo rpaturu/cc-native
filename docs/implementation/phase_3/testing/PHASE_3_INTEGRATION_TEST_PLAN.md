@@ -309,13 +309,41 @@ Before/after: Check `cc-native-decision-budget`; `daily_remaining` should reset 
 
 ---
 
-## 5. Integration Test Script
+## 5. Jest HTTP Integration Suite (Decision API)
+
+**File:** `src/tests/integration/decision/decision-api.test.ts`
+
+**Purpose:** Contract tests against the real Decision API (API Gateway) over HTTP with `x-api-key` auth. Runs as part of `npm run test:integration` when env is set.
+
+**Required env (from .env after `./deploy`):**
+- `DECISION_API_URL` — API Gateway base URL (e.g. `https://xxx.execute-api.region.amazonaws.com/prod`)
+- `DECISION_API_KEY` — API key value (deploy script retrieves and writes to .env)
+
+**Skip:** Set `SKIP_DECISION_API_INTEGRATION=1` to skip this suite (e.g. CI without deployed API). If env is missing and skip is not set, the suite is skipped via `describe.skip`.
+
+**Tests:**
+- **POST /decisions/evaluate** — Returns 200 (not triggered), 202 (initiated), or 429 (budget exceeded); body has `message` and optional `reason` / `evaluation_id`.
+- **POST /decisions/evaluate** (invalid body) — Returns 4xx/5xx with error shape.
+- **GET /decisions/{evaluation_id}/status** — Returns 400 when x-tenant-id missing; 200 or 404 for known id.
+- **GET /accounts/{account_id}/decisions** — Returns 200 with `{ decisions }` array; 400 when x-tenant-id missing.
+- **Contract: API key required** — Returns 403 when x-api-key missing.
+
+**Run:**
+```bash
+npm run test:integration
+# Or only Decision API integration:
+npm test -- --testPathPattern="decision/decision-api"
+```
+
+---
+
+## 6. Integration Test Script (shell)
 
 See `scripts/phase_3/test-phase3-api.sh` for a comprehensive test script (DECISION_API_URL, DECISION_API_KEY, tenant/account IDs).
 
 ---
 
-## 6. Troubleshooting
+## 7. Troubleshooting
 
 **API Gateway 403:** Check API key, usage plan, throttling.
 
@@ -327,7 +355,7 @@ See `scripts/phase_3/test-phase3-api.sh` for a comprehensive test script (DECISI
 
 ---
 
-## 7. Success Criteria
+## 8. Success Criteria
 
 ✅ All API endpoints return expected responses  
 ✅ Bedrock calls succeed via VPC endpoint  

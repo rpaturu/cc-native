@@ -308,7 +308,25 @@ export async function approveActionHandler(event: APIGatewayProxyEvent): Promise
         edited_fields: intent.edited_fields
       }
     });
-    
+
+    // Publish ACTION_APPROVED to EventBridge so execution Step Functions starts (Phase 4).
+    // Contract: ExecutionInfrastructure rule matches detailType ACTION_APPROVED and passes
+    // $.detail.data.{ action_intent_id, tenant_id, account_id } to Step Functions.
+    await eventBridgeClient.send(new PutEventsCommand({
+      Entries: [{
+        Source: 'cc-native',
+        DetailType: 'ACTION_APPROVED',
+        Detail: JSON.stringify({
+          data: {
+            action_intent_id: intent.action_intent_id,
+            tenant_id: tenantId,
+            account_id: accountId,
+          },
+        }),
+        EventBusName: process.env.EVENT_BUS_NAME || 'cc-native-events',
+      }],
+    }));
+
     return addCorsHeaders({
       statusCode: 200,
       body: JSON.stringify({ intent })

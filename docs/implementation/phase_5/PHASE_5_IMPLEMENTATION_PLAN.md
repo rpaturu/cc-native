@@ -59,6 +59,19 @@ Phase 5 was reviewed at architecture level. The following **4 risks** and **3 up
 
 ---
 
+## 1.2) Zero Trust (Mandatory)
+
+Phase 5 **preserves and extends** the zero-trust posture established in Phase 2. All Phase 5 work must comply with:
+
+- **Reference:** [Phase 2 Zero Trust Implementation Plan](../phase_2/ZERO_TRUST_IMPLEMENTATION_PLAN.md) — network micro-segmentation, VPC endpoints, IAM conditions, audit logging, and security monitoring remain in effect.
+- **New resources:** Every new Lambda, API, DynamoDB table, or IAM role must follow **least privilege** (minimal permissions, tenant-scoped where applicable) and **auditability** (CloudWatch logs, ledger entries for autonomy decisions).
+- **Tenant isolation:** Phase 5.7 **Tenant Isolation Verification** is a zero-trust requirement: no cross-tenant data or cost bleed; IAM and DDB access scoped by tenant; logging must never include another tenant's PII. Verification (runbook or automated test) is required.
+- **Autonomy audit:** Auto-execute decisions, policy results, and budget consumption must be written to the ledger and available for "why did the system do this?" (EPIC 5.6).
+
+Do not implement Phase 5 features that bypass Phase 2 zero-trust controls or introduce unscoped cross-tenant access.
+
+---
+
 ## 2) New Capabilities Introduced
 
 ### 2.1 Autonomy Modes

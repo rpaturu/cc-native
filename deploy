@@ -231,6 +231,10 @@ INTERNAL_TASKS_TABLE_OUTPUT=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.Outpu
 DECISION_RUN_STATE_TABLE_OUTPUT=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="DecisionRunStateTableName") | .OutputValue')
 IDEMPOTENCY_STORE_TABLE_OUTPUT=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="IdempotencyStoreTableName") | .OutputValue')
 
+# Phase 5.3: Perception Scheduler table outputs
+PERCEPTION_SCHEDULER_TABLE_OUTPUT=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="PerceptionSchedulerTableName") | .OutputValue')
+PULL_IDEMPOTENCY_STORE_TABLE_OUTPUT=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="PullIdempotencyStoreTableName") | .OutputValue')
+
 # Retrieve API key value (required for API calls - API Gateway needs the actual key value, not just ID)
 if [ -n "$DECISION_API_KEY_ID_OUTPUT" ] && [ "$DECISION_API_KEY_ID_OUTPUT" != "null" ]; then
   echo "Retrieving API key value..."
@@ -317,6 +321,10 @@ INTERNAL_TASKS_TABLE_NAME=$INTERNAL_TASKS_TABLE_OUTPUT
 # DynamoDB Tables (Phase 5.2: Decision Scheduling)
 DECISION_RUN_STATE_TABLE_NAME=$DECISION_RUN_STATE_TABLE_OUTPUT
 IDEMPOTENCY_STORE_TABLE_NAME=$IDEMPOTENCY_STORE_TABLE_OUTPUT
+
+# DynamoDB Tables (Phase 5.3: Perception Scheduler)
+PERCEPTION_SCHEDULER_TABLE_NAME=$PERCEPTION_SCHEDULER_TABLE_OUTPUT
+PULL_IDEMPOTENCY_STORE_TABLE_NAME=$PULL_IDEMPOTENCY_STORE_TABLE_OUTPUT
 
 # Neptune (Phase 2)
 NEPTUNE_CLUSTER_ENDPOINT=$NEPTUNE_CLUSTER_ENDPOINT_OUTPUT

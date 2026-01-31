@@ -3,6 +3,7 @@
 *Always-On Autonomy (Controlled) + Learning Loop*
 
 **Status:** 🟡 **PLANNING**  
+**Progress:** 5.1, 5.2, 5.3 implemented (see sub-phase docs).  
 **Created:** 2026-01-28  
 **Last Updated:** 2026-01-28  
 **Parent:** [PHASE_5_OUTLINE.md](PHASE_5_OUTLINE.md) | [PHASE_5_IMPLEMENTATION_PLAN.md](PHASE_5_IMPLEMENTATION_PLAN.md)  
@@ -56,6 +57,9 @@ For detailed code-level plans, see:
 
 **Core principles & mandatory risks:**  
 Phase 5 must not violate the core principles in `PHASE_5_IMPLEMENTATION_PLAN.md` §1 (autonomy policy-driven, low-risk only, reversible/auditable, learning never policy, humans for high-risk). The four risks and three upgrades in §1.1 are **mandatory**: DecisionCostGate (pre-Phase-3), rich AutoApprovalPolicy output (reason + explanation), OutcomeTaxonomyV1, trust safeguards (explicit opt-in, autonomy budget, daily digest for Mode 4). Sub-phase plans must implement these.
+
+**Zero Trust:**  
+Phase 5 preserves and extends the zero-trust posture from Phase 2 ([ZERO_TRUST_IMPLEMENTATION_PLAN.md](../phase_2/ZERO_TRUST_IMPLEMENTATION_PLAN.md)). All new resources (Lambda, API, DDB, IAM) must follow least privilege and auditability. Phase 5.7 **Tenant Isolation Verification** is mandatory for zero trust (no cross-tenant data/cost; tenant-scoped access; no cross-tenant PII in logs).
 
 **Integration with Phase 4:**  
 - Auto-approval is evaluated **after** Phase 3 decision, **before** Phase 4 execution.  

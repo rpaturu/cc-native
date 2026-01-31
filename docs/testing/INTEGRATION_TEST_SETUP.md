@@ -255,3 +255,17 @@ npm test -- --testPathPattern="execution/execution-status-api"
 ```
 
 If the suite is skipped, ensure you have run `./deploy` at least once so `.env` includes the execution table names. To skip these tests (e.g. in CI without AWS), set `SKIP_EXECUTION_STATUS_API_INTEGRATION=1`. See **docs/implementation/phase_4/testing/PHASE_4_4_TEST_PLAN.md** for full details.
+
+## Integration test suites (current)
+
+As of the latest run, `npm run test:integration` runs **13 suites** and **60 tests**, including:
+
+- **Phase 0:** phase0.test.ts (tenant, evidence→state→snapshot, event→ledger, schema registry)
+- **Phase 2:** phase2.test.ts (graph materialization, synthesis, failure semantics, determinism)
+- **Methodology:** methodology.test.ts (workflow, supersession, autonomy tier cap)
+- **Phase 3:** decision-api.test.ts (HTTP contract tests for Decision API; POST /decisions/evaluate, GET status, GET account decisions; x-api-key auth)
+- **Phase 4 execution:** execution-flow, idempotency, kill-switches, connector-adapters, tool-invocation, execution-status-api, end-to-end-execution (placeholder)
+- **Phase 5.2:** decision-scheduling.test.ts (DecisionRunState, IdempotencyStore; env-gated)
+- **Phase 5.3:** perception-scheduler.test.ts (PullBudget, PullIdempotency; env-gated)
+
+Phase 3 Decision API suite requires `DECISION_API_URL` and `DECISION_API_KEY` (from `.env` after `./deploy`). Set `SKIP_DECISION_API_INTEGRATION=1` to skip. Phase 5.2/5.3 suites run when their table names are in `.env` (deploy writes them).

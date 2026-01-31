@@ -75,13 +75,19 @@ Phase 5.7 stabilizes the system for production:
 
 ---
 
-## 5. Tenant Isolation Verification
+## 5. Tenant Isolation Verification (Zero Trust)
 
-**Purpose:** Ensure no cross-tenant data or cost bleed (IAM, DDB access, logging).
+**Purpose:** Ensure no cross-tenant data or cost bleed — a **zero-trust** requirement. No identity or component may access another tenant's data or incur cost to another tenant.
 
-**Implementation:** IAM policies scoped by tenant where applicable; DDB PK always includes tenant_id; logging never includes other tenants' PII. Optional: automated check (e.g. integration test or script) that verifies tenant_id in all reads/writes for a given execution.
+**Zero-trust criteria:**
+- **IAM:** Roles and policies are tenant-scoped where applicable; no single role has broad cross-tenant access without explicit, auditable justification.
+- **DynamoDB:** Partition key (and sort key where relevant) always includes `tenant_id`; no query or scan without tenant scope.
+- **Logging:** Logs must never contain another tenant's PII or identifiers in clear text; use tenant_id only where needed for support, and redact in export.
+- **Execution/cost:** Execution traces, ledger entries, and cost attribution are keyed by tenant; autonomy budget and cost gates are per-tenant.
 
-**Acceptance:** All Phase 4/5 data access is tenant-scoped; verification runbook or test exists.
+**Implementation:** Apply the criteria above in Phase 4/5 code paths. Add an automated check (integration test or script) that, for a given execution, verifies tenant_id is present and consistent in all DDB reads/writes and that log samples do not leak other tenants' data.
+
+**Acceptance:** All Phase 4/5 data access is tenant-scoped; zero-trust criteria are documented and met; verification runbook or automated test exists.
 
 ---
 

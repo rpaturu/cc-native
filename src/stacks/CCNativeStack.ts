@@ -22,6 +22,7 @@ import { ExecutionInfrastructure } from './constructs/ExecutionInfrastructure';
 import { createExecutionInfrastructureConfig } from './constructs/ExecutionInfrastructureConfig';
 import { AutonomyInfrastructure } from './constructs/AutonomyInfrastructure';
 import { DecisionSchedulingInfrastructure } from './constructs/DecisionSchedulingInfrastructure';
+import { PerceptionSchedulerInfrastructure } from './constructs/PerceptionSchedulerInfrastructure';
 
 export interface CCNativeStackProps extends cdk.StackProps {
   // Add any custom props here
@@ -689,6 +690,13 @@ export class CCNativeStack extends cdk.Stack {
       eventBus: this.eventBus,
     });
 
+    // Phase 5.3: Perception Scheduler (heat, pull budget, pull idempotency, heat-scoring + pull-orchestrator Lambdas, EventBridge rules)
+    const perceptionSchedulerInfrastructure = new PerceptionSchedulerInfrastructure(this, 'PerceptionSchedulerInfrastructure', {
+      eventBus: this.eventBus,
+      accountPostureStateTable: graphIntelligenceHandlers.accountPostureStateTable,
+      signalsTable: this.signalsTable,
+    });
+
     // Stack Outputs
     // World Model S3 Buckets
     new cdk.CfnOutput(this, 'EvidenceLedgerBucketName', {
@@ -996,6 +1004,16 @@ export class CCNativeStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'IdempotencyStoreTableName', {
       value: decisionSchedulingInfrastructure.idempotencyStoreTable.tableName,
       description: 'DynamoDB table for RUN_DECISION idempotency',
+    });
+
+    // Phase 5.3: Perception Scheduler
+    new cdk.CfnOutput(this, 'PerceptionSchedulerTableName', {
+      value: perceptionSchedulerInfrastructure.perceptionSchedulerTable.tableName,
+      description: 'DynamoDB table for perception heat and pull budget (Phase 5.3)',
+    });
+    new cdk.CfnOutput(this, 'PullIdempotencyStoreTableName', {
+      value: perceptionSchedulerInfrastructure.pullIdempotencyStoreTable.tableName,
+      description: 'DynamoDB table for pull job idempotency (Phase 5.3)',
     });
   }
 

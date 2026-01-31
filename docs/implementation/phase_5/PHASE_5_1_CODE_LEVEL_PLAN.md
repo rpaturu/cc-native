@@ -1,6 +1,6 @@
 # Phase 5.1 — Autonomy Modes & Policy: Code-Level Plan
 
-**Status:** 🟡 **PLANNING**  
+**Status:** 🟢 **IMPLEMENTED**  
 **Created:** 2026-01-28  
 **Last Updated:** 2026-01-28  
 **Parent:** [PHASE_5_CODE_LEVEL_PLAN.md](PHASE_5_CODE_LEVEL_PLAN.md)
@@ -71,14 +71,16 @@ export interface AutoApprovalPolicyResultV1 {
 ```typescript
 export interface AutoApprovalPolicyInputV1 {
   action_type: string;
-  confidence_score: number;  // from Phase 3; not learned in Phase 5
-  risk_level: string;         // from Phase 3 / tenant
+  confidence_score: number;  // from Phase 3; not learned in Phase 5; range 0–1
+  risk_level: string;         // from Phase 3 / tenant; use canonical enum (e.g. LOW, MEDIUM, HIGH)
   lifecycle_state?: string;
   tenant_id: string;
   account_id: string;
   autonomy_mode: AutonomyMode; // from AutonomyModeConfigV1
 }
 ```
+
+**Policy input normalization:** Use canonical `confidence_score` range (e.g. 0–1) and `risk_level` enum (source: Phase 3 or tenant policy) to avoid stringly-typed drift.
 
 **AutonomyBudgetV1** (config) and **AutonomyBudgetStateV1** (runtime state)
 
@@ -132,7 +134,7 @@ export interface AutonomyBudgetStateV1 {
 
 **File:** `src/services/autonomy/AutonomyModeService.ts`
 
-- `getMode(tenantId: string, accountId: string, actionType: string): Promise<AutonomyMode>` — resolve effective mode (account override → tenant default → global default).
+- `getMode(tenantId: string, accountId: string, actionType: string): Promise<AutonomyMode>` — resolve effective mode by **precedence** (first match wins): (1) account + action_type, (2) tenant + action_type, (3) account + DEFAULT, (4) tenant + DEFAULT, (5) global default. **If no config is found at any level, default to APPROVAL_REQUIRED** (never silent AUTO_EXECUTE).
 - `putConfig(item: AutonomyModeConfigV1): Promise<void>` — write config; ledger event for audit.
 - `listConfigs(tenantId: string, accountId?: string): Promise<AutonomyModeConfigV1[]>`.
 
@@ -140,7 +142,7 @@ export interface AutonomyBudgetStateV1 {
 
 **File:** `src/services/autonomy/AutoApprovalPolicyEngine.ts` (or Lambda/OPA wrapper)
 
-- `evaluate(input: AutoApprovalPolicyInputV1): Promise<AutoApprovalPolicyResultV1>` — deterministic; same input → same output.
+- `evaluate(input: AutoApprovalPolicyInputV1): Promise<AutoApprovalPolicyResultV1>` — deterministic; same input → same output. **AutoApprovalPolicyEngine must be pure and side-effect free** (no state writes inside policy evaluation).
 - Policy must return **reason** and **explanation** for BLOCK and REQUIRE_APPROVAL.
 - Policy is versioned and kill-switchable (e.g. feature flag or policy version routing).
 
@@ -148,7 +150,7 @@ export interface AutonomyBudgetStateV1 {
 
 **File:** `src/services/autonomy/AutonomyBudgetService.ts`
 
-- `checkAndConsume(tenantId: string, accountId: string, actionType: string): Promise<boolean>` — check config limits and current day state; if under limit, increment and return true; else false. Enforced **after** policy returns AUTO_EXECUTE, **before** Phase 4 execution.
+- `checkAndConsume(tenantId: string, accountId: string, actionType: string): Promise<boolean>` — check config limits and current day state; if under limit, increment and return true; else false. Enforced **after** policy returns AUTO_EXECUTE, **before** Phase 4 execution. **Must use conditional write / atomic counter** (e.g. DynamoDB conditional update or atomic increment); no read-modify-write without condition — otherwise parallel executions can overspend budget.
 - `getConfig(tenantId: string, accountId: string): Promise<AutonomyBudgetV1 | null>`.
 - `putConfig(config: AutonomyBudgetV1): Promise<void>`.
 - Optional: decay logic for unused budget (per config).
@@ -168,6 +170,8 @@ export interface AutonomyBudgetStateV1 {
 - **Endpoints:** CRUD for autonomy mode config; CRUD for autonomy budget config; list by tenant/account.
 - **Auth:** Admin-only (e.g. Cognito group or API key).
 - **Location:** API Gateway + Lambda in cc-native; UI in cc-dealmind consumes these APIs.
+- **Handler:** `src/handlers/phase5/autonomy-admin-api-handler.ts`. Routes: OPTIONS, GET/PUT `/config`, GET/PUT `/budget`, GET `/budget/state`. Tenant/account from `queryStringParameters` or `X-Tenant-Id` header.
+- **Error handling:** All async route calls (listConfig, putConfig, getBudget, putBudget, getBudgetState) are **awaited** inside the handler's try block so rejections are caught; on any thrown error the handler returns 500 with body `{ error: "Internal server error" }` and does not leak stack or internal messages.
 
 ---
 
@@ -178,13 +182,15 @@ export interface AutonomyBudgetStateV1 {
   1. Resolve AutonomyModeConfigV1 for tenant/account/action_type.
   2. Call AutoApprovalPolicyEngine.evaluate(AutoApprovalPolicyInputV1).
   3. If decision === BLOCK or REQUIRE_APPROVAL → route to human approval or block; store reason + explanation for UI/audit.
-  4. If decision === AUTO_EXECUTE → call AutonomyBudgetService.checkAndConsume; if false, treat as REQUIRE_APPROVAL or defer; if true, proceed to Phase 4 execution (skip human approval path).
+  4. If decision === AUTO_EXECUTE → call AutonomyBudgetService.checkAndConsume; **if false, treat as REQUIRE_APPROVAL** (route to human approval; do not silently defer). If true, proceed to Phase 4 execution (skip human approval path).
 
 ---
 
-## 6. Test Strategy (placeholder)
+## 6. Test Strategy
 
-Unit tests for AutonomyModeService, AutoApprovalPolicyEngine, AutonomyBudgetService. Integration tests for policy + budget enforcement with real DDB (optional; skip with env flag). Formal test plan created after implementation.
+See **[PHASE_5_1_TEST_PLAN.md](testing/PHASE_5_1_TEST_PLAN.md)** for unit tests (AutoApprovalPolicyEngine ✅, AutonomyModeService, AutonomyBudgetService, autonomy-admin-api-handler) and optional integration tests (policy + budget with real DDB, env-gated).
+
+**Implementation:** Handler tests invoke via `handler(event, context, callback)` (or a wrapper that returns the result) and assert that when a service throws, the response is 500 with a safe body (no stack or internal error text).
 
 ---
 
