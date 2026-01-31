@@ -192,6 +192,24 @@ These improve clarity and safety; you can ship 5.6 without them and add later.
 
 ---
 
+## 8. Verification: deployment reality (last two checks)
+
+Before declaring Phase 5 “operationally ready,” confirm:
+
+### 1) Export authorization is owner-scoped
+
+**Implemented:** `GET /autonomy/audit/exports/:export_id` uses `tenantId` (resolved from auth, then query/header fallback) and calls `AuditExportService.getJob(exportId, tenantId)`. Jobs are keyed by `pk = TENANT#tenantId`, and `getJob` returns `null` if the item’s `tenant_id` does not match the supplied `tenantId`. So only the tenant that owns the export can see it when `tenantId` comes from auth.
+
+**Production tightening:** For strict owner-scope, use **auth-only** for Control Center routes: do not accept `tenant_id` from query or `X-Tenant-Id` header for audit export GET (or return 401 when `resolveTenantFromAuth(event)` is null). The current fallback is for dev/local; lock to JWT-derived tenant in production.
+
+### 2) JWT claim key is standardized
+
+**Implemented:** `resolveTenantFromAuth` (in `autonomy-control-center-routes.ts`) resolves tenant in this order: (1) `authorizer.claims['custom:tenant_id']`, (2) `authorizer.tenantId`. Cognito custom attributes use the claim key **`custom:tenant_id`**; that is the canonical key. `authorizer.tenantId` is a fallback for custom authorizers that inject tenant at the authorizer level.
+
+**Alignment:** cc-dealmind (and any other callers) should send JWTs that include **`custom:tenant_id`** so all environments use the same claim. Document in cc-dealmind that the Autonomy API expects `custom:tenant_id` in the JWT. Optionally remove the `authorizer.tenantId` fallback for production to avoid ambiguity.
+
+---
+
 ## References
 
 - Parent: [PHASE_5_CODE_LEVEL_PLAN.md](PHASE_5_CODE_LEVEL_PLAN.md)

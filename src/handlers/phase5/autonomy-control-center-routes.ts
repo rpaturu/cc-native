@@ -9,6 +9,11 @@ import type { LedgerExplanationService } from '../../services/autonomy/LedgerExp
 import type { AuditExportService } from '../../services/autonomy/AuditExportService';
 import type { LedgerExplanationV1 } from '../../types/phase5/ControlCenterTypes';
 
+/**
+ * Resolves tenant_id from JWT/authorizer. Canonical claim: custom:tenant_id (Cognito custom attribute).
+ * Fallback: authorizer.tenantId (for custom authorizers). Production should use auth-only; do not
+ * rely on query/header tenant_id for Control Center (audit export, ledger explanation) authorization.
+ */
 export function resolveTenantFromAuth(event: { requestContext?: { authorizer?: unknown } }): string | null {
   const auth = event.requestContext?.authorizer as Record<string, unknown> | undefined;
   if (!auth) return null;
