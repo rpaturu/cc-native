@@ -77,8 +77,8 @@ npm run build
 # Run unit tests before deployment (unless skipped)
 if [ "$SKIP_UNIT_TESTS" = false ]; then
   echo ""
-  echo "🧪 Running unit tests..."
-  if npm test; then
+  echo "🧪 Running unit tests (with --detectOpenHandles to surface leaks)..."
+  if npx jest --testPathIgnorePatterns=integration --detectOpenHandles; then
     echo "✅ All unit tests passed"
   else
     echo "❌ Unit tests failed - deployment aborted"

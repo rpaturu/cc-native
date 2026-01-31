@@ -42,25 +42,26 @@ jest.mock('@aws-sdk/client-cognito-identity-provider', () => ({
 // Mock axios.post so gateway call returns valid MCP response; keep real axios exports (e.g. AxiosError) for other tests
 jest.mock('axios', () => {
   const actual = jest.requireActual<typeof import('axios')>('axios');
+  const postMock = jest.fn().mockResolvedValue({
+    data: {
+      result: {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              success: true,
+              external_object_refs: [{ object_id: 'mock-id', object_type: 'Task' }],
+            }),
+          },
+        ],
+      },
+    },
+  });
   return {
     ...actual,
     default: {
       ...actual.default,
-      post: jest.fn().mockResolvedValue({
-        data: {
-          result: {
-            content: [
-              {
-                type: 'text',
-                text: JSON.stringify({
-                  success: true,
-                  external_object_refs: [{ object_id: 'mock-id', object_type: 'Task' }],
-                }),
-              },
-            ],
-          },
-        },
-      }),
+      post: postMock,
     },
   };
 });
@@ -564,10 +565,9 @@ describe('ToolInvokerHandler - Error Classification', () => {
   });
 });
 
-describe('ToolInvokerHandler - Handler invocation (integration)', () => {
+describe('ToolInvokerHandler - Handler invocation', () => {
   /**
    * Valid Step Functions input (same shape as MapActionToTool output).
-   * Used to invoke the real handler so we hit getJwtToken and catch "JWT not implemented".
    */
   const validStepFunctionsEvent = {
     gateway_url: 'https://gateway.example.com',
@@ -654,4 +654,21 @@ describe('ToolInvokerHandler - Handler invocation (integration)', () => {
       if (orig.COGNITO_SERVICE_PASSWORD) process.env.COGNITO_SERVICE_PASSWORD = orig.COGNITO_SERVICE_PASSWORD;
     }
   });
+
+  it('throws ValidationError when Step Functions input is invalid (missing gateway_url)', async () => {
+    const invalidEvent = {
+      tool_name: 'create_task',
+      tool_arguments: {},
+      idempotency_key: 'key-1',
+      action_intent_id: 'intent-1',
+      tenant_id: 'tenant-1',
+      account_id: 'account-1',
+      trace_id: 'trace-1',
+    };
+    await expect(handler(invalidEvent as any, {} as any, jest.fn())).rejects.toMatchObject({
+      name: 'ValidationError',
+      message: expect.stringContaining('Invalid Step Functions input'),
+    });
+  });
+
 });

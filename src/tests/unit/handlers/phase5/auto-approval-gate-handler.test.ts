@@ -18,8 +18,9 @@ jest.mock('@aws-sdk/lib-dynamodb', () => ({
   },
 }));
 
+const mockEventBridgeSend = jest.fn();
 jest.mock('@aws-sdk/client-eventbridge', () => ({
-  EventBridgeClient: jest.fn().mockImplementation(() => ({ send: jest.fn() })),
+  EventBridgeClient: jest.fn().mockImplementation(() => ({ send: mockEventBridgeSend })),
   PutEventsCommand: jest.fn(),
 }));
 
@@ -55,8 +56,9 @@ jest.mock('../../../../services/autonomy/AutonomyBudgetService', () => ({
   AutonomyBudgetService: jest.fn().mockImplementation(() => ({ checkAndConsume: mockCheckAndConsume })),
 }));
 
+const mockEvaluatePolicy = jest.fn();
 jest.mock('../../../../services/autonomy/AutoApprovalPolicyEngine', () => ({
-  evaluateAutoApprovalPolicy: jest.fn(),
+  evaluateAutoApprovalPolicy: (...args: unknown[]) => mockEvaluatePolicy(...args),
 }));
 
 import type { AutoApprovalGateResponse } from '../../../../handlers/phase5/auto-approval-gate-handler';
@@ -137,5 +139,151 @@ describe('auto-approval-gate-handler', () => {
     expect(result.result).toBe('REQUIRE_APPROVAL');
     expect(result.reason).toBe('ACTION_TYPE_NOT_ALLOWLISTED');
     expect(mockGetMode).not.toHaveBeenCalled();
+  });
+
+  it('returns REQUIRE_APPROVAL with CONFIG_MISSING when table env unset', async () => {
+    const orig = process.env.AUTONOMY_CONFIG_TABLE_NAME;
+    delete process.env.AUTONOMY_CONFIG_TABLE_NAME;
+    jest.resetModules();
+    const mod = require('../../../../handlers/phase5/auto-approval-gate-handler');
+    const h = mod.handler;
+    try {
+      const result = (await h(
+        { action_intent_id: 'ai_1', tenant_id: 't1', account_id: 'a1' },
+        mockContext,
+        jest.fn()
+      )) as AutoApprovalGateResponse;
+      assertResponse(result);
+      expect(result.result).toBe('REQUIRE_APPROVAL');
+      expect(result.reason).toBe('CONFIG_MISSING');
+    } finally {
+      if (orig !== undefined) process.env.AUTONOMY_CONFIG_TABLE_NAME = orig;
+      else process.env.AUTONOMY_CONFIG_TABLE_NAME = 'test-autonomy-config';
+      jest.resetModules();
+      const mod2 = require('../../../../handlers/phase5/auto-approval-gate-handler');
+      handler = mod2.handler;
+    }
+  });
+
+  const intent = {
+    action_intent_id: 'ai_1',
+    action_type: 'REQUEST_RENEWAL_MEETING',
+    tenant_id: 't1',
+    account_id: 'a1',
+  };
+
+  it('returns REQUIRE_APPROVAL when policy does not allow auto-execute', async () => {
+    mockGetIntent.mockResolvedValue(intent);
+    mockIsAllowlisted.mockResolvedValue(true);
+    mockGetMode.mockResolvedValue('FULL');
+    mockEvaluatePolicy.mockReturnValue({ decision: 'REQUIRE_APPROVAL', reason: 'LOW_CONFIDENCE' });
+    const result = (await handler(
+      { action_intent_id: 'ai_1', tenant_id: 't1', account_id: 'a1' },
+      mockContext,
+      jest.fn()
+    )) as AutoApprovalGateResponse;
+    assertResponse(result);
+    expect(result.result).toBe('REQUIRE_APPROVAL');
+    expect(result.reason).toBe('LOW_CONFIDENCE');
+  });
+
+  it('returns AUTO_EXECUTED with already_published when state is PUBLISHED', async () => {
+    mockGetIntent.mockResolvedValue(intent);
+    mockIsAllowlisted.mockResolvedValue(true);
+    mockGetMode.mockResolvedValue('FULL');
+    mockEvaluatePolicy.mockReturnValue({ decision: 'AUTO_EXECUTE' });
+    mockGetState.mockResolvedValue({ status: 'PUBLISHED' });
+    const result = (await handler(
+      { action_intent_id: 'ai_1', tenant_id: 't1', account_id: 'a1' },
+      mockContext,
+      jest.fn()
+    )) as AutoApprovalGateResponse;
+    assertResponse(result);
+    expect(result.result).toBe('AUTO_EXECUTED');
+    expect(result.already_published).toBe(true);
+    expect(mockCheckAndConsume).not.toHaveBeenCalled();
+  });
+
+  it('returns AUTO_EXECUTED when state is RESERVED (retry publish)', async () => {
+    mockGetIntent.mockResolvedValue(intent);
+    mockIsAllowlisted.mockResolvedValue(true);
+    mockGetMode.mockResolvedValue('FULL');
+    mockEvaluatePolicy.mockReturnValue({ decision: 'AUTO_EXECUTE' });
+    mockGetState.mockResolvedValue({ status: 'RESERVED' });
+    mockEventBridgeSend.mockResolvedValue({});
+    mockSetPublished.mockResolvedValue(undefined);
+    const result = (await handler(
+      { action_intent_id: 'ai_1', tenant_id: 't1', account_id: 'a1' },
+      mockContext,
+      jest.fn()
+    )) as AutoApprovalGateResponse;
+    assertResponse(result);
+    expect(result.result).toBe('AUTO_EXECUTED');
+    expect(mockEventBridgeSend).toHaveBeenCalled();
+    expect(mockSetPublished).toHaveBeenCalledWith('ai_1');
+  });
+
+  it('returns REQUIRE_APPROVAL with BUDGET_EXCEEDED when checkAndConsume returns false', async () => {
+    mockGetIntent.mockResolvedValue(intent);
+    mockIsAllowlisted.mockResolvedValue(true);
+    mockGetMode.mockResolvedValue('FULL');
+    mockEvaluatePolicy.mockReturnValue({ decision: 'AUTO_EXECUTE' });
+    mockGetState.mockResolvedValue(null);
+    mockCheckAndConsume.mockResolvedValue(false);
+    const result = (await handler(
+      { action_intent_id: 'ai_1', tenant_id: 't1', account_id: 'a1' },
+      mockContext,
+      jest.fn()
+    )) as AutoApprovalGateResponse;
+    assertResponse(result);
+    expect(result.result).toBe('REQUIRE_APPROVAL');
+    expect(result.reason).toBe('BUDGET_EXCEEDED');
+  });
+
+  it('returns AUTO_EXECUTED on happy path (reserve, publish)', async () => {
+    mockGetIntent.mockResolvedValue(intent);
+    mockIsAllowlisted.mockResolvedValue(true);
+    mockGetMode.mockResolvedValue('FULL');
+    mockEvaluatePolicy.mockReturnValue({ decision: 'AUTO_EXECUTE' });
+    mockGetState.mockResolvedValue(null);
+    mockCheckAndConsume.mockResolvedValue(true);
+    mockSetReserved.mockResolvedValue(undefined);
+    mockEventBridgeSend.mockResolvedValue({});
+    mockSetPublished.mockResolvedValue(undefined);
+    const result = (await handler(
+      { action_intent_id: 'ai_1', tenant_id: 't1', account_id: 'a1' },
+      mockContext,
+      jest.fn()
+    )) as AutoApprovalGateResponse;
+    assertResponse(result);
+    expect(result.result).toBe('AUTO_EXECUTED');
+    expect(mockSetReserved).toHaveBeenCalledWith('ai_1');
+    expect(mockEventBridgeSend).toHaveBeenCalled();
+    expect(mockSetPublished).toHaveBeenCalledWith('ai_1');
+  });
+
+  it('returns AUTO_EXECUTED when setReserved throws ConditionalCheckFailed and state is RESERVED (retry publish)', async () => {
+    mockGetIntent.mockResolvedValue(intent);
+    mockIsAllowlisted.mockResolvedValue(true);
+    mockGetMode.mockResolvedValue('FULL');
+    mockEvaluatePolicy.mockReturnValue({ decision: 'AUTO_EXECUTE' });
+    mockGetState
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ status: 'RESERVED' });
+    mockCheckAndConsume.mockResolvedValue(true);
+    const conditionalError = new Error('Conditional check failed');
+    (conditionalError as any).name = 'ConditionalCheckFailedException';
+    mockSetReserved.mockRejectedValueOnce(conditionalError);
+    mockEventBridgeSend.mockResolvedValue({});
+    mockSetPublished.mockResolvedValue(undefined);
+    const result = (await handler(
+      { action_intent_id: 'ai_1', tenant_id: 't1', account_id: 'a1' },
+      mockContext,
+      jest.fn()
+    )) as AutoApprovalGateResponse;
+    assertResponse(result);
+    expect(result.result).toBe('AUTO_EXECUTED');
+    expect(mockEventBridgeSend).toHaveBeenCalled();
+    expect(mockSetPublished).toHaveBeenCalledWith('ai_1');
   });
 });
