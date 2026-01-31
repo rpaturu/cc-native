@@ -6,6 +6,7 @@
 
 import * as cdk from 'aws-cdk-lib';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
+import * as events from 'aws-cdk-lib/aws-events';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as lambdaNodejs from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
@@ -19,6 +20,9 @@ import {
 export interface AutonomyInfrastructureProps {
   readonly config?: AutonomyInfrastructureConfig;
   readonly userPool?: cognito.IUserPool;
+  /** Phase 5.4: When set, creates auto-approval-gate Lambda (needs action intent table + event bus). */
+  readonly actionIntentTable?: dynamodb.Table;
+  readonly eventBus?: events.IEventBus;
 }
 
 export class AutonomyInfrastructure extends Construct {
@@ -26,6 +30,8 @@ export class AutonomyInfrastructure extends Construct {
   public readonly autonomyBudgetStateTable: dynamodb.Table;
   public readonly autonomyAdminApiHandler: lambda.Function;
   public readonly autonomyApi: apigateway.RestApi;
+  /** Phase 5.4: Auto-approval gate Lambda (created when actionIntentTable + eventBus are provided). */
+  public readonly autoApprovalGateHandler?: lambda.Function;
 
   constructor(
     scope: Construct,
@@ -48,6 +54,7 @@ export class AutonomyInfrastructure extends Construct {
         pointInTimeRecoverySpecification: {
           pointInTimeRecoveryEnabled: true,
         },
+        timeToLiveAttribute: 'ttl', // Phase 5.4: AUTO_EXEC_STATE items (30–90 days)
       }
     );
 
@@ -131,5 +138,32 @@ export class AutonomyInfrastructure extends Construct {
 
     const budgetStateResource = budgetResource.addResource('state');
     budgetStateResource.addMethod('GET', integration, methodOptions);
+
+    // Phase 5.4: Auto-approval gate Lambda (invoked with action_intent_id, tenant_id, account_id)
+    if (props.actionIntentTable && props.eventBus) {
+      const gateHandler = new lambdaNodejs.NodejsFunction(
+        this,
+        'AutoApprovalGateHandler',
+        {
+          functionName: config.functionNames.autoApprovalGate,
+          entry: 'src/handlers/phase5/auto-approval-gate-handler.ts',
+          handler: 'handler',
+          runtime: lambda.Runtime.NODEJS_20_X,
+          timeout: cdk.Duration.seconds(config.defaults.timeoutSeconds),
+          memorySize: config.defaults.memorySize,
+          environment: {
+            AUTONOMY_CONFIG_TABLE_NAME: this.autonomyConfigTable.tableName,
+            AUTONOMY_BUDGET_STATE_TABLE_NAME: this.autonomyBudgetStateTable.tableName,
+            ACTION_INTENT_TABLE_NAME: props.actionIntentTable.tableName,
+            EVENT_BUS_NAME: props.eventBus.eventBusName,
+          },
+        }
+      );
+      this.autonomyConfigTable.grantReadWriteData(gateHandler);
+      this.autonomyBudgetStateTable.grantReadWriteData(gateHandler);
+      props.actionIntentTable.grantReadData(gateHandler);
+      props.eventBus.grantPutEventsTo(gateHandler);
+      this.autoApprovalGateHandler = gateHandler;
+    }
   }
 }

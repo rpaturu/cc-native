@@ -10,6 +10,7 @@ export interface AutonomyInfrastructureConfig {
   };
   readonly functionNames: {
     readonly autonomyAdminApi: string;
+    readonly autoApprovalGate: string;
   };
   readonly apiGateway: {
     readonly restApiName: string;
@@ -28,6 +29,7 @@ export const DEFAULT_AUTONOMY_INFRASTRUCTURE_CONFIG: AutonomyInfrastructureConfi
   },
   functionNames: {
     autonomyAdminApi: 'cc-native-autonomy-admin-api',
+    autoApprovalGate: 'cc-native-auto-approval-gate',
   },
   apiGateway: {
     restApiName: 'cc-native-autonomy-admin-api',

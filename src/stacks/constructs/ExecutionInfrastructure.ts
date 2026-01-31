@@ -838,6 +838,8 @@ export class ExecutionInfrastructure extends Construct {
         action_intent_id: events.EventField.fromPath('$.detail.data.action_intent_id'),
         tenant_id: events.EventField.fromPath('$.detail.data.tenant_id'),
         account_id: events.EventField.fromPath('$.detail.data.account_id'),
+        approval_source: events.EventField.fromPath('$.detail.data.approval_source'),
+        auto_executed: events.EventField.fromPath('$.detail.data.auto_executed'),
       }),
     }));
     

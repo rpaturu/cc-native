@@ -680,9 +680,11 @@ export class CCNativeStack extends cdk.Stack {
       accountsResource,
     });
 
-    // Phase 5.1: Autonomy Infrastructure (autonomy config, budget, admin API)
+    // Phase 5.1 + 5.4: Autonomy Infrastructure (autonomy config, budget, admin API, auto-approval gate)
     const autonomyInfrastructure = new AutonomyInfrastructure(this, 'AutonomyInfrastructure', {
       userPool: this.userPool,
+      actionIntentTable: this.actionIntentTable,
+      eventBus: this.eventBus,
     });
 
     // Phase 5.2: Decision Scheduling (CostGate, RunState, IdempotencyStore, Requeue)

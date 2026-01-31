@@ -118,6 +118,10 @@ export interface ActionOutcomeV1 {
   tenant_id: string;
   account_id: string;
   trace_id: string;
+
+  // Phase 5.4: Approval source and auto-execute flag (immutable once written)
+  approval_source?: 'HUMAN' | 'POLICY';
+  auto_executed?: boolean;
   
   // TTL
   ttl?: number; // completed_at + 90 days (epoch seconds)

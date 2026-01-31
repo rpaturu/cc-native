@@ -321,6 +321,8 @@ export async function approveActionHandler(event: APIGatewayProxyEvent): Promise
             action_intent_id: intent.action_intent_id,
             tenant_id: tenantId,
             account_id: accountId,
+            approval_source: 'HUMAN',
+            auto_executed: false,
           },
         }),
         EventBusName: process.env.EVENT_BUS_NAME || 'cc-native-events',

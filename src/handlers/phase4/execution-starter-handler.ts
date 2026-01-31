@@ -80,7 +80,7 @@ export function createHandler(
     throw error;
   }
   
-  const { action_intent_id, tenant_id, account_id } = validationResult.data;
+  const { action_intent_id, tenant_id, account_id, approval_source, auto_executed } = validationResult.data;
   
     // Generate execution trace ID (single trace for entire execution lifecycle)
     // This is separate from decision trace_id - execution has its own trace for debugging
@@ -172,7 +172,7 @@ export function createHandler(
         },
       });
       
-      // 6. Return for Step Functions (include registry_version, attempt_count, started_at for downstream handlers)
+      // 6. Return for Step Functions (include registry_version, attempt_count, started_at, approval_source, auto_executed for downstream handlers)
       return {
         action_intent_id,
         idempotency_key: idempotencyKey,
@@ -182,6 +182,8 @@ export function createHandler(
         registry_version: toolMapping.registry_version, // Pass to downstream handlers
         attempt_count: attempt.attempt_count,
         started_at: attempt.started_at,
+        approval_source,
+        auto_executed,
       };
     } catch (error: any) {
       logger.error('Execution starter failed', { 

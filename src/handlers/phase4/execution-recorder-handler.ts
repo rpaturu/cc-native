@@ -129,6 +129,8 @@ export const handler: Handler = async (event: unknown) => {
     tenant_id,
     account_id,
     trace_id, // execution_trace_id (from starter handler)
+    approval_source,
+    auto_executed,
     tool_invocation_response,
     tool_name,
     tool_schema_version,
@@ -145,7 +147,7 @@ export const handler: Handler = async (event: unknown) => {
     // Phase 4.1 ExecutionAttempt uses these exact values, so this is correct
     const status = tool_invocation_response.success ? 'SUCCEEDED' : 'FAILED';
     
-    // 1. Record outcome (include registry_version for audit and backwards compatibility)
+    // 1. Record outcome (include registry_version, approval_source, auto_executed for audit and Phase 5.4)
     const outcome = await executionOutcomeService.recordOutcome({
       action_intent_id,
       status,
@@ -165,6 +167,8 @@ export const handler: Handler = async (event: unknown) => {
       tenant_id,
       account_id,
       trace_id, // execution_trace_id (from starter handler), not decision_trace_id
+      approval_source,
+      auto_executed,
     });
     
     // 2. Update execution attempt status

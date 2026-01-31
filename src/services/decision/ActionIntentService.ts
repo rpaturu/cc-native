@@ -61,7 +61,10 @@ export class ActionIntentService {
       // Phase 4: Registry version (required for deterministic execution)
       // TODO: Phase 3 needs to be updated to fetch registry_version from ActionTypeRegistryService
       // For now, defaulting to 1 (will be properly populated when Phase 3 is updated)
-      registry_version: 1 // TODO: Get from ActionTypeRegistryService.getToolMapping(action_type)?.registry_version
+      registry_version: 1, // TODO: Get from ActionTypeRegistryService.getToolMapping(action_type)?.registry_version
+      // Phase 5.4: Optional; used by auto-approval policy when gate runs on this intent
+      confidence_score: proposal.confidence,
+      risk_level: proposal.risk_level,
     };
     
     // Validate provenance invariant (original_proposal_id == original_decision_id)

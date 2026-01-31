@@ -542,6 +542,9 @@ export interface ActionIntentV1 {
   registry_version: number; // REQUIRED: Registry version used at decision time
   // This locks the mapping used for execution, preventing silent behavioral drift
   // Phase 3 must populate this when creating ActionIntentV1
+  // Phase 5.4: Optional; used by auto-approval policy (confidence 0–1, risk from proposal)
+  confidence_score?: number;
+  risk_level?: string; // MINIMAL | LOW | MEDIUM | HIGH
 }
 
 /**

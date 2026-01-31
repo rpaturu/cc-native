@@ -66,3 +66,25 @@ export interface AutonomyBudgetStateV1 {
   count: number;
   updated_at: string;
 }
+
+/** Phase 5.4: Allowlist of action_type values that may auto-execute (hard stop before policy/budget). */
+export interface AutoExecuteAllowListV1 {
+  pk: string; // TENANT#<tenant_id> or TENANT#<tenant_id>#ACCOUNT#<account_id>
+  sk: string; // ALLOWLIST#AUTO_EXEC
+  tenant_id: string;
+  account_id?: string;
+  action_types: string[]; // action_type values allowed for auto-execute
+  updated_at: string;
+}
+
+/** Phase 5.4: Auto-exec state for idempotency (no double budget consume under retries). */
+export type AutoExecStateStatus = 'RESERVED' | 'PUBLISHED';
+
+export interface AutoExecStateV1 {
+  pk: string; // AUTO_EXEC_STATE
+  sk: string; // <action_intent_id>
+  action_intent_id: string;
+  status: AutoExecStateStatus;
+  updated_at: string;
+  ttl: number; // epoch seconds; 30–90 days for audit
+}
