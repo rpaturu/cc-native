@@ -32,6 +32,7 @@ describe('PlanOrchestratorService', () => {
 
   const mockRepo = {
     listPlansByTenantAndStatus: jest.fn(),
+    listActivePlansForAccountAndType: jest.fn(),
     getPlan: jest.fn(),
     updateStepStatus: jest.fn(),
   };
@@ -66,6 +67,7 @@ describe('PlanOrchestratorService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockGetPlanTypeConfig.mockReturnValue({ max_retries_per_step: 3 });
+    mockRepo.listActivePlansForAccountAndType.mockResolvedValue([]);
   });
 
   describe('runCycle', () => {
@@ -75,6 +77,7 @@ describe('PlanOrchestratorService', () => {
         (_t: string, status: string) =>
           Promise.resolve(status === 'APPROVED' ? [approvedPlan] : [])
       );
+      mockRepo.listActivePlansForAccountAndType.mockResolvedValue([]);
       mockGate.evaluateCanActivate.mockResolvedValue({ can_activate: true, reasons: [] });
 
       const result = await orchestrator().runCycle('t1');
@@ -83,12 +86,13 @@ describe('PlanOrchestratorService', () => {
       expect(mockLifecycle.transition).toHaveBeenCalledWith(approvedPlan, 'ACTIVE');
     });
 
-    it('does not activate when can_activate false', async () => {
-      const approvedPlan = plan({ plan_status: 'APPROVED', steps: [] });
+    it('does not activate when can_activate false and writes PLAN_ACTIVATION_REJECTED ledger event', async () => {
+      const approvedPlan = plan({ plan_id: 'p1', plan_status: 'APPROVED', steps: [] });
       mockRepo.listPlansByTenantAndStatus.mockImplementation(
         (_t: string, status: string) =>
           Promise.resolve(status === 'APPROVED' ? [approvedPlan] : [])
       );
+      mockRepo.listActivePlansForAccountAndType.mockResolvedValue(['other-active-id']);
       mockGate.evaluateCanActivate.mockResolvedValue({
         can_activate: false,
         reasons: [{ code: 'CONFLICT_ACTIVE_PLAN', message: 'x' }],
@@ -98,6 +102,35 @@ describe('PlanOrchestratorService', () => {
 
       expect(result.activated).toBe(0);
       expect(mockLifecycle.transition).not.toHaveBeenCalled();
+      expect(mockLedger.append).toHaveBeenCalledWith(
+        expect.objectContaining({
+          plan_id: 'p1',
+          event_type: 'PLAN_ACTIVATION_REJECTED',
+          data: expect.objectContaining({
+            conflicting_plan_ids: ['other-active-id'],
+            caller: 'orchestrator',
+            reason_code: 'CONFLICT_ACTIVE_PLAN',
+          }),
+        })
+      );
+    });
+
+    it('does not treat own plan_id as conflict (self-conflict ignored)', async () => {
+      const approvedPlan = plan({ plan_id: 'p1', plan_status: 'APPROVED', steps: [] });
+      mockRepo.listPlansByTenantAndStatus.mockImplementation(
+        (_t: string, status: string) =>
+          Promise.resolve(status === 'APPROVED' ? [approvedPlan] : [])
+      );
+      mockRepo.listActivePlansForAccountAndType.mockResolvedValue(['p1']);
+      mockGate.evaluateCanActivate.mockResolvedValue({ can_activate: true, reasons: [] });
+
+      const result = await orchestrator().runCycle('t1');
+
+      expect(result.activated).toBe(1);
+      expect(mockLifecycle.transition).toHaveBeenCalledWith(approvedPlan, 'ACTIVE');
+      expect(mockLedger.append).not.toHaveBeenCalledWith(
+        expect.objectContaining({ event_type: 'PLAN_ACTIVATION_REJECTED' })
+      );
     });
 
     it('starts next PENDING step and appends STEP_STARTED', async () => {

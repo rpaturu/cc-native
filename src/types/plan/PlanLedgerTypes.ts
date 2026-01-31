@@ -13,6 +13,7 @@ export type PlanLedgerEventType =
   | 'PLAN_ABORTED'
   | 'PLAN_COMPLETED'
   | 'PLAN_EXPIRED'
+  | 'PLAN_ACTIVATION_REJECTED'
   | 'STEP_STARTED'
   | 'STEP_COMPLETED'
   | 'STEP_SKIPPED'

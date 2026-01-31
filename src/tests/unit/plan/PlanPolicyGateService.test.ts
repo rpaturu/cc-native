@@ -137,6 +137,21 @@ describe('PlanPolicyGateService', () => {
       expect(result.reasons.some((r) => r.code === 'CONFLICT_ACTIVE_PLAN')).toBe(true);
     });
 
+    it('returns can_activate true when existing_active_plan_ids contains only plan own id (self-conflict ignored)', async () => {
+      const gate = new PlanPolicyGateService();
+      const p = plan({ plan_id: 'plan-1', plan_status: 'APPROVED' });
+      const input: PlanPolicyGateInput = {
+        plan: p,
+        tenant_id: 't1',
+        account_id: 'acc-1',
+        existing_active_plan_ids: ['plan-1'],
+        preconditions_met: true,
+      };
+      const result = await gate.evaluateCanActivate(input);
+      expect(result.can_activate).toBe(true);
+      expect(result.reasons.some((r) => r.code === 'CONFLICT_ACTIVE_PLAN')).toBe(false);
+    });
+
     it('returns can_activate false with PRECONDITIONS_UNMET when preconditions_met is false', async () => {
       const gate = new PlanPolicyGateService();
       const p = plan({ plan_status: 'APPROVED' });

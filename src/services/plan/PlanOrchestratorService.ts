@@ -83,20 +83,40 @@ export class PlanOrchestratorService {
       this.maxPlansPerRun
     );
     for (const plan of approved) {
+      const existing_active_plan_ids = await this.repo.listActivePlansForAccountAndType(
+        tenantId,
+        plan.account_id,
+        plan.plan_type
+      );
       const can = await this.gate.evaluateCanActivate({
         plan,
         tenant_id: tenantId,
         account_id: plan.account_id,
-        existing_active_plan_ids: await this.getActivePlanIdsForAccount(
-          tenantId,
-          plan.account_id,
-          plan.plan_type
-        ),
+        existing_active_plan_ids,
         preconditions_met: true,
       });
       if (can.can_activate) {
         await this.lifecycle.transition(plan, 'ACTIVE');
         result.activated++;
+      } else {
+        const hasConflict = can.reasons.some((r) => r.code === 'CONFLICT_ACTIVE_PLAN');
+        if (hasConflict) {
+          const conflicting_plan_ids = existing_active_plan_ids
+            .filter((id) => id !== plan.plan_id)
+            .sort((a, b) => a.localeCompare(b));
+          await this.ledger.append({
+            plan_id: plan.plan_id,
+            tenant_id: plan.tenant_id,
+            account_id: plan.account_id,
+            event_type: 'PLAN_ACTIVATION_REJECTED',
+            data: {
+              plan_type: plan.plan_type,
+              conflicting_plan_ids,
+              caller: 'orchestrator',
+              reason_code: 'CONFLICT_ACTIVE_PLAN',
+            },
+          });
+        }
       }
     }
 
@@ -276,19 +296,15 @@ export class PlanOrchestratorService {
     return null;
   }
 
+  /**
+   * Phase 6.5 — Uses repo.listActivePlansForAccountAndType (canonical conflict lookup).
+   */
   private async getActivePlanIdsForAccount(
     tenantId: string,
     accountId: string,
     planType: string
   ): Promise<string[]> {
-    const plans = await this.repo.listPlansByTenantAndStatus(
-      tenantId,
-      'ACTIVE',
-      100
-    );
-    return plans
-      .filter((p) => p.account_id === accountId && p.plan_type === planType)
-      .map((p) => p.plan_id);
+    return this.repo.listActivePlansForAccountAndType(tenantId, accountId, planType);
   }
 
   private async failStepAndPausePlan(

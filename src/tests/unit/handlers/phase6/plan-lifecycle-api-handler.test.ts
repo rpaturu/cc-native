@@ -12,6 +12,7 @@ const mockRefs: {
   listPlansByTenantAndStatus: jest.Mock;
   ledgerGetByPlanId: jest.Mock;
 } = { listPlansByTenantAndStatus: jest.fn(), ledgerGetByPlanId: jest.fn() };
+const mockListActivePlansForAccountAndType = jest.fn();
 const mockExistsActivePlanForAccountAndType = jest.fn();
 const mockValidateForApproval = jest.fn();
 const mockEvaluateCanActivate = jest.fn();
@@ -30,6 +31,7 @@ jest.mock('../../../../services/plan/PlanRepositoryService', () => ({
     getPlan: mockGetPlan,
     putPlan: mockPutPlan,
     listPlansByTenantAndStatus: mockRefs.listPlansByTenantAndStatus,
+    listActivePlansForAccountAndType: mockListActivePlansForAccountAndType,
     existsActivePlanForAccountAndType: mockExistsActivePlanForAccountAndType,
   })),
 }));
@@ -109,6 +111,7 @@ describe('plan-lifecycle-api-handler', () => {
     mockRefs.ledgerGetByPlanId.mockResolvedValue([]);
     mockValidateForApproval.mockResolvedValue({ valid: true, reasons: [] });
     mockEvaluateCanActivate.mockResolvedValue({ can_activate: true, reasons: [] });
+    mockListActivePlansForAccountAndType.mockResolvedValue([]);
     mockExistsActivePlanForAccountAndType.mockResolvedValue({ exists: false });
     mockTransition.mockResolvedValue(undefined);
   });
@@ -299,26 +302,60 @@ describe('plan-lifecycle-api-handler', () => {
   });
 
   describe('POST /plans/:planId/resume', () => {
-    it('200: Plan in PAUSED; evaluateCanActivate true; transition(ACTIVE) called', async () => {
+    it('200: Plan in PAUSED; listActivePlansForAccountAndType returns []; evaluateCanActivate true; transition(ACTIVE) called', async () => {
       const p = plan({ plan_status: 'PAUSED' });
       mockGetPlan.mockResolvedValue(p);
+      mockListActivePlansForAccountAndType.mockResolvedValue([]);
       mockEvaluateCanActivate.mockResolvedValue({ can_activate: true, reasons: [] });
       const res = await invokeHandler(event({ resource: '/plans/{planId}/resume', path: '/plans/plan-1/resume' }));
       expect(res.statusCode).toBe(200);
       expect(mockTransition).toHaveBeenCalledWith(p, 'ACTIVE');
+      expect(mockListActivePlansForAccountAndType).toHaveBeenCalledWith('t1', 'acc-1', 'RENEWAL_DEFENSE');
     });
 
-    it('400: Plan in PAUSED but can_activate false; response includes reasons; transition not called', async () => {
+    it('409: Plan in PAUSED but can_activate false; response error Conflict and reasons; transition not called', async () => {
       const p = plan({ plan_status: 'PAUSED' });
       mockGetPlan.mockResolvedValue(p);
+      mockListActivePlansForAccountAndType.mockResolvedValue([]);
       mockEvaluateCanActivate.mockResolvedValue({
         can_activate: false,
         reasons: [{ code: 'PRECONDITIONS_UNMET', message: 'x' }],
       });
       const res = await invokeHandler(event({ resource: '/plans/{planId}/resume', path: '/plans/plan-1/resume' }));
-      expect(res.statusCode).toBe(400);
-      expect(JSON.parse(res.body || '{}').reasons).toHaveLength(1);
+      expect(res.statusCode).toBe(409);
+      const body = JSON.parse(res.body || '{}');
+      expect(body.error).toBe('Conflict');
+      expect(body.reasons).toHaveLength(1);
       expect(mockTransition).not.toHaveBeenCalled();
+    });
+
+    it('409: CONFLICT_ACTIVE_PLAN; listActivePlansForAccountAndType returns other plan; ledger PLAN_ACTIVATION_REJECTED written', async () => {
+      const p = plan({ plan_id: 'plan-1', plan_status: 'PAUSED', plan_type: 'RENEWAL_DEFENSE' });
+      mockGetPlan.mockResolvedValue(p);
+      mockListActivePlansForAccountAndType.mockResolvedValue(['other-active-id']);
+      mockEvaluateCanActivate.mockResolvedValue({
+        can_activate: false,
+        reasons: [{ code: 'CONFLICT_ACTIVE_PLAN', message: 'Another ACTIVE plan exists.' }],
+      });
+      const res = await invokeHandler(event({ resource: '/plans/{planId}/resume', path: '/plans/plan-1/resume' }));
+      expect(res.statusCode).toBe(409);
+      const body = JSON.parse(res.body || '{}');
+      expect(body.error).toBe('Conflict');
+      expect(body.reasons.some((r: { code: string }) => r.code === 'CONFLICT_ACTIVE_PLAN')).toBe(true);
+      expect(mockTransition).not.toHaveBeenCalled();
+      expect(mockLedgerAppend).toHaveBeenCalledWith(
+        expect.objectContaining({
+          plan_id: 'plan-1',
+          tenant_id: 't1',
+          account_id: 'acc-1',
+          event_type: 'PLAN_ACTIVATION_REJECTED',
+          data: expect.objectContaining({
+            conflicting_plan_ids: ['other-active-id'],
+            caller: 'resume',
+            reason_code: 'CONFLICT_ACTIVE_PLAN',
+          }),
+        })
+      );
     });
 
     it('404: Plan not found', async () => {

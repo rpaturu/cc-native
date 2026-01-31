@@ -247,17 +247,28 @@ export class PlanRepositoryService {
     });
   }
 
+  /**
+   * Phase 6.5 — Canonical conflict lookup: ACTIVE plan IDs for (tenant, account, plan_type).
+   * Returns plan_id[] in stable order (sorted ascending by plan_id). Used by resume and orchestrator.
+   */
+  async listActivePlansForAccountAndType(
+    tenantId: string,
+    accountId: string,
+    planType: string
+  ): Promise<string[]> {
+    const plans = await this.listPlansByTenantAndStatus(tenantId, 'ACTIVE', 100);
+    const ids = plans
+      .filter((p) => p.account_id === accountId && p.plan_type === planType)
+      .map((p) => p.plan_id);
+    return [...ids].sort((a, b) => a.localeCompare(b));
+  }
+
   async existsActivePlanForAccountAndType(
     tenantId: string,
     accountId: string,
     planType: string
   ): Promise<{ exists: boolean; planId?: string }> {
-    const plans = await this.listPlansByTenantAndStatus(tenantId, 'ACTIVE', 100);
-    const match = plans.find(
-      (p) => p.account_id === accountId && p.plan_type === planType
-    );
-    return match
-      ? { exists: true, planId: match.plan_id }
-      : { exists: false };
+    const ids = await this.listActivePlansForAccountAndType(tenantId, accountId, planType);
+    return ids.length > 0 ? { exists: true, planId: ids[0] } : { exists: false };
   }
 }

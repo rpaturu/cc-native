@@ -227,7 +227,7 @@ async function handleResume(
   accountId: string,
   planId: string
 ): Promise<APIGatewayProxyResult> {
-  const { repo, gate, lifecycle } = services;
+  const { repo, gate, lifecycle, ledger } = services;
   const plan = await repo.getPlan(tenantId, accountId, planId);
   if (!plan) return cors({ statusCode: 404, body: JSON.stringify({ error: 'Plan not found' }) });
   if (plan.plan_status !== 'PAUSED') {
@@ -236,8 +236,11 @@ async function handleResume(
       body: JSON.stringify({ error: 'Plan must be PAUSED to resume', status: plan.plan_status }),
     });
   }
-  const active = await repo.existsActivePlanForAccountAndType(tenantId, accountId, plan.plan_type);
-  const existing_active_plan_ids = active.exists && active.planId ? [active.planId] : [];
+  const existing_active_plan_ids = await repo.listActivePlansForAccountAndType(
+    tenantId,
+    accountId,
+    plan.plan_type
+  );
   const body = parseBody<{ preconditions_met?: boolean }>(event);
   const preconditions_met = body.preconditions_met !== false;
   const result = await gate.evaluateCanActivate({
@@ -248,9 +251,27 @@ async function handleResume(
     preconditions_met,
   });
   if (!result.can_activate) {
+    const hasConflict = result.reasons.some((r) => r.code === 'CONFLICT_ACTIVE_PLAN');
+    if (hasConflict) {
+      const conflicting_plan_ids = existing_active_plan_ids
+        .filter((id) => id !== plan.plan_id)
+        .sort((a, b) => a.localeCompare(b));
+      await ledger.append({
+        plan_id: plan.plan_id,
+        tenant_id: tenantId,
+        account_id: accountId,
+        event_type: 'PLAN_ACTIVATION_REJECTED',
+        data: {
+          plan_type: plan.plan_type,
+          conflicting_plan_ids,
+          caller: 'resume',
+          reason_code: 'CONFLICT_ACTIVE_PLAN',
+        },
+      });
+    }
     return cors({
-      statusCode: 400,
-      body: JSON.stringify({ error: 'Cannot resume', reasons: result.reasons }),
+      statusCode: 409,
+      body: JSON.stringify({ error: 'Conflict', reasons: result.reasons }),
     });
   }
   await lifecycle.transition(plan, 'ACTIVE');

@@ -412,7 +412,7 @@ else
   exit 1
 fi
 
-# Run integration tests after deployment (uses .env written above; includes Phase 6.3 plan-orchestrator and Phase 6.4 plans-api — mandatory when env present)
+# Run integration tests after deployment (uses .env written above; includes Phase 6.3 plan-orchestrator, Phase 6.4 plans-api, Phase 6.5 conflict-resolution — mandatory when env present)
 if [ "$SKIP_INTEGRATION_TESTS" = false ]; then
   echo ""
   echo "🧪 Running integration tests (post-deploy, with --detectOpenHandles to surface leaks)..."
