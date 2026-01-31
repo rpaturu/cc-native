@@ -1,8 +1,8 @@
 /**
- * Autonomy Admin API Handler - Phase 5.1
+ * Autonomy Admin API Handler - Phase 5.1 + 5.6
  *
- * CRUD for autonomy mode config and autonomy budget config.
- * Auth: Cognito (admin) or API key. Routes: /autonomy/config, /autonomy/budget.
+ * CRUD for autonomy config, budget; Phase 5.6: kill-switches, ledger explanation, audit exports.
+ * Auth: tenant from JWT (custom:tenant_id) when present; fallback query/header for dev.
  */
 
 import {
@@ -16,10 +16,26 @@ import { getAWSClientConfig } from '../../utils/aws-client-config';
 import { Logger } from '../../services/core/Logger';
 import { AutonomyModeService } from '../../services/autonomy/AutonomyModeService';
 import { AutonomyBudgetService } from '../../services/autonomy/AutonomyBudgetService';
+import { ExecutionOutcomeService } from '../../services/execution/ExecutionOutcomeService';
+import { KillSwitchService } from '../../services/execution/KillSwitchService';
+import { LedgerService } from '../../services/ledger/LedgerService';
+import { LedgerExplanationService } from '../../services/autonomy/LedgerExplanationService';
+import { AuditExportService } from '../../services/autonomy/AuditExportService';
 import {
   AutonomyModeConfigV1,
   AutonomyBudgetV1,
 } from '../../types/autonomy/AutonomyTypes';
+import { EventBridgeClient, PutEventsCommand } from '@aws-sdk/client-eventbridge';
+import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import {
+  resolveTenantFromAuth,
+  getKillSwitches as routeGetKillSwitches,
+  putKillSwitches as routePutKillSwitches,
+  getLedgerExplanation as routeGetLedgerExplanation,
+  postAuditExports as routePostAuditExports,
+  getAuditExportStatus as routeGetAuditExportStatus,
+} from './autonomy-control-center-routes';
 
 const logger = new Logger('AutonomyAdminAPIHandler');
 
@@ -29,6 +45,9 @@ const dynamoClient = DynamoDBDocumentClient.from(
   new DynamoDBClient(clientConfig),
   { marshallOptions: { removeUndefinedValues: true } }
 );
+const eventBridgeClient = new EventBridgeClient(clientConfig);
+const s3Client = new S3Client(clientConfig);
+const PRESIGNED_URL_EXPIRY_SECONDS = 3600;
 
 const autonomyConfigTable =
   process.env.AUTONOMY_CONFIG_TABLE_NAME || 'cc-native-autonomy-config';
@@ -46,6 +65,31 @@ const autonomyBudgetService = new AutonomyBudgetService(
   autonomyBudgetStateTable,
   logger
 );
+
+function getPhase56Services(): {
+  killSwitch: KillSwitchService | null;
+  ledgerExplanation: LedgerExplanationService | null;
+  auditExport: AuditExportService | null;
+} {
+  const tenantsTable = process.env.TENANTS_TABLE_NAME;
+  const ledgerTable = process.env.LEDGER_TABLE_NAME;
+  const outcomesTable = process.env.EXECUTION_OUTCOMES_TABLE_NAME;
+  const auditExportTable = process.env.AUDIT_EXPORT_TABLE_NAME;
+  return {
+    killSwitch: tenantsTable ? new KillSwitchService(dynamoClient, tenantsTable, logger) : null,
+    ledgerExplanation:
+      ledgerTable && outcomesTable
+        ? new LedgerExplanationService({
+            executionOutcomeService: new ExecutionOutcomeService(dynamoClient, outcomesTable, logger),
+            ledgerService: new LedgerService(logger, ledgerTable, region),
+            logger,
+          })
+        : null,
+    auditExport: auditExportTable
+      ? new AuditExportService(dynamoClient, auditExportTable, logger)
+      : null,
+  };
+}
 
 function addCorsHeaders(
   response: APIGatewayProxyResult
@@ -122,7 +166,7 @@ async function putConfig(
 }
 
 /**
- * GET /autonomy/budget?tenant_id=&account_id=
+ * GET /autonomy/budget?tenant_id=&account_id= — includes remaining_today (UTC).
  */
 async function getBudget(
   tenantId: string,
@@ -130,9 +174,13 @@ async function getBudget(
 ): Promise<APIGatewayProxyResult> {
   const config = await autonomyBudgetService.getConfig(tenantId, accountId);
   if (!config) {
-    return json({ config: null }, 200);
+    return json({ config: null, remaining_today: 0 }, 200);
   }
-  return json({ config });
+  const todayUtc = new Date().toISOString().slice(0, 10);
+  const state = await autonomyBudgetService.getStateForDate(tenantId, accountId, todayUtc);
+  const consumed = state?.total ?? 0;
+  const remaining_today = Math.max(0, config.max_autonomous_per_day - consumed);
+  return json({ config, remaining_today });
 }
 
 /**
@@ -184,9 +232,11 @@ export const handler: Handler<APIGatewayProxyEvent, APIGatewayProxyResult> =
 
     const path = event.path ?? '';
     const method = event.httpMethod ?? 'GET';
+    const tenantFromAuth = resolveTenantFromAuth(event);
     const tenantId =
-      event.queryStringParameters?.tenant_id ||
-      event.headers['x-tenant-id'] ||
+      tenantFromAuth ??
+      event.queryStringParameters?.tenant_id ??
+      event.headers['x-tenant-id'] ??
       '';
     const accountId = event.queryStringParameters?.account_id || '';
     const dateKey = event.queryStringParameters?.date || new Date().toISOString().slice(0, 10);
@@ -195,6 +245,119 @@ export const handler: Handler<APIGatewayProxyEvent, APIGatewayProxyResult> =
         ?.userId || 'unknown';
 
     try {
+      // Phase 5.6: kill-switches
+      if (path.includes('/kill-switches')) {
+        if (!tenantId) return err('tenant_id required (from auth or query)');
+        const { killSwitch } = getPhase56Services();
+        if (!killSwitch) return err('Kill switches not configured', 503);
+        if (method === 'GET') {
+          const result = await routeGetKillSwitches(killSwitch, tenantId);
+          return addCorsHeaders(result);
+        }
+        if (method === 'PUT') {
+          const body = event.body ? JSON.parse(event.body) : {};
+          const result = await routePutKillSwitches(killSwitch, tenantId, body);
+          return addCorsHeaders(result);
+        }
+      }
+
+      // Phase 5.6: ledger explanation (canonical: action_intent_id; execution_id = action_intent_id)
+      if (path.includes('/ledger/explanation')) {
+        if (method !== 'GET') return err('Method not allowed', 405);
+        const executionId = event.queryStringParameters?.execution_id;
+        const actionIntentId = event.queryStringParameters?.action_intent_id ?? executionId;
+        if (!actionIntentId) return err('execution_id or action_intent_id required');
+        if (!tenantId || !accountId) return err('tenant_id and account_id required (from auth or query)');
+        const { ledgerExplanation } = getPhase56Services();
+        if (!ledgerExplanation) return err('Ledger explanation not configured', 503);
+        const result = await routeGetLedgerExplanation(
+          ledgerExplanation,
+          actionIntentId,
+          tenantId,
+          accountId
+        );
+        return addCorsHeaders(result);
+      }
+
+      // Phase 5.6: audit exports (async)
+      if (path.includes('/audit/exports')) {
+        if (!tenantId) return err('tenant_id required (from auth or query)');
+        const { auditExport } = getPhase56Services();
+        if (!auditExport) return err('Audit export not configured', 503);
+        const pathParts = path.split('/').filter(Boolean);
+        const exportId = pathParts[pathParts.length - 1];
+        const isExportById = pathParts[pathParts.length - 2] === 'exports' && exportId && exportId !== 'exports';
+        if (method === 'POST' && !isExportById) {
+          const body = event.body ? JSON.parse(event.body) : {};
+          const result = await routePostAuditExports(auditExport, tenantId, body);
+          if (result.statusCode === 202) {
+            const parsed = JSON.parse(result.body) as { export_id: string };
+            const eventBusName = process.env.EVENT_BUS_NAME;
+            if (eventBusName && parsed.export_id) {
+              try {
+                await eventBridgeClient.send(
+                  new PutEventsCommand({
+                    Entries: [
+                      {
+                        Source: 'cc-native.autonomy',
+                        DetailType: 'AuditExportRequested',
+                        Detail: JSON.stringify({
+                          export_id: parsed.export_id,
+                          tenant_id: tenantId,
+                          account_id: body.account_id,
+                          from: body.from,
+                          to: body.to,
+                          format: body.format || 'json',
+                        }),
+                        EventBusName: eventBusName,
+                      },
+                    ],
+                  })
+                );
+              } catch (e) {
+                logger.error('Failed to emit AuditExportRequested', { export_id: parsed.export_id, error: e });
+              }
+            }
+          }
+          return addCorsHeaders(result);
+        }
+        if (method === 'GET' && isExportById) {
+          let result = await routeGetAuditExportStatus(auditExport, exportId, tenantId);
+          if (result.statusCode === 200) {
+            const body = JSON.parse(result.body) as {
+              export_id: string;
+              status: string;
+              presigned_url?: string;
+              expires_at?: string;
+              s3_bucket?: string;
+              s3_key?: string;
+              error_message?: string;
+            };
+            if (
+              body.status === 'COMPLETED' &&
+              body.s3_bucket &&
+              body.s3_key
+            ) {
+              try {
+                const url = await getSignedUrl(
+                  s3Client,
+                  new GetObjectCommand({ Bucket: body.s3_bucket, Key: body.s3_key }),
+                  { expiresIn: PRESIGNED_URL_EXPIRY_SECONDS }
+                );
+                body.presigned_url = url;
+                body.expires_at = new Date(Date.now() + PRESIGNED_URL_EXPIRY_SECONDS * 1000).toISOString();
+              } catch (e) {
+                logger.warn('Failed to generate presigned URL', { export_id: exportId, error: e });
+              }
+              delete body.s3_bucket;
+              delete body.s3_key;
+            }
+            result = { ...result, body: JSON.stringify(body) };
+          }
+          return addCorsHeaders(result);
+        }
+      }
+
       // More specific path first: /budget/state before /budget
       if (path.includes('/budget/state')) {
         if (method === 'GET') {

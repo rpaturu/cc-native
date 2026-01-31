@@ -1,16 +1,19 @@
 /**
- * Autonomy Infrastructure - Phase 5.1
+ * Autonomy Infrastructure - Phase 5.1 + 5.6
  *
- * DynamoDB tables for autonomy config and budget state, plus admin API (Lambda + API Gateway).
+ * DynamoDB tables for autonomy config, budget, audit export jobs; admin API (Lambda + API Gateway).
+ * Phase 5.6: kill-switches, ledger explanation, audit exports (async).
  */
 
 import * as cdk from 'aws-cdk-lib';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as events from 'aws-cdk-lib/aws-events';
+import * as targets from 'aws-cdk-lib/aws-events-targets';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as lambdaNodejs from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as cognito from 'aws-cdk-lib/aws-cognito';
+import * as s3 from 'aws-cdk-lib/aws-s3';
 import { Construct } from 'constructs';
 import {
   AutonomyInfrastructureConfig,
@@ -23,15 +26,25 @@ export interface AutonomyInfrastructureProps {
   /** Phase 5.4: When set, creates auto-approval-gate Lambda (needs action intent table + event bus). */
   readonly actionIntentTable?: dynamodb.Table;
   readonly eventBus?: events.IEventBus;
+  /** Phase 5.6: When set, Control Center APIs (kill-switches, ledger explanation, audit exports) get env and grants. */
+  readonly tenantsTable?: dynamodb.Table;
+  readonly ledgerTable?: dynamodb.Table;
+  readonly executionOutcomesTable?: dynamodb.Table;
 }
 
 export class AutonomyInfrastructure extends Construct {
   public readonly autonomyConfigTable: dynamodb.Table;
   public readonly autonomyBudgetStateTable: dynamodb.Table;
+  /** Phase 5.6: Audit export jobs (async export pattern). */
+  public readonly auditExportTable: dynamodb.Table;
+  /** Phase 5.6: S3 bucket for async audit export files (worker writes; API returns presigned URL). */
+  public readonly auditExportBucket: s3.IBucket;
   public readonly autonomyAdminApiHandler: lambda.Function;
   public readonly autonomyApi: apigateway.RestApi;
   /** Phase 5.4: Auto-approval gate Lambda (created when actionIntentTable + eventBus are provided). */
   public readonly autoApprovalGateHandler?: lambda.Function;
+  /** Phase 5.6: Async audit export worker (EventBridge → worker → S3, update job). */
+  public readonly auditExportWorkerHandler?: lambda.Function;
 
   constructor(
     scope: Construct,
@@ -72,6 +85,32 @@ export class AutonomyInfrastructure extends Construct {
       }
     );
 
+    this.auditExportTable = new dynamodb.Table(this, 'AuditExportTable', {
+      tableName: 'cc-native-audit-export',
+      partitionKey: { name: 'pk', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'sk', type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+    });
+
+    this.auditExportBucket = new s3.Bucket(this, 'AuditExportBucket', {
+      bucketName: undefined,
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      encryption: s3.BucketEncryption.S3_MANAGED,
+      enforceSSL: true,
+    });
+
+    const handlerEnv: Record<string, string> = {
+      AUTONOMY_CONFIG_TABLE_NAME: this.autonomyConfigTable.tableName,
+      AUTONOMY_BUDGET_STATE_TABLE_NAME: this.autonomyBudgetStateTable.tableName,
+      AUDIT_EXPORT_TABLE_NAME: this.auditExportTable.tableName,
+      AUDIT_EXPORT_BUCKET_NAME: this.auditExportBucket.bucketName,
+    };
+    if (props.tenantsTable) handlerEnv.TENANTS_TABLE_NAME = props.tenantsTable.tableName;
+    if (props.ledgerTable) handlerEnv.LEDGER_TABLE_NAME = props.ledgerTable.tableName;
+    if (props.executionOutcomesTable)
+      handlerEnv.EXECUTION_OUTCOMES_TABLE_NAME = props.executionOutcomesTable.tableName;
+    if (props.eventBus) handlerEnv.EVENT_BUS_NAME = props.eventBus.eventBusName;
+
     this.autonomyAdminApiHandler = new lambdaNodejs.NodejsFunction(
       this,
       'AutonomyAdminApiHandler',
@@ -82,11 +121,7 @@ export class AutonomyInfrastructure extends Construct {
         runtime: lambda.Runtime.NODEJS_20_X,
         timeout: cdk.Duration.seconds(config.defaults.timeoutSeconds),
         memorySize: config.defaults.memorySize,
-        environment: {
-          AUTONOMY_CONFIG_TABLE_NAME: this.autonomyConfigTable.tableName,
-          AUTONOMY_BUDGET_STATE_TABLE_NAME:
-            this.autonomyBudgetStateTable.tableName,
-        },
+        environment: handlerEnv,
       }
     );
 
@@ -94,13 +129,20 @@ export class AutonomyInfrastructure extends Construct {
     this.autonomyBudgetStateTable.grantReadWriteData(
       this.autonomyAdminApiHandler
     );
+    this.auditExportTable.grantReadWriteData(this.autonomyAdminApiHandler);
+    this.auditExportBucket.grantRead(this.autonomyAdminApiHandler);
+    if (props.tenantsTable) props.tenantsTable.grantReadWriteData(this.autonomyAdminApiHandler);
+    if (props.ledgerTable) props.ledgerTable.grantReadData(this.autonomyAdminApiHandler);
+    if (props.executionOutcomesTable)
+      props.executionOutcomesTable.grantReadData(this.autonomyAdminApiHandler);
+    if (props.eventBus) props.eventBus.grantPutEventsTo(this.autonomyAdminApiHandler);
 
     this.autonomyApi = new apigateway.RestApi(this, 'AutonomyApi', {
       restApiName: config.apiGateway.restApiName,
       description: 'Autonomy config and budget admin API (Phase 5.1)',
       defaultCorsPreflightOptions: {
         allowOrigins: apigateway.Cors.ALL_ORIGINS,
-        allowMethods: ['GET', 'PUT', 'OPTIONS'],
+        allowMethods: ['GET', 'PUT', 'POST', 'OPTIONS'],
         allowHeaders: [
           'Content-Type',
           'Authorization',
@@ -139,6 +181,20 @@ export class AutonomyInfrastructure extends Construct {
     const budgetStateResource = budgetResource.addResource('state');
     budgetStateResource.addMethod('GET', integration, methodOptions);
 
+    const killSwitchesResource = this.autonomyApi.root.addResource('kill-switches');
+    killSwitchesResource.addMethod('GET', integration, methodOptions);
+    killSwitchesResource.addMethod('PUT', integration, methodOptions);
+
+    const ledgerResource = this.autonomyApi.root.addResource('ledger');
+    const explanationResource = ledgerResource.addResource('explanation');
+    explanationResource.addMethod('GET', integration, methodOptions);
+
+    const auditResource = this.autonomyApi.root.addResource('audit');
+    const exportsResource = auditResource.addResource('exports');
+    exportsResource.addMethod('POST', integration, methodOptions);
+    const exportByIdResource = exportsResource.addResource('{id}');
+    exportByIdResource.addMethod('GET', integration, methodOptions);
+
     // Phase 5.4: Auto-approval gate Lambda (invoked with action_intent_id, tenant_id, account_id)
     if (props.actionIntentTable && props.eventBus) {
       const gateHandler = new lambdaNodejs.NodejsFunction(
@@ -164,6 +220,39 @@ export class AutonomyInfrastructure extends Construct {
       props.actionIntentTable.grantReadData(gateHandler);
       props.eventBus.grantPutEventsTo(gateHandler);
       this.autoApprovalGateHandler = gateHandler;
+    }
+
+    // Phase 5.6: Async audit export worker (EventBridge AuditExportRequested → worker → S3, update job)
+    if (props.eventBus && props.ledgerTable) {
+      const auditExportWorker = new lambdaNodejs.NodejsFunction(
+        this,
+        'AuditExportWorkerHandler',
+        {
+          functionName: 'cc-native-audit-export-worker',
+          entry: 'src/handlers/phase5/audit-export-worker-handler.ts',
+          handler: 'handler',
+          runtime: lambda.Runtime.NODEJS_20_X,
+          timeout: cdk.Duration.seconds(300),
+          memorySize: 512,
+          environment: {
+            LEDGER_TABLE_NAME: props.ledgerTable.tableName,
+            AUDIT_EXPORT_TABLE_NAME: this.auditExportTable.tableName,
+            AUDIT_EXPORT_BUCKET_NAME: this.auditExportBucket.bucketName,
+          },
+        }
+      );
+      props.ledgerTable.grantReadData(auditExportWorker);
+      this.auditExportTable.grantReadWriteData(auditExportWorker);
+      this.auditExportBucket.grantWrite(auditExportWorker);
+      new events.Rule(this, 'AuditExportRequestedRule', {
+        eventBus: props.eventBus,
+        eventPattern: {
+          source: ['cc-native.autonomy'],
+          detailType: ['AuditExportRequested'],
+        },
+        targets: [new targets.LambdaFunction(auditExportWorker)],
+      });
+      this.auditExportWorkerHandler = auditExportWorker;
     }
   }
 }

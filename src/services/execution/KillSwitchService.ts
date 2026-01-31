@@ -4,7 +4,7 @@
  * Manage execution safety controls (kill switches)
  */
 
-import { DynamoDBDocumentClient, GetCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, GetCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { Logger } from '../core/Logger';
 import { KillSwitchConfig } from '../../types/ExecutionTypes';
 
@@ -73,5 +73,41 @@ export class KillSwitchService {
       disabled_action_types: [],
       global_emergency_stop: process.env.GLOBAL_EXECUTION_STOP === 'true',
     };
+  }
+
+  /**
+   * Update kill switch config for tenant (Phase 5.6 Control Center API).
+   * Partial update: only provided fields are written. Tenants table key: tenantId.
+   */
+  async updateKillSwitchConfig(
+    tenantId: string,
+    updates: { execution_enabled?: boolean; disabled_action_types?: string[] }
+  ): Promise<void> {
+    const now = new Date().toISOString();
+    const sets: string[] = ['#updated_at = :now'];
+    const values: Record<string, unknown> = { ':now': now };
+    const names: Record<string, string> = { '#updated_at': 'updated_at' };
+
+    if (updates.execution_enabled !== undefined) {
+      sets.push('#execution_enabled = :en');
+      values[':en'] = updates.execution_enabled;
+      names['#execution_enabled'] = 'execution_enabled';
+    }
+    if (updates.disabled_action_types !== undefined) {
+      sets.push('#disabled_action_types = :types');
+      values[':types'] = updates.disabled_action_types;
+      names['#disabled_action_types'] = 'disabled_action_types';
+    }
+
+    await this.dynamoClient.send(
+      new UpdateCommand({
+        TableName: this.configTableName,
+        Key: { tenantId },
+        UpdateExpression: `SET ${sets.join(', ')}`,
+        ExpressionAttributeNames: names,
+        ExpressionAttributeValues: values,
+      })
+    );
+    this.logger.debug('Kill switch config updated', { tenantId, updates });
   }
 }

@@ -4,7 +4,7 @@
 
 import { KillSwitchService } from '../../../services/execution/KillSwitchService';
 import { Logger } from '../../../services/core/Logger';
-import { DynamoDBDocumentClient, GetCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, GetCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { mockDynamoDBDocumentClient, resetAllMocks } from '../../__mocks__/aws-sdk-clients';
 import tenantExecutionConfig from '../../fixtures/execution/tenant-execution-config.json';
 
@@ -13,6 +13,7 @@ jest.mock('@aws-sdk/lib-dynamodb', () => ({
     from: jest.fn(() => mockDynamoDBDocumentClient),
   },
   GetCommand: jest.fn(),
+  UpdateCommand: jest.fn().mockImplementation((args: unknown) => args),
 }));
 
 describe('KillSwitchService', () => {
@@ -205,6 +206,56 @@ describe('KillSwitchService', () => {
       const config = await service.getKillSwitchConfig('tenant_test_1');
 
       expect(config.disabled_action_types).toEqual([]);
+    });
+  });
+
+  describe('updateKillSwitchConfig (Phase 5.6)', () => {
+    it('should update execution_enabled only', async () => {
+      mockDynamoDBDocumentClient.send.mockResolvedValue({});
+
+      await service.updateKillSwitchConfig('tenant_test_1', { execution_enabled: false });
+
+      expect(UpdateCommand).toHaveBeenCalledTimes(1);
+      const call = (UpdateCommand as unknown as jest.Mock).mock.calls[0][0];
+      expect(call.TableName).toBe('test-tenants-table');
+      expect(call.Key).toEqual({ tenantId: 'tenant_test_1' });
+      expect(call.UpdateExpression).toContain('#execution_enabled = :en');
+      expect(call.ExpressionAttributeValues[':en']).toBe(false);
+    });
+
+    it('should update disabled_action_types only', async () => {
+      mockDynamoDBDocumentClient.send.mockResolvedValue({});
+
+      await service.updateKillSwitchConfig('tenant_test_1', {
+        disabled_action_types: ['SEND_EMAIL', 'CREATE_CRM_TASK'],
+      });
+
+      const call = (UpdateCommand as unknown as jest.Mock).mock.calls[0][0];
+      expect(call.UpdateExpression).toContain('#disabled_action_types = :types');
+      expect(call.ExpressionAttributeValues[':types']).toEqual(['SEND_EMAIL', 'CREATE_CRM_TASK']);
+    });
+
+    it('should update both execution_enabled and disabled_action_types', async () => {
+      mockDynamoDBDocumentClient.send.mockResolvedValue({});
+
+      await service.updateKillSwitchConfig('tenant_test_1', {
+        execution_enabled: true,
+        disabled_action_types: [],
+      });
+
+      const call = (UpdateCommand as unknown as jest.Mock).mock.calls[0][0];
+      expect(call.ExpressionAttributeValues[':en']).toBe(true);
+      expect(call.ExpressionAttributeValues[':types']).toEqual([]);
+    });
+
+    it('should set only updated_at when updates empty', async () => {
+      mockDynamoDBDocumentClient.send.mockResolvedValue({});
+
+      await service.updateKillSwitchConfig('tenant_test_1', {});
+
+      const call = (UpdateCommand as unknown as jest.Mock).mock.calls[0][0];
+      expect(call.UpdateExpression).toBe('SET #updated_at = :now');
+      expect(Object.keys(call.ExpressionAttributeValues)).toEqual([':now']);
     });
   });
 });
