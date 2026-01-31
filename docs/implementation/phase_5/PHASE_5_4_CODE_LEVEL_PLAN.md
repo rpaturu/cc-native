@@ -146,6 +146,21 @@ Unit tests: allowlist reject (ACTION_TYPE_NOT_ALLOWLISTED); policy AUTO_EXECUTE 
 
 ---
 
+## 9. Verification: "Don't get burned later" checks
+
+### 1) EventBridge publish retry is idempotent; Phase 4 dedupes by intent
+
+- **Gate:** RESERVED → republish until success; PUBLISHED → skip. Duplicate EventBridge deliveries of ACTION_APPROVED (same `action_intent_id`) are safe: the gate is idempotent on `action_intent_id` via AUTO_EXEC_STATE.
+- **Phase 4:** `ExecutionAttemptService.startAttempt` uses a conditional Put keyed by `(tenant, account, action_intent_id)` with `attribute_not_exists(pk) AND attribute_not_exists(sk)`. A second delivery for the same intent gets `ConditionalCheckFailedException`; then if status is RUNNING it throws "Execution already in progress"; if terminal it throws "Execution already completed... Reruns are not allowed" (allow_rerun=false). So **Phase 4 dedupes by action_intent_id** — duplicate ACTION_APPROVED events do not start a second execution. No change required.
+
+### 2) Budget consume once under retries; ordering note for concurrent invocations
+
+- **Retries (same Lambda):** Idempotency guard runs first. If state is PUBLISHED we skip consume and publish. If state is RESERVED we skip consume and only retry publish. So **retries never call checkAndConsume again** — no double consume under Lambda retry.
+- **Ordering in code:** Current order is: idempotency guard → checkAndConsume → setReserved (conditional) → publish → setPublished. So **state write (RESERVED) happens after budget consume**. That matches "consume then reserve then publish" and ensures a **retry** after a failed publish sees RESERVED and does not re-consume.
+- **Concurrent invocations (two Lambdas, same intent):** Both can pass the idempotency check (no state yet), both call checkAndConsume (both can succeed → double consume), then one wins setReserved. To eliminate this race, the alternative is **reserve-first**: setReserved (conditional) first; only the Lambda that wins the reserve then calls checkAndConsume and publish. Current implementation prioritizes simplicity; if you need strict single-consume under concurrent trigger, consider moving setReserved before checkAndConsume (reserve-first).
+
+---
+
 ## References
 
 - Parent: [PHASE_5_CODE_LEVEL_PLAN.md](PHASE_5_CODE_LEVEL_PLAN.md)
