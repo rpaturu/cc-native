@@ -113,5 +113,5 @@ Run: `npx jest --coverage --testPathIgnorePatterns=integration --collectCoverage
 ## References
 
 - **Code-level plan:** [PHASE_5_6_CODE_LEVEL_PLAN.md](../PHASE_5_6_CODE_LEVEL_PLAN.md)
-- **Coverage plan:** [COVERAGE_TEST_PLAN.md](../../../testing/COVERAGE_TEST_PLAN.md)
+- **Coverage plan:** [PROJECT_TEST_COVERAGE_REVIEW.md](../../../testing/PROJECT_TEST_COVERAGE_REVIEW.md)
 - **Phase 5.5 test plan:** [PHASE_5_5_TEST_PLAN.md](./PHASE_5_5_TEST_PLAN.md)

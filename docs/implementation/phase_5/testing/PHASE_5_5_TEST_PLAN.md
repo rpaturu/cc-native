@@ -118,5 +118,5 @@ One branch uncovered: optional `baselineMetricValue` in `ShadowModeService.evalu
 ## References
 
 - **Code-level plan:** [PHASE_5_5_CODE_LEVEL_PLAN.md](../PHASE_5_5_CODE_LEVEL_PLAN.md)
-- **Coverage plan:** [COVERAGE_TEST_PLAN.md](../../../testing/COVERAGE_TEST_PLAN.md)
+- **Coverage plan:** [PROJECT_TEST_COVERAGE_REVIEW.md](../../../testing/PROJECT_TEST_COVERAGE_REVIEW.md)
 - **Implementation plan:** [PHASE_5_IMPLEMENTATION_PLAN.md](../PHASE_5_IMPLEMENTATION_PLAN.md) EPIC 5.5

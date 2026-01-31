@@ -57,6 +57,12 @@ describe('LifecycleStateService', () => {
       expect(result).toBeNull();
     });
 
+    it('throws when Dynamo send rejects (catch branch)', async () => {
+      mockDynamoDBDocumentClient.send.mockRejectedValue(new Error('Dynamo error'));
+
+      await expect(service.getAccountState('acc-1', 't1')).rejects.toThrow('Dynamo error');
+    });
+
     it('returns mapped AccountState when item exists', async () => {
       mockDynamoDBDocumentClient.send.mockResolvedValue({
         Item: {
@@ -127,6 +133,16 @@ describe('LifecycleStateService', () => {
 
       expect(result.currentLifecycleState).toBe(LifecycleState.SUSPECT);
       expect(mockDynamoDBDocumentClient.send).toHaveBeenCalledTimes(2);
+    });
+
+    it('throws when PutCommand fails (catch branch)', async () => {
+      mockDynamoDBDocumentClient.send
+        .mockResolvedValueOnce({ Item: null })
+        .mockRejectedValueOnce(new Error('Put failed'));
+
+      await expect(
+        service.updateAccountState('acc-1', 't1', { currentLifecycleState: LifecycleState.PROSPECT })
+      ).rejects.toThrow('Put failed');
     });
   });
 
@@ -208,6 +224,28 @@ describe('LifecycleStateService', () => {
 
       expect(result).toBe(LifecycleState.PROSPECT);
     });
+
+    it('returns PROSPECT when no rule matches (fall-through to default)', async () => {
+      mockDynamoDBDocumentClient.send.mockResolvedValue({
+        Item: {
+          tenantId: 't1',
+          accountId: 'acc-1',
+          currentLifecycleState: LifecycleState.PROSPECT,
+          activeSignalIndex: {},
+          lastTransitionAt: null,
+          lastEngagementAt: null,
+          hasActiveContract: false,
+          lastInferenceAt: '2026-01-01T00:00:00Z',
+          inferenceRuleVersion: '1.0.0',
+          createdAt: '2026-01-01T00:00:00Z',
+          updatedAt: '2026-01-01T00:00:00Z',
+        },
+      });
+
+      const result = await service.inferLifecycleState('acc-1', 't1');
+
+      expect(result).toBe(LifecycleState.PROSPECT);
+    });
   });
 
   describe('shouldTransition', () => {
@@ -267,12 +305,55 @@ describe('LifecycleStateService', () => {
         })
       );
     });
+
+    it('throws when ledger append rejects (catch branch)', async () => {
+      mockDynamoDBDocumentClient.send
+        .mockResolvedValueOnce({
+          Item: {
+            tenantId: 't1',
+            accountId: 'acc-1',
+            currentLifecycleState: LifecycleState.PROSPECT,
+            activeSignalIndex: {},
+            lastTransitionAt: null,
+            lastEngagementAt: null,
+            hasActiveContract: false,
+            lastInferenceAt: '2026-01-01T00:00:00Z',
+            inferenceRuleVersion: '1.0.0',
+            createdAt: '2026-01-01T00:00:00Z',
+            updatedAt: '2026-01-01T00:00:00Z',
+          },
+        })
+        .mockResolvedValueOnce({})
+        .mockResolvedValueOnce({});
+      mockLedgerService.append.mockRejectedValue(new Error('Ledger append failed'));
+
+      await expect(
+        service.recordTransition(
+          'acc-1',
+          't1',
+          LifecycleState.PROSPECT,
+          LifecycleState.SUSPECT,
+          [SignalType.FIRST_ENGAGEMENT_OCCURRED],
+          ['ref-1'],
+          'trace-1'
+        )
+      ).rejects.toThrow('Ledger append failed');
+    });
   });
 
   describe('getLifecycleHistory', () => {
     it('returns empty array', async () => {
       const result = await service.getLifecycleHistory('acc-1', 't1');
       expect(result).toEqual([]);
+    });
+
+    it('throws when logger.debug throws (catch branch)', async () => {
+      const logSpy = jest.spyOn(logger, 'debug').mockImplementationOnce(() => {
+        throw new Error('Logger error');
+      });
+
+      await expect(service.getLifecycleHistory('acc-1', 't1')).rejects.toThrow('Logger error');
+      logSpy.mockRestore();
     });
   });
 });

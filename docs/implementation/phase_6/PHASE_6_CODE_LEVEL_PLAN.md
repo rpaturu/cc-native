@@ -46,6 +46,8 @@ For detailed code-level plans, see:
 | **6.4** | `PHASE_6_4_CODE_LEVEL_PLAN.md` | Plans API (GET + CDK) — ✅ Complete; Active Plans UI (cc-dealmind) deferred |
 | **6.5** | `PHASE_6_5_CODE_LEVEL_PLAN.md` | Conflict-resolution invariant (reject on violation); optional extended rules |
 
+**6.4 source of truth:** For 6.4 implementation and semantics (list shape, default status, ledger ownership, CORS), use [PHASE_6_4_CODE_LEVEL_PLAN.md](PHASE_6_4_CODE_LEVEL_PLAN.md) and [testing/PHASE_6_4_TEST_PLAN.md](testing/PHASE_6_4_TEST_PLAN.md) only. Any other 6.4 description (e.g. "per product choice," "optional ownership check") is **STALE — do not use.**
+
 **Implementation order:** 6.1 → 6.2 → 6.3 → 6.4 → 6.5. Do not introduce multiple plan types at once.
 
 ---

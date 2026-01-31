@@ -292,7 +292,9 @@ Validates before a plan can move to APPROVED or before next step runs. For APPRO
 
 ## EPIC 6.4 — UI: Active Plans
 
-**UI is implemented in cc-dealmind;** cc-native provides APIs and data.
+**6.4 code-level contract:** For API/CDK implementation and semantics (list shape, default status, ledger ownership, CORS), use **[PHASE_6_4_CODE_LEVEL_PLAN.md](PHASE_6_4_CODE_LEVEL_PLAN.md)** only. This section is high-level acceptance only; do not implement from here. Any doc that says "per product choice" or "optional ownership check" for 6.4 is **STALE — do not use.**
+
+**UI is implemented in cc-dealmind;** cc-native provides APIs and data. (6.4 cc-native API: ✅ complete per code-level plan.)
 
 ### Story 6.4.1 — Plans API (list, get, approve, pause, abort)
 - List plans by tenant/account (filter by status).

@@ -171,5 +171,45 @@ describe('SynthesisEngine', () => {
       expect(result.account_id).toBe('acc-1');
       expect(result.posture).toBe(PostureState.OK);
     });
+
+    it('uses rule_id tie-breaker when two rules have same priority (sort branch)', async () => {
+      const tieBreakRuleset: Ruleset = {
+        ...minimalRuleset,
+        rules: [
+          {
+            rule_id: 'rule-b',
+            priority: 1,
+            lifecycle_state: 'PROSPECT',
+            conditions: { conditions: {} },
+            outputs: {
+              posture: 'OK',
+              momentum: 'FLAT',
+              evidence_signals: [],
+              output_ttl_days: 7,
+            },
+          } as SynthesisRule,
+          {
+            rule_id: 'rule-a',
+            priority: 1,
+            lifecycle_state: 'PROSPECT',
+            conditions: { conditions: {} },
+            outputs: {
+              posture: 'AT_RISK',
+              momentum: 'DOWN',
+              evidence_signals: [],
+              output_ttl_days: 7,
+            },
+          } as SynthesisRule,
+        ],
+      };
+      const { RulesetLoader } = require('../../../services/synthesis/RulesetLoader');
+      RulesetLoader.loadRuleset.mockReturnValueOnce(tieBreakRuleset);
+
+      const eventTime = new Date().toISOString();
+      const result = await engine.synthesize('acc-1', 't1', eventTime);
+
+      expect(result.rule_id).toBe('rule-a');
+      expect(result.posture).toBe(PostureState.AT_RISK);
+    });
   });
 });

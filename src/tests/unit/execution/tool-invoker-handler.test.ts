@@ -40,6 +40,14 @@ jest.mock('@aws-sdk/client-cognito-identity-provider', () => ({
   },
 }));
 
+// Mock InvokeWithResilience for resilience-path coverage (RESILIENCE_TABLE_NAME set)
+const mockInvokeWithResilience = jest.fn();
+const mockConnectorIdFromToolName = jest.fn((n: string) => n);
+jest.mock('../../../services/connector/InvokeWithResilience', () => ({
+  invokeWithResilience: (...args: unknown[]) => mockInvokeWithResilience(...args),
+  connectorIdFromToolName: (n: string) => mockConnectorIdFromToolName(n),
+}));
+
 // Do not mock axios so handler makes real HTTP calls; we use nock in handler-invocation tests to intercept
 
 import { handler } from '../../../handlers/phase4/tool-invoker-handler';
@@ -857,6 +865,200 @@ describe('ToolInvokerHandler - Handler invocation', () => {
     } finally {
       if (origPool) process.env.COGNITO_USER_POOL_ID = origPool;
       if (origClient) process.env.COGNITO_CLIENT_ID = origClient;
+    }
+  });
+
+  it('throws TransientError when resilience path returns defer (backpressure/circuit open)', async () => {
+    const origResilience = process.env.RESILIENCE_TABLE_NAME;
+    process.env.RESILIENCE_TABLE_NAME = 'test-resilience-table';
+    process.env.COGNITO_USER_POOL_ID = 'test-pool-id';
+    process.env.COGNITO_CLIENT_ID = 'test-client-id';
+    process.env.COGNITO_SERVICE_USERNAME = 'test-service-user';
+    process.env.COGNITO_SERVICE_PASSWORD = 'test-service-pass';
+    mockInvokeWithResilience.mockResolvedValueOnce({ kind: 'defer', retryAfterSeconds: 30 });
+    try {
+      await expect(handler(validStepFunctionsEvent, {} as any, jest.fn())).rejects.toMatchObject({
+        name: 'TransientError',
+        message: expect.stringContaining('Backpressure or circuit open'),
+      });
+      expect(mockInvokeWithResilience).toHaveBeenCalled();
+    } finally {
+      nock.cleanAll();
+      if (origResilience) process.env.RESILIENCE_TABLE_NAME = origResilience;
+      else delete process.env.RESILIENCE_TABLE_NAME;
+      delete process.env.COGNITO_USER_POOL_ID;
+      delete process.env.COGNITO_CLIENT_ID;
+      delete process.env.COGNITO_SERVICE_USERNAME;
+      delete process.env.COGNITO_SERVICE_PASSWORD;
+    }
+  });
+
+  it('returns success when resilience path returns value (mocked gateway response)', async () => {
+    const origResilience = process.env.RESILIENCE_TABLE_NAME;
+    process.env.RESILIENCE_TABLE_NAME = 'test-resilience-table';
+    process.env.COGNITO_USER_POOL_ID = 'test-pool-id';
+    process.env.COGNITO_CLIENT_ID = 'test-client-id';
+    process.env.COGNITO_SERVICE_USERNAME = 'test-service-user';
+    process.env.COGNITO_SERVICE_PASSWORD = 'test-service-pass';
+    const successBody = {
+      result: {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              success: true,
+              external_object_refs: [{ object_id: 'mock-id', object_type: 'Task' }],
+            }),
+          },
+        ],
+      },
+    };
+    mockInvokeWithResilience.mockResolvedValueOnce({ kind: 'value', value: successBody });
+    try {
+      const result = await handler(validStepFunctionsEvent, {} as any, jest.fn());
+      expect((result as any).success).toBe(true);
+      expect((result as any).external_object_refs?.[0]?.object_id).toBe('mock-id');
+      expect(mockInvokeWithResilience).toHaveBeenCalled();
+    } finally {
+      if (origResilience) process.env.RESILIENCE_TABLE_NAME = origResilience;
+      else delete process.env.RESILIENCE_TABLE_NAME;
+      delete process.env.COGNITO_USER_POOL_ID;
+      delete process.env.COGNITO_CLIENT_ID;
+      delete process.env.COGNITO_SERVICE_USERNAME;
+      delete process.env.COGNITO_SERVICE_PASSWORD;
+    }
+  });
+
+  it('throws TransientError when gateway returns invalid MCP format (missing result.content)', async () => {
+    process.env.COGNITO_USER_POOL_ID = 'test-pool-id';
+    process.env.COGNITO_CLIENT_ID = 'test-client-id';
+    process.env.COGNITO_SERVICE_USERNAME = 'test-service-user';
+    process.env.COGNITO_SERVICE_PASSWORD = 'test-service-pass';
+    nock('https://gateway.example.com').post('/').reply(200, { result: {} });
+    try {
+      await expect(handler(validStepFunctionsEvent, {} as any, jest.fn())).rejects.toMatchObject({
+        name: 'TransientError',
+        message: expect.stringContaining('Invalid MCP response format'),
+      });
+    } finally {
+      nock.cleanAll();
+      delete process.env.COGNITO_USER_POOL_ID;
+      delete process.env.COGNITO_CLIENT_ID;
+      delete process.env.COGNITO_SERVICE_USERNAME;
+      delete process.env.COGNITO_SERVICE_PASSWORD;
+    }
+  });
+
+  it('throws TransientError when gateway returns malformed JSON in result.content (not isError)', async () => {
+    process.env.COGNITO_USER_POOL_ID = 'test-pool-id';
+    process.env.COGNITO_CLIENT_ID = 'test-client-id';
+    process.env.COGNITO_SERVICE_USERNAME = 'test-service-user';
+    process.env.COGNITO_SERVICE_PASSWORD = 'test-service-pass';
+    nock('https://gateway.example.com')
+      .post('/')
+      .reply(200, { result: { content: [{ type: 'text', text: 'plain text not json' }] } });
+    try {
+      await expect(handler(validStepFunctionsEvent, {} as any, jest.fn())).rejects.toMatchObject({
+        name: 'TransientError',
+        message: expect.stringContaining('Failed to parse MCP response JSON'),
+      });
+    } finally {
+      nock.cleanAll();
+      delete process.env.COGNITO_USER_POOL_ID;
+      delete process.env.COGNITO_CLIENT_ID;
+      delete process.env.COGNITO_SERVICE_USERNAME;
+      delete process.env.COGNITO_SERVICE_PASSWORD;
+    }
+  });
+
+  it('throws InvalidToolResponseError when success but missing external_object_refs', async () => {
+    process.env.COGNITO_USER_POOL_ID = 'test-pool-id';
+    process.env.COGNITO_CLIENT_ID = 'test-client-id';
+    process.env.COGNITO_SERVICE_USERNAME = 'test-service-user';
+    process.env.COGNITO_SERVICE_PASSWORD = 'test-service-pass';
+    const mcpBody = {
+      result: {
+        content: [{ type: 'text', text: JSON.stringify({ success: true }) }],
+      },
+    };
+    nock('https://gateway.example.com').post('/').reply(200, mcpBody);
+    try {
+      await expect(handler(validStepFunctionsEvent, {} as any, jest.fn())).rejects.toMatchObject({
+        name: 'InvalidToolResponseError',
+        message: expect.stringContaining('external_object_refs'),
+      });
+    } finally {
+      nock.cleanAll();
+      delete process.env.COGNITO_USER_POOL_ID;
+      delete process.env.COGNITO_CLIENT_ID;
+      delete process.env.COGNITO_SERVICE_USERNAME;
+      delete process.env.COGNITO_SERVICE_PASSWORD;
+    }
+  });
+
+  it('throws InvalidToolResponseError when success:false with no error message', async () => {
+    process.env.COGNITO_USER_POOL_ID = 'test-pool-id';
+    process.env.COGNITO_CLIENT_ID = 'test-client-id';
+    process.env.COGNITO_SERVICE_USERNAME = 'test-service-user';
+    process.env.COGNITO_SERVICE_PASSWORD = 'test-service-pass';
+    const mcpBody = {
+      result: {
+        content: [{ type: 'text', text: JSON.stringify({ success: false }) }],
+      },
+    };
+    nock('https://gateway.example.com').post('/').reply(200, mcpBody);
+    try {
+      await expect(handler(validStepFunctionsEvent, {} as any, jest.fn())).rejects.toMatchObject({
+        name: 'InvalidToolResponseError',
+        message: expect.stringContaining('no error message'),
+      });
+    } finally {
+      nock.cleanAll();
+      delete process.env.COGNITO_USER_POOL_ID;
+      delete process.env.COGNITO_CLIENT_ID;
+      delete process.env.COGNITO_SERVICE_USERNAME;
+      delete process.env.COGNITO_SERVICE_PASSWORD;
+    }
+  });
+
+  it('throws PermanentError when gateway returns 403', async () => {
+    process.env.COGNITO_USER_POOL_ID = 'test-pool-id';
+    process.env.COGNITO_CLIENT_ID = 'test-client-id';
+    process.env.COGNITO_SERVICE_USERNAME = 'test-service-user';
+    process.env.COGNITO_SERVICE_PASSWORD = 'test-service-pass';
+    nock('https://gateway.example.com').post('/').reply(403, { message: 'Forbidden' });
+    try {
+      await expect(handler(validStepFunctionsEvent, {} as any, jest.fn())).rejects.toMatchObject({
+        name: 'PermanentError',
+      });
+    } finally {
+      nock.cleanAll();
+      delete process.env.COGNITO_USER_POOL_ID;
+      delete process.env.COGNITO_CLIENT_ID;
+      delete process.env.COGNITO_SERVICE_USERNAME;
+      delete process.env.COGNITO_SERVICE_PASSWORD;
+    }
+  });
+
+  it('throws TransientError when gateway times out (ECONNABORTED) after retries', async () => {
+    process.env.COGNITO_USER_POOL_ID = 'test-pool-id';
+    process.env.COGNITO_CLIENT_ID = 'test-client-id';
+    process.env.COGNITO_SERVICE_USERNAME = 'test-service-user';
+    process.env.COGNITO_SERVICE_PASSWORD = 'test-service-pass';
+    const timeoutError = new AxiosError('timeout of 60000ms exceeded', 'ECONNABORTED');
+    for (let i = 0; i < 4; i++) {
+      nock('https://gateway.example.com').post('/').replyWithError(timeoutError);
+    }
+    try {
+      await expect(handler(validStepFunctionsEvent, {} as any, jest.fn())).rejects.toMatchObject({
+        name: 'TransientError',
+      });
+    } finally {
+      nock.cleanAll();
+      delete process.env.COGNITO_USER_POOL_ID;
+      delete process.env.COGNITO_CLIENT_ID;
+      delete process.env.COGNITO_SERVICE_USERNAME;
+      delete process.env.COGNITO_SERVICE_PASSWORD;
     }
   });
 });

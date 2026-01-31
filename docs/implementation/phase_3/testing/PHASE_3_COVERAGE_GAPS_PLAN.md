@@ -229,4 +229,4 @@ This plan covers **all Phase 3 coverage gaps**: four handlers and one service wi
 - **Existing Phase 3 test plan:** [PHASE_3_TEST_PLAN.md](PHASE_3_TEST_PLAN.md) (summary, contract, recommendations).
 - **Handler test pattern (injected deps):** `src/tests/unit/handlers/phase4/execution-starter-handler.test.ts`, `src/tests/unit/handlers/phase5/auto-approval-gate-handler.test.ts`.
 - **Handler test pattern (module mocks):** Use `jest.mock('path/to/service')` and `require` or dynamic import of handler after mocks.
-- **Coverage improvement overview:** `docs/testing/TEST_COVERAGE_IMPROVEMENT.md`.
+- **Coverage improvement overview:** `docs/testing/PROJECT_TEST_COVERAGE_REVIEW.md`.

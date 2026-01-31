@@ -140,5 +140,5 @@ All **49** Phase 5.7 unit tests pass.
 ## References
 
 - **Code-level plan:** [PHASE_5_7_CODE_LEVEL_PLAN.md](../PHASE_5_7_CODE_LEVEL_PLAN.md)
-- **Coverage plan:** [COVERAGE_TEST_PLAN.md](../../../testing/COVERAGE_TEST_PLAN.md)
+- **Coverage plan:** [PROJECT_TEST_COVERAGE_REVIEW.md](../../../testing/PROJECT_TEST_COVERAGE_REVIEW.md)
 - **Phase 5.6 test plan:** [PHASE_5_6_TEST_PLAN.md](./PHASE_5_6_TEST_PLAN.md)

@@ -59,6 +59,14 @@ describe('TenantService', () => {
 
       expect(tenant.tenantId).toBe(tenantId);
     });
+
+    it('throws when PutCommand fails (catch branch)', async () => {
+      mockDynamoDBDocumentClient.send.mockRejectedValue(new Error('ConditionalCheckFailed'));
+
+      await expect(
+        tenantService.createTenant({ tenantId: 't1', name: 'Test' })
+      ).rejects.toThrow('ConditionalCheckFailed');
+    });
   });
 
   describe('getTenant', () => {
@@ -92,6 +100,12 @@ describe('TenantService', () => {
       const tenant = await tenantService.getTenant('non-existent');
 
       expect(tenant).toBeNull();
+    });
+
+    it('throws when Dynamo send rejects (catch branch)', async () => {
+      mockDynamoDBDocumentClient.send.mockRejectedValue(new Error('Dynamo error'));
+
+      await expect(tenantService.getTenant('tenant-123')).rejects.toThrow('Dynamo error');
     });
   });
 
@@ -150,6 +164,33 @@ describe('TenantService', () => {
       await expect(
         tenantService.updateTenant('non-existent', { name: 'Updated' })
       ).rejects.toThrow();
+    });
+
+    it('returns existing tenant when updates empty (no SET fields)', async () => {
+      mockDynamoDBDocumentClient.send.mockResolvedValue({
+        Item: {
+          tenantId: 'tenant-123',
+          name: 'Test Tenant',
+          status: 'active',
+          config: { name: 'Test Tenant' },
+          metadata: {},
+          createdAt: '2024-01-01T00:00:00Z',
+          updatedAt: '2024-01-01T00:00:00Z',
+        },
+      });
+
+      const result = await tenantService.updateTenant('tenant-123', {});
+
+      expect(result?.tenantId).toBe('tenant-123');
+      expect(mockDynamoDBDocumentClient.send).toHaveBeenCalledTimes(1);
+    });
+
+    it('rejects when updates empty and tenant not found', async () => {
+      mockDynamoDBDocumentClient.send.mockResolvedValue({ Item: undefined });
+
+      await expect(tenantService.updateTenant('missing', {})).rejects.toThrow(
+        /Tenant not found: missing/
+      );
     });
   });
 });

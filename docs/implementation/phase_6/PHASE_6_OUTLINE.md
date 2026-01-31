@@ -241,7 +241,7 @@ That's the difference between:
 1. **Phase 6.1 — RevenuePlan schema + policy**
 2. **Phase 6.2 — Single plan type** (Renewal Defense is ideal)
 3. **Phase 6.3 — Plan orchestration over time**
-4. **Phase 6.4 — UI: 'Active Plans'**
+4. **Phase 6.4 — UI: 'Active Plans'** (cc-native API: see [PHASE_6_4_CODE_LEVEL_PLAN.md](PHASE_6_4_CODE_LEVEL_PLAN.md) — canonical; ✅ complete.)
 5. **Phase 6.5 — Cross-plan conflict resolution**
 
 Do *not* introduce multiple plan types at once.

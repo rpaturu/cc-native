@@ -2,7 +2,7 @@
 
 **Status:** 🟢 Complete (tool-invoker validation, SignalService, auto-approval-gate)  
 **Created:** 2026-01-30  
-**Parent:** [COVERAGE_TEST_PLAN.md](../../../testing/COVERAGE_TEST_PLAN.md), [TEST_COVERAGE_IMPROVEMENT.md](../../../testing/TEST_COVERAGE_IMPROVEMENT.md)
+**Parent:** [PROJECT_TEST_COVERAGE_REVIEW.md](../../../testing/PROJECT_TEST_COVERAGE_REVIEW.md)
 
 ---
 
@@ -70,7 +70,7 @@ This plan targets **lower-coverage files** identified after Phase 1–4 coverage
 
 ### 4. SnapshotService / EvidenceService (P1, optional)
 
-- Deferred unless time permits; see TEST_COVERAGE_IMPROVEMENT.md for uncovered line ranges.
+- Deferred unless time permits; see PROJECT_TEST_COVERAGE_REVIEW.md for uncovered line ranges.
 
 ---
 
