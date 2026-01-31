@@ -7,10 +7,13 @@ process.env.PLAN_LEDGER_TABLE_NAME = 'PlanLedger';
 process.env.AWS_REGION = 'us-east-1';
 
 const mockGetPlan = jest.fn();
+const mockPutPlan = jest.fn();
 const mockExistsActivePlanForAccountAndType = jest.fn();
 const mockValidateForApproval = jest.fn();
 const mockEvaluateCanActivate = jest.fn();
 const mockTransition = jest.fn();
+const mockGenerateProposal = jest.fn();
+const mockLedgerAppend = jest.fn();
 
 jest.mock('../../../../services/core/Logger');
 jest.mock('../../../../utils/aws-client-config', () => ({ getAWSClientConfig: jest.fn(() => ({})) }));
@@ -21,11 +24,19 @@ jest.mock('@aws-sdk/lib-dynamodb', () => ({
 jest.mock('../../../../services/plan/PlanRepositoryService', () => ({
   PlanRepositoryService: jest.fn().mockImplementation(() => ({
     getPlan: mockGetPlan,
+    putPlan: mockPutPlan,
     existsActivePlanForAccountAndType: mockExistsActivePlanForAccountAndType,
   })),
 }));
 jest.mock('../../../../services/plan/PlanLedgerService', () => ({
-  PlanLedgerService: jest.fn().mockImplementation(() => ({})),
+  PlanLedgerService: jest.fn().mockImplementation(() => ({
+    append: mockLedgerAppend,
+  })),
+}));
+jest.mock('../../../../services/plan/PlanProposalGeneratorService', () => ({
+  PlanProposalGeneratorService: jest.fn().mockImplementation(() => ({
+    generateProposal: mockGenerateProposal,
+  })),
 }));
 jest.mock('../../../../services/plan/PlanPolicyGateService', () => ({
   PlanPolicyGateService: jest.fn().mockImplementation(() => ({
@@ -86,10 +97,141 @@ describe('plan-lifecycle-api-handler', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockGetPlan.mockResolvedValue(null);
+    mockPutPlan.mockResolvedValue(undefined);
+    mockLedgerAppend.mockResolvedValue({});
     mockValidateForApproval.mockResolvedValue({ valid: true, reasons: [] });
     mockEvaluateCanActivate.mockResolvedValue({ can_activate: true, reasons: [] });
     mockExistsActivePlanForAccountAndType.mockResolvedValue({ exists: false });
     mockTransition.mockResolvedValue(undefined);
+  });
+
+  describe('shared / edge (run first for 503)', () => {
+    it('503: Service not configured when env missing (getServices catch)', async () => {
+      const saved = process.env.REVENUE_PLANS_TABLE_NAME;
+      delete process.env.REVENUE_PLANS_TABLE_NAME;
+      const res = await invokeHandler(event({
+        path: '/plans/propose',
+        resource: '/plans/propose',
+        pathParameters: null,
+        body: JSON.stringify({ tenant_id: 't1', account_id: 'acc-1', plan_type: 'RENEWAL_DEFENSE' }),
+      }));
+      expect(res.statusCode).toBe(503);
+      expect(JSON.parse(res.body || '{}').error).toBe('Service not configured');
+      if (saved !== undefined) process.env.REVENUE_PLANS_TABLE_NAME = saved;
+      else process.env.REVENUE_PLANS_TABLE_NAME = 'RevenuePlans';
+    });
+
+    it('parseBody invalid JSON returns empty object (propose with invalid body still defaults plan_type)', async () => {
+      mockGenerateProposal.mockResolvedValue({ plan: plan({ plan_id: 'p1', plan_status: 'DRAFT' }) });
+      const res = await invokeHandler(event({
+        path: '/plans/propose',
+        resource: '/plans/propose',
+        pathParameters: null,
+        body: '{',
+      }));
+      expect(res.statusCode).toBe(201);
+      expect(mockGenerateProposal).toHaveBeenCalledWith(
+        expect.objectContaining({ plan_type: 'RENEWAL_DEFENSE', tenant_id: 't1', account_id: 'acc-1' })
+      );
+    });
+  });
+
+  describe('POST /plans/propose (6.2)', () => {
+    it('201: valid RENEWAL_DEFENSE proposal; plan persisted and ledger appended', async () => {
+      const draftPlan = plan({
+        plan_id: 'proposed-1',
+        plan_status: 'DRAFT',
+        plan_type: 'RENEWAL_DEFENSE',
+      });
+      mockGenerateProposal.mockResolvedValue({ plan: draftPlan });
+      const res = await invokeHandler(event({
+        path: '/plans/propose',
+        resource: '/plans/propose',
+        pathParameters: null,
+        body: JSON.stringify({
+          tenant_id: 't1',
+          account_id: 'acc-1',
+          plan_type: 'RENEWAL_DEFENSE',
+        }),
+      }));
+      expect(res.statusCode).toBe(201);
+      const body = JSON.parse(res.body || '{}');
+      expect(body.plan).toBeDefined();
+      expect(body.plan.plan_id).toBe('proposed-1');
+      expect(body.plan.plan_status).toBe('DRAFT');
+      expect(mockPutPlan).toHaveBeenCalledWith(draftPlan);
+      expect(mockLedgerAppend).toHaveBeenCalledWith(
+        expect.objectContaining({
+          plan_id: 'proposed-1',
+          tenant_id: 't1',
+          account_id: 'acc-1',
+          event_type: 'PLAN_CREATED',
+        })
+      );
+    });
+
+    it('400: invalid plan_type (not RENEWAL_DEFENSE)', async () => {
+      const res = await invokeHandler(event({
+        path: '/plans/propose',
+        resource: '/plans/propose',
+        pathParameters: null,
+        body: JSON.stringify({
+          tenant_id: 't1',
+          account_id: 'acc-1',
+          plan_type: 'OTHER_TYPE',
+        }),
+      }));
+      expect(res.statusCode).toBe(400);
+      expect(JSON.parse(res.body || '{}').error).toContain('RENEWAL_DEFENSE');
+      expect(mockGenerateProposal).not.toHaveBeenCalled();
+    });
+
+    it('403: tenant_id or account_id does not match auth', async () => {
+      const res = await invokeHandler(event({
+        path: '/plans/propose',
+        resource: '/plans/propose',
+        pathParameters: null,
+        body: JSON.stringify({
+          tenant_id: 'other-tenant',
+          account_id: 'acc-1',
+          plan_type: 'RENEWAL_DEFENSE',
+        }),
+      }));
+      expect(res.statusCode).toBe(403);
+      expect(mockGenerateProposal).not.toHaveBeenCalled();
+    });
+
+    it('500: generateProposal throws generic error', async () => {
+      mockGenerateProposal.mockRejectedValue(new Error('DB error'));
+      const res = await invokeHandler(event({
+        path: '/plans/propose',
+        resource: '/plans/propose',
+        pathParameters: null,
+        body: JSON.stringify({
+          tenant_id: 't1',
+          account_id: 'acc-1',
+          plan_type: 'RENEWAL_DEFENSE',
+        }),
+      }));
+      expect(res.statusCode).toBe(500);
+      expect(JSON.parse(res.body || '{}').error).toBe('Internal server error');
+    });
+
+    it('400: generateProposal throws with message containing "not supported"', async () => {
+      mockGenerateProposal.mockRejectedValue(new Error('Plan type X is not supported.'));
+      const res = await invokeHandler(event({
+        path: '/plans/propose',
+        resource: '/plans/propose',
+        pathParameters: null,
+        body: JSON.stringify({
+          tenant_id: 't1',
+          account_id: 'acc-1',
+          plan_type: 'RENEWAL_DEFENSE',
+        }),
+      }));
+      expect(res.statusCode).toBe(400);
+      expect(JSON.parse(res.body || '{}').error).toContain('not supported');
+    });
   });
 
   describe('POST /plans/:planId/approve', () => {
@@ -175,6 +317,14 @@ describe('plan-lifecycle-api-handler', () => {
       mockGetPlan.mockResolvedValue(null);
       const res = await invokeHandler(event({ resource: '/plans/{planId}/resume', path: '/plans/plan-1/resume' }));
       expect(res.statusCode).toBe(404);
+      expect(mockTransition).not.toHaveBeenCalled();
+    });
+
+    it('400: Plan not PAUSED (e.g. DRAFT) to resume', async () => {
+      mockGetPlan.mockResolvedValue(plan({ plan_status: 'DRAFT' }));
+      const res = await invokeHandler(event({ resource: '/plans/{planId}/resume', path: '/plans/plan-1/resume' }));
+      expect(res.statusCode).toBe(400);
+      expect(JSON.parse(res.body || '{}').error).toContain('PAUSED');
       expect(mockTransition).not.toHaveBeenCalled();
     });
   });

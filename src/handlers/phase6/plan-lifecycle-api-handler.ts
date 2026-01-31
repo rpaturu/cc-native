@@ -15,6 +15,8 @@ import { PlanRepositoryService } from '../../services/plan/PlanRepositoryService
 import { PlanLedgerService } from '../../services/plan/PlanLedgerService';
 import { PlanPolicyGateService } from '../../services/plan/PlanPolicyGateService';
 import { PlanLifecycleService } from '../../services/plan/PlanLifecycleService';
+import { PlanProposalGeneratorService } from '../../services/plan/PlanProposalGeneratorService';
+import { getPlanTypeConfig } from '../../config/planTypeConfig';
 
 const logger = new Logger('PlanLifecycleAPI');
 
@@ -33,6 +35,7 @@ function buildServices(): {
   ledger: PlanLedgerService;
   gate: PlanPolicyGateService;
   lifecycle: PlanLifecycleService;
+  proposalGenerator: PlanProposalGeneratorService;
 } {
   const repo = new PlanRepositoryService(logger, {
     tableName: requireEnv('REVENUE_PLANS_TABLE_NAME'),
@@ -42,13 +45,14 @@ function buildServices(): {
     tableName: requireEnv('PLAN_LEDGER_TABLE_NAME'),
     region,
   });
-  const gate = new PlanPolicyGateService({});
+  const gate = new PlanPolicyGateService({ getPlanTypeConfig });
   const lifecycle = new PlanLifecycleService({
     planRepository: repo,
     planLedger: ledger,
     logger,
   });
-  return { repo, ledger, gate, lifecycle };
+  const proposalGenerator = new PlanProposalGeneratorService({ logger });
+  return { repo, ledger, gate, lifecycle, proposalGenerator };
 }
 
 let cached: ReturnType<typeof buildServices> | null = null;
@@ -88,6 +92,77 @@ function parseBody<T = Record<string, unknown>>(event: APIGatewayProxyEvent): T 
     return (event.body ? JSON.parse(event.body) : {}) as T;
   } catch {
     return {} as T;
+  }
+}
+
+interface ProposeBody {
+  tenant_id?: string;
+  account_id?: string;
+  plan_type?: string;
+  posture?: Record<string, unknown>;
+  signals?: unknown[];
+  history?: unknown[];
+  tenant_goals?: Record<string, unknown>;
+}
+
+async function handlePropose(
+  event: APIGatewayProxyEvent,
+  services: ReturnType<typeof buildServices>,
+  tenantId: string,
+  accountId: string
+): Promise<APIGatewayProxyResult> {
+  const body = parseBody<ProposeBody>(event);
+  const planType = body.plan_type ?? 'RENEWAL_DEFENSE';
+  if (planType !== 'RENEWAL_DEFENSE') {
+    return cors({
+      statusCode: 400,
+      body: JSON.stringify({ error: 'Invalid plan_type; only RENEWAL_DEFENSE is supported in 6.2', plan_type: planType }),
+    });
+  }
+  const tenant_id = body.tenant_id ?? tenantId;
+  const account_id = body.account_id ?? accountId;
+  if (tenant_id !== tenantId || account_id !== accountId) {
+    return cors({
+      statusCode: 403,
+      body: JSON.stringify({ error: 'tenant_id and account_id must match authenticated claims' }),
+    });
+  }
+  const { proposalGenerator, repo, ledger } = services;
+  try {
+    const { plan } = await proposalGenerator.generateProposal({
+      tenant_id,
+      account_id,
+      plan_type: planType,
+      posture: body.posture,
+      signals: body.signals,
+      history: body.history,
+      tenant_goals: body.tenant_goals,
+    });
+    await repo.putPlan(plan);
+    await ledger.append({
+      plan_id: plan.plan_id,
+      tenant_id: plan.tenant_id,
+      account_id: plan.account_id,
+      event_type: 'PLAN_CREATED',
+      data: {
+        plan_id: plan.plan_id,
+        plan_type: plan.plan_type,
+        account_id: plan.account_id,
+        tenant_id: plan.tenant_id,
+        trigger: 'proposal_generated',
+      },
+    });
+    return cors({ statusCode: 201, body: JSON.stringify({ plan }) });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    if (message.includes('not supported') || message.includes('rejected')) {
+      return cors({ statusCode: 400, body: JSON.stringify({ error: message }) });
+    }
+    logger.error('Propose error', { tenant_id, account_id, error: message });
+    return cors({
+      statusCode: 500,
+      body: JSON.stringify({ error: 'Internal server error' }),
+    });
   }
 }
 
@@ -211,13 +286,16 @@ export const handler: Handler<APIGatewayProxyEvent, APIGatewayProxyResult> = asy
     return cors({ statusCode: 401, body: JSON.stringify({ error: 'Unauthorized' }) });
   }
   const { tenantId, accountId } = authResult;
-  const planId = event.pathParameters?.planId;
-  if (!planId) {
-    return cors({ statusCode: 400, body: JSON.stringify({ error: 'Missing planId' }) });
-  }
-
   const path = event.resource || event.path || '';
+  const planId = event.pathParameters?.planId;
+
   try {
+    if (path.endsWith('/propose') && event.httpMethod === 'POST') {
+      return await handlePropose(event, services, tenantId, accountId);
+    }
+    if (!planId) {
+      return cors({ statusCode: 400, body: JSON.stringify({ error: 'Missing planId' }) });
+    }
     if (path.endsWith('/approve') && event.httpMethod === 'POST') {
       return await handleApprove(event, services, tenantId, accountId, planId);
     }

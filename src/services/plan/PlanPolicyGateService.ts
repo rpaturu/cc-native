@@ -1,7 +1,7 @@
 /**
  * Phase 6.1 — Plan Policy Gate: validation only; can_activate + reasons taxonomy.
- * Deterministic: same input → same output. Does not read from DB.
- * See PHASE_6_1_CODE_LEVEL_PLAN.md §5 PlanPolicyGateService.
+ * Phase 6.2 — Uses plan-type config for allowed plan types and step action types.
+ * See PHASE_6_1_CODE_LEVEL_PLAN.md §5, PHASE_6_2_CODE_LEVEL_PLAN.md §5.
  */
 
 import { RevenuePlanV1 } from '../../types/plan/PlanTypes';
@@ -11,10 +11,13 @@ import {
   PlanPolicyGateReason,
   PlanPolicyGateReasonCode,
 } from '../../types/plan/PlanPolicyGateTypes';
+import type { PlanTypeConfig } from '../../types/plan/PlanTypeConfig';
 
 export interface PlanPolicyGateServiceConfig {
-  /** Allowed plan types for tenant (default ['RENEWAL_DEFENSE']) */
+  /** Allowed plan types for tenant (default ['RENEWAL_DEFENSE']); used when getPlanTypeConfig not provided */
   allowedPlanTypes?: string[];
+  /** Plan-type config resolver (6.2): if provided, validates plan_type and step action_type against config */
+  getPlanTypeConfig?: (planType: string) => PlanTypeConfig | null;
   /** If true, treat plans with high-risk step as requiring elevated authority (stub) */
   requireElevatedForHighRisk?: boolean;
   /** If true, human-touch required not satisfied (stub) */
@@ -39,11 +42,33 @@ export class PlanPolicyGateService {
     _tenantId: string
   ): Promise<{ valid: boolean; reasons: PlanPolicyGateReason[] }> {
     const reasons: PlanPolicyGateReason[] = [];
-    const allowed = this.config.allowedPlanTypes ?? DEFAULT_ALLOWED_PLAN_TYPES;
-    if (!allowed.includes(plan.plan_type)) {
-      reasons.push(
-        reason('INVALID_PLAN_TYPE', `Plan type ${plan.plan_type} is not allowed for this tenant.`)
-      );
+    if (this.config.getPlanTypeConfig) {
+      const typeConfig = this.config.getPlanTypeConfig(plan.plan_type);
+      if (typeConfig === null) {
+        reasons.push(
+          reason('INVALID_PLAN_TYPE', `Plan type ${plan.plan_type} is not allowed for this tenant.`)
+        );
+      } else {
+        const allowedSteps = new Set(typeConfig.allowed_step_action_types);
+        for (const step of plan.steps || []) {
+          const actionType = step.action_type ?? '';
+          if (!allowedSteps.has(actionType)) {
+            reasons.push(
+              reason(
+                'STEP_ORDER_VIOLATION',
+                `Disallowed step action_type: ${actionType}. Allowed: ${typeConfig.allowed_step_action_types.join(', ')}.`
+              )
+            );
+          }
+        }
+      }
+    } else {
+      const allowed = this.config.allowedPlanTypes ?? DEFAULT_ALLOWED_PLAN_TYPES;
+      if (!allowed.includes(plan.plan_type)) {
+        reasons.push(
+          reason('INVALID_PLAN_TYPE', `Plan type ${plan.plan_type} is not allowed for this tenant.`)
+        );
+      }
     }
     const stepViolation = this.checkStepOrder(plan);
     if (stepViolation) reasons.push(stepViolation);
@@ -83,11 +108,19 @@ export class PlanPolicyGateService {
         )
       );
     }
-    const allowed = this.config.allowedPlanTypes ?? DEFAULT_ALLOWED_PLAN_TYPES;
-    if (!allowed.includes(plan.plan_type)) {
-      reasons.push(
-        reason('INVALID_PLAN_TYPE', `Plan type ${plan.plan_type} is not allowed.`)
-      );
+    if (this.config.getPlanTypeConfig) {
+      if (this.config.getPlanTypeConfig(plan.plan_type) === null) {
+        reasons.push(
+          reason('INVALID_PLAN_TYPE', `Plan type ${plan.plan_type} is not allowed.`)
+        );
+      }
+    } else {
+      const allowed = this.config.allowedPlanTypes ?? DEFAULT_ALLOWED_PLAN_TYPES;
+      if (!allowed.includes(plan.plan_type)) {
+        reasons.push(
+          reason('INVALID_PLAN_TYPE', `Plan type ${plan.plan_type} is not allowed.`)
+        );
+      }
     }
     return { can_activate: reasons.length === 0, reasons };
   }
