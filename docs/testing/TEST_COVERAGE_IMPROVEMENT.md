@@ -1,7 +1,9 @@
 # How to Improve Test Coverage
 
-Current overall coverage (approximate): **Statements ~56%**, **Branches ~44%**, **Functions ~65%**, **Lines ~56%** (after excluding `scripts`, `custom-resources`, `tests`).  
+Current overall coverage (approximate): **Statements ~62%**, **Branches ~48%**, **Functions ~69%**, **Lines ~62%** (after excluding `scripts`, `custom-resources`, `tests`).  
 Coverage is collected from `src/**/*.ts` (excluding `*.d.ts`, `index.ts`, `stacks/**`, `scripts/**`, `custom-resources/**`, `tests/**`).
+
+**Phase 3 coverage gaps (handlers + DecisionSynthesisService) are implemented** — see `docs/implementation/phase_3/testing/PHASE_3_COVERAGE_GAPS_PLAN.md` (checklist completed).
 
 ---
 
@@ -38,10 +40,10 @@ These **handlers and services** have **no dedicated unit tests** and are strong 
 
 | Handler | Path | Notes |
 |--------|------|--------|
-| decision-api-handler | `handlers/phase3/decision-api-handler.ts` | Human approval, event publish; critical path |
-| decision-evaluation-handler | `handlers/phase3/decision-evaluation-handler.ts` | Decision evaluation; critical path |
-| decision-trigger-handler | `handlers/phase3/decision-trigger-handler.ts` | Trigger scheduling; critical path |
-| budget-reset-handler | `handlers/phase3/budget-reset-handler.ts` | Budget reset; small, easy to test |
+| ~~decision-api-handler~~ | `handlers/phase3/decision-api-handler.ts` | ✅ Unit tests in `phase3/decision-api-handler.test.ts` |
+| ~~decision-evaluation-handler~~ | `handlers/phase3/decision-evaluation-handler.ts` | ✅ Unit tests in `phase3/decision-evaluation-handler.test.ts` |
+| ~~decision-trigger-handler~~ | `handlers/phase3/decision-trigger-handler.ts` | ✅ Unit tests in `phase3/decision-trigger-handler.test.ts` |
+| ~~budget-reset-handler~~ | `handlers/phase3/budget-reset-handler.ts` | ✅ Unit tests in `phase3/budget-reset-handler.test.ts` |
 | graph-materializer-handler | `handlers/phase2/graph-materializer-handler.ts` | Graph build; depends on GraphService |
 | synthesis-engine-handler | `handlers/phase2/synthesis-engine-handler.ts` | Synthesis; depends on SynthesisEngine |
 | connector-poll-handler | `handlers/perception/connector-poll-handler.ts` | Connector poll; perception path |
@@ -52,7 +54,7 @@ These **handlers and services** have **no dedicated unit tests** and are strong 
 
 | Service | Path | Notes |
 |---------|------|--------|
-| DecisionSynthesisService | `services/decision/DecisionSynthesisService.ts` | Decision synthesis; used by evaluation |
+| ~~DecisionSynthesisService~~ | `services/decision/DecisionSynthesisService.ts` | ✅ Unit tests in `decision/DecisionSynthesisService.test.ts` |
 | GraphService | `services/graph/GraphService.ts` | Neptune/graph; often 0% (external deps) |
 | GraphMaterializer | `services/graph/GraphMaterializer.ts` | Graph materialization |
 | NeptuneConnection | `services/graph/NeptuneConnection.ts` | Neptune client; mock in tests |

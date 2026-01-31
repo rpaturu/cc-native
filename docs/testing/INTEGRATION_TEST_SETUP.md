@@ -6,6 +6,8 @@ This guide explains how to set up IAM permissions for running integration tests 
 
 Integration tests use **real AWS resources** (DynamoDB, S3, EventBridge) and require proper IAM permissions. The test suite includes a CDK construct that creates an IAM managed policy with all necessary permissions.
 
+**Phase 0 contract certification** (`src/tests/integration/phase0-certification.test.ts`) runs with `npm run test:integration` (post-deploy). It is not run by default `npm test` (unit/contract only) so it only executes when real AWS and `.env` from deploy are available.
+
 ## Prerequisites
 
 1. **Infrastructure Deployed**: Run `./deploy` to deploy the CDK stack

@@ -213,13 +213,13 @@ This plan covers **all Phase 3 coverage gaps**: four handlers and one service wi
 
 ## 7. Test file creation checklist
 
-- [ ] Create directory `src/tests/unit/handlers/phase3/` if it does not exist.
-- [ ] Implement `budget-reset-handler.test.ts` (all cases in §2).
-- [ ] Implement `decision-trigger-handler.test.ts` (all cases in §3).
-- [ ] Implement `decision-api-handler.test.ts` (routing + §4.2–4.6).
-- [ ] Implement `decision-evaluation-handler.test.ts` (all cases in §5).
-- [ ] Implement `DecisionSynthesisService.test.ts` in `src/tests/unit/decision/` (all cases in §6).
-- [ ] Run `npx jest --coverage --testPathIgnorePatterns=integration` and confirm Phase 3 handlers and DecisionSynthesisService show increased (or full) line/branch coverage.
+- [x] Create directory `src/tests/unit/handlers/phase3/` if it does not exist.
+- [x] Implement `budget-reset-handler.test.ts` (all cases in §2).
+- [x] Implement `decision-trigger-handler.test.ts` (all cases in §3).
+- [x] Implement `decision-api-handler.test.ts` (routing + §4.2–4.6).
+- [x] Implement `decision-evaluation-handler.test.ts` (all cases in §5).
+- [x] Implement `DecisionSynthesisService.test.ts` in `src/tests/unit/decision/` (all cases in §6).
+- [x] Run `npx jest --coverage --testPathIgnorePatterns=integration` and confirm Phase 3 handlers and DecisionSynthesisService show increased (or full) line/branch coverage.
 - [ ] Optionally add `coverageThreshold` in `jest.config.js` and set global minimums so Phase 3 coverage cannot regress unnoticed.
 
 ---
