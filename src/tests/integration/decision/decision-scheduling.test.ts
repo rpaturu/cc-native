@@ -16,15 +16,7 @@ import { DecisionRunStateService } from '../../../services/decision/DecisionRunS
 import { DecisionIdempotencyStoreService } from '../../../services/decision/DecisionIdempotencyStoreService';
 import { Logger } from '../../../services/core/Logger';
 import type { DecisionTriggerRegistryEntryV1 } from '../../../types/decision/DecisionTriggerTypes';
-
-const loadEnv = (): void => {
-  try {
-    require('dotenv').config({ path: '.env.local' });
-    require('dotenv').config({ path: '.env' });
-  } catch {
-    // dotenv not available
-  }
-};
+import { loadEnv } from '../loadEnv';
 
 loadEnv();
 

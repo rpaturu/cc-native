@@ -16,15 +16,7 @@ import { DynamoDBDocumentClient, PutCommand, DeleteCommand } from '@aws-sdk/lib-
 import { getAWSClientConfig } from '../../../utils/aws-client-config';
 import { KillSwitchService } from '../../../services/execution/KillSwitchService';
 import { Logger } from '../../../services/core/Logger';
-
-const loadEnv = (): void => {
-  try {
-    require('dotenv').config({ path: '.env.local' });
-    require('dotenv').config({ path: '.env' });
-  } catch {
-    // dotenv not available
-  }
-};
+import { loadEnv } from '../loadEnv';
 
 loadEnv();
 

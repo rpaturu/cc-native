@@ -226,6 +226,49 @@ describe('ExecutionStarterHandler', () => {
       await expect(handler(invalidEvent, {} as any, jest.fn())).rejects.toThrow();
     });
 
+    it('should accept EventBridge input with empty-string approval_source and auto_executed (backward compat)', async () => {
+      const eventFromEventBridge = {
+        action_intent_id: 'ai_test_123',
+        tenant_id: 'tenant_test_1',
+        account_id: 'account_test_1',
+        approval_source: '',
+        auto_executed: '',
+      };
+      mockActionIntentService.getIntent.mockResolvedValue(createActionIntentV1());
+      mockActionTypeRegistryService.getToolMapping.mockResolvedValue(actionTypeRegistryV1 as any);
+      mockActionTypeRegistryService.mapParametersToToolArguments.mockReturnValue({ title: 'Test Task' });
+      mockIdempotencyService.generateIdempotencyKey.mockReturnValue('idempotency_key_123');
+      mockExecutionAttemptService.startAttempt.mockResolvedValue({
+        action_intent_id: 'ai_test_123',
+        tenant_id: 'tenant_test_1',
+        account_id: 'account_test_1',
+        trace_id: 'execution_trace_123',
+        idempotency_key: 'idempotency_key_123',
+        status: 'RUNNING',
+        attempt_count: 1,
+        last_attempt_id: 'attempt_123',
+        started_at: Date.now(),
+        updated_at: Date.now(),
+        ttl: Date.now() + 3600,
+      } as any);
+      mockLedgerService.append.mockResolvedValue({
+        entryId: 'entry_123',
+        timestamp: new Date().toISOString(),
+        eventType: 'EXECUTION_STARTED',
+        tenantId: 'tenant_test_1',
+        accountId: 'account_test_1',
+        traceId: 'execution_trace_123',
+        data: {},
+      } as any);
+
+      const result = await handler(eventFromEventBridge, {} as any, jest.fn());
+
+      expect(result).toHaveProperty('action_intent_id', 'ai_test_123');
+      expect(result).toHaveProperty('idempotency_key', 'idempotency_key_123');
+      expect(result).toHaveProperty('approval_source', undefined);
+      expect(result).toHaveProperty('auto_executed', undefined);
+    });
+
     it('should throw for null event', async () => {
       await expect(handler(null as any, {} as any, jest.fn())).rejects.toThrow();
       await expect(handler(null as any, {} as any, jest.fn())).rejects.toThrow('Invalid Step Functions input');

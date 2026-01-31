@@ -8,11 +8,29 @@
 
 import { z } from 'zod';
 
+/** Coerce empty strings from EventBridge to undefined/false so optional schema accepts (backward compat). */
+const approvalSourceOptional = z.preprocess(
+  (val) => (val === '' || val == null ? undefined : val),
+  z.enum(['HUMAN', 'POLICY']).optional()
+);
+const autoExecutedOptional = z.preprocess(
+  (val) => {
+    if (val === '' || val == null) return undefined;
+    if (typeof val === 'boolean') return val;
+    if (val === 'true') return true;
+    if (val === 'false') return false;
+    return undefined;
+  },
+  z.boolean().optional()
+);
+
 /** Input to StartExecution (from EventBridge → Step Functions). */
 export const StartExecutionInputSchema = z.object({
   action_intent_id: z.string().min(1, 'action_intent_id is required'),
   tenant_id: z.string().min(1, 'tenant_id is required'),
   account_id: z.string().min(1, 'account_id is required'),
+  approval_source: approvalSourceOptional,
+  auto_executed: autoExecutedOptional,
 }).strict();
 
 /** Input to ValidatePreflight = output of execution-starter-handler. */
@@ -25,6 +43,8 @@ export const ValidatorInputSchema = z.object({
   registry_version: z.number().int().positive('registry_version must be positive integer'),
   attempt_count: z.number().int().positive('attempt_count must be positive integer'),
   started_at: z.string().min(1, 'started_at is required'),
+  approval_source: z.enum(['HUMAN', 'POLICY']).optional(),
+  auto_executed: z.boolean().optional(),
 }).strict();
 
 /** Input to MapActionToTool = state after ValidatePreflight (optional validation_result). */
@@ -76,6 +96,8 @@ export const RecorderInputSchema = z.object({
   tenant_id: z.string().min(1, 'tenant_id is required'),
   account_id: z.string().min(1, 'account_id is required'),
   trace_id: z.string().min(1, 'trace_id is required'),
+  approval_source: z.enum(['HUMAN', 'POLICY']).optional(),
+  auto_executed: z.boolean().optional(),
   tool_invocation_response: z.object({
     success: z.boolean(),
     external_object_refs: z.array(z.any()).optional(),

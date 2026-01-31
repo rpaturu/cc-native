@@ -15,15 +15,7 @@ import type { Context, Handler } from 'aws-lambda';
 import { InternalConnectorAdapter } from '../../../adapters/internal/InternalConnectorAdapter';
 import { createHandler } from '../../../handlers/phase4/internal-adapter-handler';
 import { Logger } from '../../../services/core/Logger';
-
-const loadEnv = (): void => {
-  try {
-    require('dotenv').config({ path: '.env.local' });
-    require('dotenv').config({ path: '.env' });
-  } catch {
-    // dotenv not available
-  }
-};
+import { loadEnv } from '../loadEnv';
 
 loadEnv();
 

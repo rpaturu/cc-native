@@ -11,14 +11,7 @@
  * If required env is missing and skip is not set, the suite fails (run ./deploy or set the skip flag).
  */
 
-const loadEnv = (): void => {
-  try {
-    require('dotenv').config({ path: '.env.local' });
-    require('dotenv').config({ path: '.env' });
-  } catch {
-    // dotenv not available
-  }
-};
+import { loadEnv } from '../loadEnv';
 
 loadEnv();
 

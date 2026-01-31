@@ -19,24 +19,17 @@ describe('CCNativeStack Infrastructure', () => {
   let stack: CCNativeStack;
   let template: Template;
 
-  beforeEach(() => {
+  // Synth once for the whole suite (beforeEach caused 22 full synths + Lambda bundling).
+  beforeAll(() => {
     app = new App();
-    
-    // Set required context parameters BEFORE creating stack (same as deploy script)
     app.node.setContext('bedrockModel', 'anthropic.claude-3-5-sonnet-20240620-v1:0');
     app.node.setContext('awsRegion', 'us-west-2');
     app.node.setContext('nodeEnv', 'test');
     app.node.setContext('logLevel', 'info');
-    app.node.setContext('dynamoDbPrefixListId', 'pl-00a54069'); // us-west-2 DynamoDB prefix list (deploy script looks this up)
-    
-    // Create stack with required environment
+    app.node.setContext('dynamoDbPrefixListId', 'pl-00a54069');
     stack = new CCNativeStack(app, 'TestStack', {
-      env: {
-        account: '123456789012',
-        region: 'us-west-2',
-      },
+      env: { account: '123456789012', region: 'us-west-2' },
     });
-    
     template = Template.fromStack(stack);
   });
 

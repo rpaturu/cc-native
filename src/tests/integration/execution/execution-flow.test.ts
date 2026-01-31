@@ -12,15 +12,7 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, PutCommand, GetCommand } from '@aws-sdk/lib-dynamodb';
 import { getAWSClientConfig } from '../../../utils/aws-client-config';
-
-const loadEnv = (): void => {
-  try {
-    require('dotenv').config({ path: '.env.local' });
-    require('dotenv').config({ path: '.env' });
-  } catch {
-    // dotenv not available
-  }
-};
+import { loadEnv } from '../loadEnv';
 
 loadEnv();
 

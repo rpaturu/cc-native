@@ -15,15 +15,7 @@ import { getAWSClientConfig } from '../../../utils/aws-client-config';
 import { ExecutionOutcomeService } from '../../../services/execution/ExecutionOutcomeService';
 import { Logger } from '../../../services/core/Logger';
 import { ActionIntentV1 } from '../../../types/DecisionTypes';
-
-const loadEnv = (): void => {
-  try {
-    require('dotenv').config({ path: '.env.local' });
-    require('dotenv').config({ path: '.env' });
-  } catch {
-    // dotenv not available
-  }
-};
+import { loadEnv } from '../loadEnv';
 
 loadEnv();
 

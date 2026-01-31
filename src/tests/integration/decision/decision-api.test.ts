@@ -8,14 +8,7 @@
  * Skip when: SKIP_DECISION_API_INTEGRATION=1 or env missing.
  */
 
-const loadEnv = (): void => {
-  try {
-    require('dotenv').config({ path: '.env.local' });
-    require('dotenv').config({ path: '.env' });
-  } catch {
-    // dotenv not available
-  }
-};
+import { loadEnv } from '../loadEnv';
 
 loadEnv();
 
