@@ -24,16 +24,18 @@ const autoExecutedOptional = z.preprocess(
   z.boolean().optional()
 );
 
-/** Input to StartExecution (from EventBridge → Step Functions). */
+/** Input to StartExecution (from EventBridge → Step Functions). Phase 5.7: replay_reason, requested_by for replay. */
 export const StartExecutionInputSchema = z.object({
   action_intent_id: z.string().min(1, 'action_intent_id is required'),
   tenant_id: z.string().min(1, 'tenant_id is required'),
   account_id: z.string().min(1, 'account_id is required'),
   approval_source: approvalSourceOptional,
   auto_executed: autoExecutedOptional,
+  replay_reason: z.string().min(1).optional(),
+  requested_by: z.string().min(1).optional(),
 }).strict();
 
-/** Input to ValidatePreflight = output of execution-starter-handler. */
+/** Input to ValidatePreflight = output of execution-starter-handler. Phase 5.7: is_replay, replay_reason, requested_by. */
 export const ValidatorInputSchema = z.object({
   action_intent_id: z.string().min(1, 'action_intent_id is required'),
   tenant_id: z.string().min(1, 'tenant_id is required'),
@@ -45,6 +47,9 @@ export const ValidatorInputSchema = z.object({
   started_at: z.string().min(1, 'started_at is required'),
   approval_source: z.enum(['HUMAN', 'POLICY']).optional(),
   auto_executed: z.boolean().optional(),
+  is_replay: z.boolean().optional(),
+  replay_reason: z.string().min(1).optional(),
+  requested_by: z.string().min(1).optional(),
 }).strict();
 
 /** Input to MapActionToTool = state after ValidatePreflight (optional validation_result). */
@@ -112,10 +117,13 @@ export const RecorderInputSchema = z.object({
   registry_version: z.number().int().positive('registry_version must be positive integer'),
   attempt_count: z.number().int().positive('attempt_count must be positive integer'),
   started_at: z.string().min(1, 'started_at is required'),
+  is_replay: z.boolean().optional(),
+  replay_reason: z.string().min(1).optional(),
+  requested_by: z.string().min(1).optional(),
 });
 // No .strict() — Step Functions passes full merged state (MapActionToTool + tool_invocation_response); extra keys are stripped.
 
-/** Input to RecordFailure = failed step state + Catch resultPath $.error. */
+/** Input to RecordFailure = failed step state + Catch resultPath $.error. Phase 5.7: is_replay, replay_reason, requested_by. */
 export const FailureRecorderInputSchema = z.object({
   action_intent_id: z.string().min(1, 'action_intent_id is required'),
   tenant_id: z.string().min(1, 'tenant_id is required'),
@@ -125,6 +133,9 @@ export const FailureRecorderInputSchema = z.object({
   idempotency_key: z.string().min(1).optional(),
   attempt_count: z.number().int().positive().optional(),
   started_at: z.string().min(1).optional(),
+  is_replay: z.boolean().optional(),
+  replay_reason: z.string().min(1).optional(),
+  requested_by: z.string().min(1).optional(),
   error: z.object({
     Error: z.string().optional(),
     Cause: z.string().optional(),

@@ -35,7 +35,9 @@ import {
   getLedgerExplanation as routeGetLedgerExplanation,
   postAuditExports as routePostAuditExports,
   getAuditExportStatus as routeGetAuditExportStatus,
+  postReplayExecution as routePostReplayExecution,
 } from './autonomy-control-center-routes';
+import { ActionIntentService } from '../../services/decision/ActionIntentService';
 
 const logger = new Logger('AutonomyAdminAPIHandler');
 
@@ -245,6 +247,48 @@ export const handler: Handler<APIGatewayProxyEvent, APIGatewayProxyResult> =
         ?.userId || 'unknown';
 
     try {
+      // Phase 5.7: replay execution (tenant/account from auth; body: action_intent_id, account_id, replay_reason, requested_by)
+      if (path.includes('/replay') && method === 'POST') {
+        if (!tenantId) return err('tenant_id required (from auth)', 401);
+        const actionIntentTable = process.env.ACTION_INTENT_TABLE_NAME;
+        const ledgerTable = process.env.LEDGER_TABLE_NAME;
+        const eventBusName = process.env.EVENT_BUS_NAME;
+        if (!actionIntentTable || !ledgerTable || !eventBusName) {
+          return err('Replay not configured (ACTION_INTENT_TABLE_NAME, LEDGER_TABLE_NAME, EVENT_BUS_NAME required)', 503);
+        }
+        const body = event.body ? JSON.parse(event.body) : {};
+        const putReplayEvent = async (detail: {
+          action_intent_id: string;
+          tenant_id: string;
+          account_id: string;
+          replay_reason: string;
+          requested_by: string;
+        }) => {
+          await eventBridgeClient.send(
+            new PutEventsCommand({
+              Entries: [
+                {
+                  Source: 'cc-native',
+                  DetailType: 'REPLAY_REQUESTED',
+                  Detail: JSON.stringify({ data: detail }),
+                  EventBusName: eventBusName,
+                },
+              ],
+            })
+          );
+        };
+        const actionIntentService = new ActionIntentService(dynamoClient, actionIntentTable, logger);
+        const ledgerService = new LedgerService(logger, ledgerTable, region);
+        const result = await routePostReplayExecution(
+          actionIntentService,
+          ledgerService,
+          putReplayEvent,
+          tenantId,
+          body
+        );
+        return addCorsHeaders(result);
+      }
+
       // Phase 5.6: kill-switches
       if (path.includes('/kill-switches')) {
         if (!tenantId) return err('tenant_id required (from auth or query)');

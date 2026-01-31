@@ -63,6 +63,8 @@ export class ExecutionInfrastructure extends Construct {
   public readonly executionOutcomesTable: dynamodb.Table;
   public readonly actionTypeRegistryTable: dynamodb.Table;
   public readonly externalWriteDedupeTable: dynamodb.Table;
+  /** Phase 5.7: Circuit breaker + concurrency state (pk/sk, ttl_epoch_sec for TTL) */
+  public readonly resilienceTable: dynamodb.Table;
   
   // Lambda Functions (Phase 4.1)
   public readonly executionStarterHandler: lambda.Function;
@@ -91,6 +93,8 @@ export class ExecutionInfrastructure extends Construct {
   
   // EventBridge Rule (Phase 4.2)
   public readonly executionTriggerRule: events.Rule;
+  /** Phase 5.7: Replay triggers same state machine with replay_reason, requested_by */
+  public readonly executionReplayTriggerRule: events.Rule;
   
   // S3 Bucket (Phase 4.2)
   public readonly executionArtifactsBucket?: s3.IBucket;
@@ -128,6 +132,7 @@ export class ExecutionInfrastructure extends Construct {
     this.executionOutcomesTable = this.createExecutionOutcomesTable(config);
     this.actionTypeRegistryTable = this.createActionTypeRegistryTable(config);
     this.externalWriteDedupeTable = this.createExternalWriteDedupeTable(config);
+    this.resilienceTable = this.createResilienceTable(config);
     
     // 2. Create Dead Letter Queues (Phase 4.1)
     this.executionStarterDlq = this.createDlq('ExecutionStarterDlq', config.queueNames.executionStarterDlq, config);
@@ -308,6 +313,17 @@ export class ExecutionInfrastructure extends Construct {
     });
   }
 
+  /** Phase 5.7: Circuit breaker state (CONNECTOR#id / STATE) + concurrency (CONNECTOR#id / CONCURRENCY). TTL 7–30 days. */
+  private createResilienceTable(config: ExecutionInfrastructureConfig): dynamodb.Table {
+    return new dynamodb.Table(this, 'ResilienceTable', {
+      tableName: config.tableNames.resilience,
+      partitionKey: { name: 'pk', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'sk', type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      timeToLiveAttribute: 'ttl_epoch_sec',
+    });
+  }
+
   private createExecutionStarterHandler(
     props: ExecutionInfrastructureProps,
     config: ExecutionInfrastructureConfig
@@ -451,6 +467,14 @@ export class ExecutionInfrastructure extends Construct {
     if (this.executionArtifactsBucket) {
       this.executionArtifactsBucket.grantWrite(handler);
     }
+    
+    // Phase 5.7: Resilience table (circuit breaker + concurrency) + CloudWatch metrics
+    this.resilienceTable.grantReadWriteData(handler);
+    handler.addToRolePolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: ['cloudwatch:PutMetricData'],
+      resources: ['*'],
+    }));
     
     // Grant Cognito permissions for JWT token retrieval (if userPool provided)
     if (props.userPool) {
@@ -846,6 +870,31 @@ export class ExecutionInfrastructure extends Construct {
     // Grant Step Functions permission to be invoked by EventBridge
     this.executionStateMachine.grantStartExecution(new iam.ServicePrincipal('events.amazonaws.com'));
     
+    return rule;
+  }
+
+  /** Phase 5.7: Replay triggers same state machine; starter uses allow_rerun=true when replay_reason/requested_by present. */
+  private createExecutionReplayTriggerRule(
+    props: ExecutionInfrastructureProps,
+    config: ExecutionInfrastructureConfig
+  ): events.Rule {
+    const rule = new events.Rule(this, 'ExecutionReplayTriggerRule', {
+      eventBus: props.eventBus,
+      eventPattern: {
+        source: [config.eventBridge.source],
+        detailType: [config.eventBridge.detailTypes.replayRequested],
+      },
+    });
+    rule.addTarget(new eventsTargets.SfnStateMachine(this.executionStateMachine, {
+      input: events.RuleTargetInput.fromObject({
+        action_intent_id: events.EventField.fromPath('$.detail.data.action_intent_id'),
+        tenant_id: events.EventField.fromPath('$.detail.data.tenant_id'),
+        account_id: events.EventField.fromPath('$.detail.data.account_id'),
+        replay_reason: events.EventField.fromPath('$.detail.data.replay_reason'),
+        requested_by: events.EventField.fromPath('$.detail.data.requested_by'),
+      }),
+    }));
+    this.executionStateMachine.grantStartExecution(new iam.ServicePrincipal('events.amazonaws.com'));
     return rule;
   }
 

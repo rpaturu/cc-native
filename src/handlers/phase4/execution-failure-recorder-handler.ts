@@ -100,7 +100,7 @@ export const handler: Handler = async (event: unknown) => {
     throw error;
   }
   
-  const { action_intent_id, tenant_id, account_id, trace_id, registry_version, error: errorDetails } = validationResult.data;
+  const { action_intent_id, tenant_id, account_id, trace_id, registry_version, is_replay, replay_reason, requested_by, error: errorDetails } = validationResult.data;
   
   logger.info('Execution failure recorder invoked', { action_intent_id, trace_id, errorDetails });
   
@@ -185,6 +185,22 @@ export const handler: Handler = async (event: unknown) => {
         registry_version: finalRegistryVersion,
       },
     });
+
+    // Phase 5.7: Replay trail (REPLAY_FAILED for pre-tool failures on replay)
+    if (is_replay && replay_reason && requested_by) {
+      await ledgerService.append({
+        eventType: LedgerEventType.REPLAY_FAILED,
+        tenantId: tenant_id,
+        accountId: account_id,
+        traceId: trace_id,
+        data: {
+          action_intent_id,
+          status: 'FAILED',
+          replay_reason,
+          requested_by,
+        },
+      });
+    }
     
     logger.info('Execution failure recorded', { action_intent_id, trace_id, outcome });
     

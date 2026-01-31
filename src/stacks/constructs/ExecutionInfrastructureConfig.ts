@@ -18,6 +18,7 @@ export interface ExecutionInfrastructureConfig {
     readonly connectorConfig: string; // Phase 4.3
     readonly internalNotes: string; // Phase 4.3
     readonly internalTasks: string; // Phase 4.3
+    readonly resilience: string; // Phase 5.7: circuit breaker + concurrency state
   };
   
   // Function names
@@ -61,6 +62,7 @@ export interface ExecutionInfrastructureConfig {
     readonly source: string;
     readonly detailTypes: {
       readonly actionApproved: string;
+      readonly replayRequested: string; // Phase 5.7
     };
   };
   
@@ -110,6 +112,7 @@ export const DEFAULT_EXECUTION_INFRASTRUCTURE_CONFIG: ExecutionInfrastructureCon
     connectorConfig: 'cc-native-connector-config', // Phase 4.3
     internalNotes: 'cc-native-internal-notes', // Phase 4.3
     internalTasks: 'cc-native-internal-tasks', // Phase 4.3
+    resilience: 'cc-native-resilience', // Phase 5.7
   },
   
   functionNames: {
@@ -148,6 +151,7 @@ export const DEFAULT_EXECUTION_INFRASTRUCTURE_CONFIG: ExecutionInfrastructureCon
     source: 'cc-native',
     detailTypes: {
       actionApproved: 'ACTION_APPROVED',
+      replayRequested: 'REPLAY_REQUESTED',
     },
   },
   

@@ -80,13 +80,14 @@ export function createHandler(
     throw error;
   }
   
-  const { action_intent_id, tenant_id, account_id, approval_source, auto_executed } = validationResult.data;
+  const { action_intent_id, tenant_id, account_id, approval_source, auto_executed, replay_reason, requested_by } = validationResult.data;
+    const isReplay = !!(replay_reason && requested_by);
   
     // Generate execution trace ID (single trace for entire execution lifecycle)
     // This is separate from decision trace_id - execution has its own trace for debugging
     const executionTraceId = traceService.generateTraceId();
     
-    logger.info('Execution starter invoked', { action_intent_id, tenant_id, account_id, executionTraceId });
+    logger.info('Execution starter invoked', { action_intent_id, tenant_id, account_id, executionTraceId, is_replay: isReplay });
     
     try {
       // 1. Fetch ActionIntentV1 (with tenant/account for security validation)
@@ -153,10 +154,24 @@ export function createHandler(
         executionTraceId, // Use execution trace, not decision trace
         idempotencyKey,
         stateMachineTimeoutSeconds, // Pass SFN timeout for TTL calculation
-        false // allow_rerun=false for normal execution path (prevents accidental reruns from duplicate events)
+        isReplay // allow_rerun=true for replay path (Phase 5.7)
       );
       
-      // 5. Emit ledger event (use execution trace for execution lifecycle events)
+      // 5. Emit ledger events (Phase 5.7: REPLAY_STARTED then EXECUTION_STARTED when replay)
+      if (isReplay) {
+        await ledgerService.append({
+          eventType: LedgerEventType.REPLAY_STARTED,
+          tenantId: intent.tenant_id,
+          accountId: intent.account_id,
+          traceId: executionTraceId,
+          data: {
+            action_intent_id,
+            replay_reason: replay_reason!,
+            requested_by: requested_by!,
+            attempt_id: attempt.last_attempt_id,
+          },
+        });
+      }
       await ledgerService.append({
         eventType: LedgerEventType.EXECUTION_STARTED,
         tenantId: intent.tenant_id,
@@ -172,7 +187,7 @@ export function createHandler(
         },
       });
       
-      // 6. Return for Step Functions (include registry_version, attempt_count, started_at, approval_source, auto_executed for downstream handlers)
+      // 6. Return for Step Functions (include is_replay, replay_reason, requested_by for Phase 5.7 recorders)
       return {
         action_intent_id,
         idempotency_key: idempotencyKey,
@@ -184,6 +199,7 @@ export function createHandler(
         started_at: attempt.started_at,
         approval_source,
         auto_executed,
+        ...(isReplay && { is_replay: true, replay_reason: replay_reason!, requested_by: requested_by! }),
       };
     } catch (error: any) {
       logger.error('Execution starter failed', { 

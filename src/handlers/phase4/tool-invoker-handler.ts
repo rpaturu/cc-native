@@ -22,16 +22,20 @@ import {
   NotAuthorizedException,
 } from '@aws-sdk/client-cognito-identity-provider';
 import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-secrets-manager';
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
 import { Logger } from '../../services/core/Logger';
 import { TraceService } from '../../services/core/TraceService';
 import { ToolInvocationResponse } from '../../types/ExecutionTypes';
 import { getAWSClientConfig } from '../../utils/aws-client-config';
 import axios, { AxiosError } from 'axios';
+import { CircuitBreakerService } from '../../services/connector/CircuitBreakerService';
+import { ConnectorConcurrencyService } from '../../services/connector/ConnectorConcurrencyService';
+import { ToolSloMetricsService } from '../../services/connector/ToolSloMetricsService';
+import { invokeWithResilience, connectorIdFromToolName } from '../../services/connector/InvokeWithResilience';
 
 const logger = new Logger('ToolInvokerHandler');
 const traceService = new TraceService(logger);
-
-// Note: No DynamoDB client needed - this handler only calls Gateway via HTTP
 
 import { ToolInvocationRequestSchema } from './execution-state-schemas';
 export { ToolInvocationRequestSchema };
@@ -105,15 +109,52 @@ export const handler: Handler = async (event: unknown) => {
     params_arguments_keys: tool_arguments && typeof tool_arguments === 'object' ? Object.keys(tool_arguments) : [],
   });
   
-  // 3. Call Gateway with retry logic
+  // 3. Call Gateway with retry logic (Phase 5.7: via resilience wrapper when RESILIENCE_TABLE_NAME set)
   // invokeWithRetry throws errors with name='TransientError' or 'PermanentError' for SFN
-  const response = await invokeWithRetry(
-    gateway_url,
-    mcpRequest,
-    jwtToken,
-    toolRunRef,
-    action_intent_id
-  );
+  const resilienceTableName = process.env.RESILIENCE_TABLE_NAME;
+  let response: any;
+  if (resilienceTableName) {
+    const region = process.env.AWS_REGION ?? 'us-east-1';
+    const dynamoClient = DynamoDBDocumentClient.from(
+      new DynamoDBClient(getAWSClientConfig(region)),
+      { marshallOptions: { removeUndefinedValues: true } }
+    );
+    const circuitBreaker = new CircuitBreakerService(dynamoClient, resilienceTableName, logger);
+    const concurrency = new ConnectorConcurrencyService(dynamoClient, resilienceTableName, logger);
+    const metrics = new ToolSloMetricsService(logger, region);
+    const connectorId = connectorIdFromToolName(tool_name);
+    const result = await invokeWithResilience(
+      tool_name,
+      tenant_id,
+      connectorId,
+      'phase4_execution',
+      () =>
+        invokeWithRetry(
+          gateway_url,
+          mcpRequest,
+          jwtToken,
+          toolRunRef,
+          action_intent_id
+        ),
+      { circuitBreaker, concurrency, metrics, logger }
+    );
+    if (result.kind === 'defer') {
+      const err = new Error(
+        `TransientError: Backpressure or circuit open; retry after ${result.retryAfterSeconds}s`
+      );
+      err.name = 'TransientError';
+      throw err;
+    }
+    response = result.value;
+  } else {
+    response = await invokeWithRetry(
+      gateway_url,
+      mcpRequest,
+      jwtToken,
+      toolRunRef,
+      action_intent_id
+    );
+  }
   
   // 4. Parse MCP response (log raw response on parse/error for "Unknown tool" troubleshooting)
   // Gateway exposes tools as "target-name___tool.name" (e.g. internal-create-task___internal.create_task).

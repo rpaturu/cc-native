@@ -8,6 +8,7 @@
 
 import { z } from 'zod';
 import { AxiosError } from 'axios';
+import nock from 'nock';
 
 // Mock Secrets Manager for COGNITO_SERVICE_USER_SECRET_ARN path (JWT_SERVICE_USER_STACK_PLAN.md)
 const mockSecretsManagerSend = jest.fn().mockResolvedValue({
@@ -39,32 +40,7 @@ jest.mock('@aws-sdk/client-cognito-identity-provider', () => ({
   },
 }));
 
-// Mock axios.post so gateway call returns valid MCP response; keep real axios exports (e.g. AxiosError) for other tests
-jest.mock('axios', () => {
-  const actual = jest.requireActual<typeof import('axios')>('axios');
-  const postMock = jest.fn().mockResolvedValue({
-    data: {
-      result: {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify({
-              success: true,
-              external_object_refs: [{ object_id: 'mock-id', object_type: 'Task' }],
-            }),
-          },
-        ],
-      },
-    },
-  });
-  return {
-    ...actual,
-    default: {
-      ...actual.default,
-      post: postMock,
-    },
-  };
-});
+// Do not mock axios so handler makes real HTTP calls; we use nock in handler-invocation tests to intercept
 
 import { handler } from '../../../handlers/phase4/tool-invoker-handler';
 
@@ -581,12 +557,27 @@ describe('ToolInvokerHandler - Handler invocation', () => {
     attempt_count: 1,
   };
 
+  const successMcpBody = {
+    result: {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify({
+            success: true,
+            external_object_refs: [{ object_id: 'mock-id', object_type: 'Task' }],
+          }),
+        },
+      ],
+    },
+  };
+
   /**
    * Asserts the handler does not throw "JWT token retrieval not implemented".
-   * With JWT implemented, we set Cognito env vars and use mocks (Cognito + axios) so the handler runs to completion.
+   * With JWT implemented, we set Cognito env vars and nock the gateway so the handler runs to completion.
    * See JWT_NOT_CAUGHT_ASSESSMENT.md.
    */
   it('must not throw JWT token retrieval not implemented when invoked with valid input', async () => {
+    nock('https://gateway.example.com').post('/').reply(200, successMcpBody);
     const orig = {
       COGNITO_USER_POOL_ID: process.env.COGNITO_USER_POOL_ID,
       COGNITO_CLIENT_ID: process.env.COGNITO_CLIENT_ID,
@@ -607,6 +598,7 @@ describe('ToolInvokerHandler - Handler invocation', () => {
       const message = (thrown as Error)?.message ?? '';
       expect(message).not.toContain('JWT token retrieval not implemented');
     } finally {
+      nock.cleanAll();
       process.env.COGNITO_USER_POOL_ID = orig.COGNITO_USER_POOL_ID;
       process.env.COGNITO_CLIENT_ID = orig.COGNITO_CLIENT_ID;
       process.env.COGNITO_SERVICE_USERNAME = orig.COGNITO_SERVICE_USERNAME;
@@ -617,10 +609,11 @@ describe('ToolInvokerHandler - Handler invocation', () => {
 
   /**
    * When COGNITO_SERVICE_USER_SECRET_ARN is set, handler uses Secrets Manager for JWT credentials (JWT_SERVICE_USER_STACK_PLAN.md).
-   * Asserts secret path is used (GetSecretValue called) and no JWT config error; does not require gateway mock to succeed.
+   * Asserts secret path is used (GetSecretValue called) and no JWT config error; nock gateway so handler completes.
    */
   it('uses secret for JWT when COGNITO_SERVICE_USER_SECRET_ARN is set', async () => {
     mockSecretsManagerSend.mockClear();
+    nock('https://gateway.example.com').post('/').reply(200, successMcpBody);
     const orig = {
       COGNITO_USER_POOL_ID: process.env.COGNITO_USER_POOL_ID,
       COGNITO_CLIENT_ID: process.env.COGNITO_CLIENT_ID,
@@ -646,6 +639,7 @@ describe('ToolInvokerHandler - Handler invocation', () => {
       expect(message).not.toContain('JWT credentials not configured');
       expect(message).not.toContain('JWT secret');
     } finally {
+      nock.cleanAll();
       process.env.COGNITO_USER_POOL_ID = orig.COGNITO_USER_POOL_ID;
       process.env.COGNITO_CLIENT_ID = orig.COGNITO_CLIENT_ID;
       if (orig.COGNITO_SERVICE_USER_SECRET_ARN) process.env.COGNITO_SERVICE_USER_SECRET_ARN = orig.COGNITO_SERVICE_USER_SECRET_ARN;
@@ -671,4 +665,198 @@ describe('ToolInvokerHandler - Handler invocation', () => {
     });
   });
 
+  it('returns success: false with error_class when gateway returns tool business failure', async () => {
+    process.env.COGNITO_USER_POOL_ID = 'test-pool-id';
+    process.env.COGNITO_CLIENT_ID = 'test-client-id';
+    process.env.COGNITO_SERVICE_USERNAME = 'test-service-user';
+    process.env.COGNITO_SERVICE_PASSWORD = 'test-service-pass';
+    const mcpFailureBody = {
+      result: {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              success: false,
+              error_message: 'validation failed: missing required field',
+            }),
+          },
+        ],
+      },
+    };
+    nock('https://gateway.example.com')
+      .post('/')
+      .reply(200, mcpFailureBody);
+    try {
+      const result = await handler(validStepFunctionsEvent, {} as any, jest.fn());
+      expect(result).toBeDefined();
+      expect((result as any).success).toBe(false);
+      expect((result as any).error_class).toBe('VALIDATION');
+      expect((result as any).error_code).toBe('VALIDATION_ERROR');
+    } finally {
+      nock.cleanAll();
+      delete process.env.COGNITO_USER_POOL_ID;
+      delete process.env.COGNITO_CLIENT_ID;
+      delete process.env.COGNITO_SERVICE_USERNAME;
+      delete process.env.COGNITO_SERVICE_PASSWORD;
+    }
+  });
+
+  it('returns success: false with AUTH when gateway returns authentication error message', async () => {
+    process.env.COGNITO_USER_POOL_ID = 'test-pool-id';
+    process.env.COGNITO_CLIENT_ID = 'test-client-id';
+    process.env.COGNITO_SERVICE_USERNAME = 'test-service-user';
+    process.env.COGNITO_SERVICE_PASSWORD = 'test-service-pass';
+    const mcpBody = {
+      result: {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              success: false,
+              error_message: 'authentication failed: Invalid token',
+            }),
+          },
+        ],
+      },
+    };
+    nock('https://gateway.example.com').post('/').reply(200, mcpBody);
+    try {
+      const result = await handler(validStepFunctionsEvent, {} as any, jest.fn());
+      expect((result as any).success).toBe(false);
+      expect((result as any).error_class).toBe('AUTH');
+      expect((result as any).error_code).toBe('AUTH_FAILED');
+    } finally {
+      nock.cleanAll();
+      delete process.env.COGNITO_USER_POOL_ID;
+      delete process.env.COGNITO_CLIENT_ID;
+      delete process.env.COGNITO_SERVICE_USERNAME;
+      delete process.env.COGNITO_SERVICE_PASSWORD;
+    }
+  });
+
+  it('returns success: false with error_message when gateway returns result.isError and non-JSON text', async () => {
+    process.env.COGNITO_USER_POOL_ID = 'test-pool-id';
+    process.env.COGNITO_CLIENT_ID = 'test-client-id';
+    process.env.COGNITO_SERVICE_USERNAME = 'test-service-user';
+    process.env.COGNITO_SERVICE_PASSWORD = 'test-service-pass';
+    const mcpBody = {
+      result: {
+        isError: true,
+        content: [{ type: 'text', text: 'Plain error from adapter' }],
+      },
+    };
+    nock('https://gateway.example.com').post('/').reply(200, mcpBody);
+    try {
+      const result = await handler(validStepFunctionsEvent, {} as any, jest.fn());
+      expect((result as any).success).toBe(false);
+      expect((result as any).error_message).toBe('Plain error from adapter');
+      expect((result as any).error_class).toBe('UNKNOWN');
+    } finally {
+      nock.cleanAll();
+      delete process.env.COGNITO_USER_POOL_ID;
+      delete process.env.COGNITO_CLIENT_ID;
+      delete process.env.COGNITO_SERVICE_USERNAME;
+      delete process.env.COGNITO_SERVICE_PASSWORD;
+    }
+  });
+
+  it('returns success: true with external_object_refs and tool_run_ref when gateway succeeds', async () => {
+    process.env.COGNITO_USER_POOL_ID = 'test-pool-id';
+    process.env.COGNITO_CLIENT_ID = 'test-client-id';
+    process.env.COGNITO_SERVICE_USERNAME = 'test-service-user';
+    process.env.COGNITO_SERVICE_PASSWORD = 'test-service-pass';
+    nock('https://gateway.example.com').post('/').reply(200, successMcpBody);
+    try {
+      const result = await handler(validStepFunctionsEvent, {} as any, jest.fn());
+      expect((result as any).success).toBe(true);
+      expect((result as any).tool_run_ref).toMatch(/^toolrun\/trace-1\/1\/create_task$/);
+      expect(Array.isArray((result as any).external_object_refs)).toBe(true);
+      expect((result as any).external_object_refs[0].object_id).toBe('mock-id');
+      expect((result as any).external_object_refs[0].object_type).toBe('Task');
+    } finally {
+      nock.cleanAll();
+      delete process.env.COGNITO_USER_POOL_ID;
+      delete process.env.COGNITO_CLIENT_ID;
+      delete process.env.COGNITO_SERVICE_USERNAME;
+      delete process.env.COGNITO_SERVICE_PASSWORD;
+    }
+  });
+
+  it('throws PermanentError when gateway returns MCP protocol error (response.error)', async () => {
+    process.env.COGNITO_USER_POOL_ID = 'test-pool-id';
+    process.env.COGNITO_CLIENT_ID = 'test-client-id';
+    process.env.COGNITO_SERVICE_USERNAME = 'test-service-user';
+    process.env.COGNITO_SERVICE_PASSWORD = 'test-service-pass';
+    nock('https://gateway.example.com')
+      .post('/')
+      .reply(200, { error: { code: -32600, message: 'Invalid request' } });
+    try {
+      await expect(handler(validStepFunctionsEvent, {} as any, jest.fn())).rejects.toMatchObject({
+        name: 'PermanentError',
+        message: expect.stringContaining('MCP protocol error'),
+      });
+    } finally {
+      nock.cleanAll();
+      delete process.env.COGNITO_USER_POOL_ID;
+      delete process.env.COGNITO_CLIENT_ID;
+      delete process.env.COGNITO_SERVICE_USERNAME;
+      delete process.env.COGNITO_SERVICE_PASSWORD;
+    }
+  });
+
+  it('throws PermanentError when gateway returns 401', async () => {
+    process.env.COGNITO_USER_POOL_ID = 'test-pool-id';
+    process.env.COGNITO_CLIENT_ID = 'test-client-id';
+    process.env.COGNITO_SERVICE_USERNAME = 'test-service-user';
+    process.env.COGNITO_SERVICE_PASSWORD = 'test-service-pass';
+    nock('https://gateway.example.com').post('/').reply(401, { message: 'Unauthorized' });
+    try {
+      await expect(handler(validStepFunctionsEvent, {} as any, jest.fn())).rejects.toMatchObject({
+        name: 'PermanentError',
+      });
+    } finally {
+      nock.cleanAll();
+      delete process.env.COGNITO_USER_POOL_ID;
+      delete process.env.COGNITO_CLIENT_ID;
+      delete process.env.COGNITO_SERVICE_USERNAME;
+      delete process.env.COGNITO_SERVICE_PASSWORD;
+    }
+  });
+
+  it('throws TransientError when gateway returns 500 after retries', async () => {
+    process.env.COGNITO_USER_POOL_ID = 'test-pool-id';
+    process.env.COGNITO_CLIENT_ID = 'test-client-id';
+    process.env.COGNITO_SERVICE_USERNAME = 'test-service-user';
+    process.env.COGNITO_SERVICE_PASSWORD = 'test-service-pass';
+    for (let i = 0; i < 4; i++) {
+      nock('https://gateway.example.com').post('/').reply(500, { error: 'Internal Server Error' });
+    }
+    try {
+      await expect(handler(validStepFunctionsEvent, {} as any, jest.fn())).rejects.toMatchObject({
+        name: 'TransientError',
+      });
+    } finally {
+      nock.cleanAll();
+      delete process.env.COGNITO_USER_POOL_ID;
+      delete process.env.COGNITO_CLIENT_ID;
+      delete process.env.COGNITO_SERVICE_USERNAME;
+      delete process.env.COGNITO_SERVICE_PASSWORD;
+    }
+  });
+
+  it('throws PermanentError when Cognito user pool and client id are not set', async () => {
+    const origPool = process.env.COGNITO_USER_POOL_ID;
+    const origClient = process.env.COGNITO_CLIENT_ID;
+    delete process.env.COGNITO_USER_POOL_ID;
+    delete process.env.COGNITO_CLIENT_ID;
+    try {
+      await expect(handler(validStepFunctionsEvent, {} as any, jest.fn())).rejects.toMatchObject({
+        name: 'PermanentError',
+        message: expect.stringContaining('JWT token retrieval not implemented'),
+      });
+    } finally {
+      if (origPool) process.env.COGNITO_USER_POOL_ID = origPool;
+      if (origClient) process.env.COGNITO_CLIENT_ID = origClient;
+    }
+  });
 });

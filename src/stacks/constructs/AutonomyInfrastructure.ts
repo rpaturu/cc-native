@@ -110,6 +110,7 @@ export class AutonomyInfrastructure extends Construct {
     if (props.executionOutcomesTable)
       handlerEnv.EXECUTION_OUTCOMES_TABLE_NAME = props.executionOutcomesTable.tableName;
     if (props.eventBus) handlerEnv.EVENT_BUS_NAME = props.eventBus.eventBusName;
+    if (props.actionIntentTable) handlerEnv.ACTION_INTENT_TABLE_NAME = props.actionIntentTable.tableName;
 
     this.autonomyAdminApiHandler = new lambdaNodejs.NodejsFunction(
       this,
@@ -136,6 +137,7 @@ export class AutonomyInfrastructure extends Construct {
     if (props.executionOutcomesTable)
       props.executionOutcomesTable.grantReadData(this.autonomyAdminApiHandler);
     if (props.eventBus) props.eventBus.grantPutEventsTo(this.autonomyAdminApiHandler);
+    if (props.actionIntentTable) props.actionIntentTable.grantReadData(this.autonomyAdminApiHandler); // Phase 5.7 replay
 
     this.autonomyApi = new apigateway.RestApi(this, 'AutonomyApi', {
       restApiName: config.apiGateway.restApiName,
@@ -184,6 +186,9 @@ export class AutonomyInfrastructure extends Construct {
     const killSwitchesResource = this.autonomyApi.root.addResource('kill-switches');
     killSwitchesResource.addMethod('GET', integration, methodOptions);
     killSwitchesResource.addMethod('PUT', integration, methodOptions);
+
+    const replayResource = this.autonomyApi.root.addResource('replay');
+    replayResource.addMethod('POST', integration, methodOptions);
 
     const ledgerResource = this.autonomyApi.root.addResource('ledger');
     const explanationResource = ledgerResource.addResource('explanation');

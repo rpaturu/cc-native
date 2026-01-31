@@ -137,6 +137,9 @@ export const handler: Handler = async (event: unknown) => {
     registry_version, // From starter handler output
     attempt_count,
     started_at,
+    is_replay,
+    replay_reason,
+    requested_by,
   } = validationResult.data;
   
   logger.info('Execution recorder invoked', { action_intent_id, trace_id, registry_version });
@@ -206,6 +209,22 @@ export const handler: Handler = async (event: unknown) => {
         attempt_count,
       },
     });
+
+    // Phase 5.7: Replay trail (REPLAY_COMPLETED on success, REPLAY_FAILED on tool failure)
+    if (is_replay && replay_reason && requested_by) {
+      await ledgerService.append({
+        eventType: status === 'SUCCEEDED' ? LedgerEventType.REPLAY_COMPLETED : LedgerEventType.REPLAY_FAILED,
+        tenantId: tenant_id,
+        accountId: account_id,
+        traceId: trace_id,
+        data: {
+          action_intent_id,
+          status,
+          replay_reason,
+          requested_by,
+        },
+      });
+    }
 
     // 4. Emit execution outcome signal (Phase 4.4 — dedupeKey prevents duplicate signals per action_intent_id)
     const now = new Date().toISOString();

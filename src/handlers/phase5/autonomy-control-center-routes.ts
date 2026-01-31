@@ -7,7 +7,10 @@ import type { APIGatewayProxyResult } from 'aws-lambda';
 import type { KillSwitchService } from '../../services/execution/KillSwitchService';
 import type { LedgerExplanationService } from '../../services/autonomy/LedgerExplanationService';
 import type { AuditExportService } from '../../services/autonomy/AuditExportService';
+import type { ActionIntentService } from '../../services/decision/ActionIntentService';
+import type { LedgerService } from '../../services/ledger/LedgerService';
 import type { LedgerExplanationV1 } from '../../types/phase5/ControlCenterTypes';
+import { LedgerEventType } from '../../types/LedgerTypes';
 
 /**
  * Resolves tenant_id from JWT/authorizer. Canonical claim: custom:tenant_id (Cognito custom attribute).
@@ -98,4 +101,51 @@ export async function getAuditExportStatus(
     error_message: job.error_message,
   };
   return { statusCode: 200, body: JSON.stringify(response), headers: {} };
+}
+
+/** Phase 5.7: Replay execution. AuthZ: tenant from JWT, account_id in body (in scope). */
+export async function postReplayExecution(
+  actionIntentService: ActionIntentService,
+  ledgerService: LedgerService,
+  putReplayEvent: (detail: {
+    action_intent_id: string;
+    tenant_id: string;
+    account_id: string;
+    replay_reason: string;
+    requested_by: string;
+  }) => Promise<void>,
+  tenantId: string,
+  body: { action_intent_id: string; account_id: string; replay_reason: string; requested_by: string }
+): Promise<APIGatewayProxyResult> {
+  if (!body.action_intent_id || !body.account_id || !body.replay_reason || !body.requested_by) {
+    return { statusCode: 400, body: JSON.stringify({ error: 'action_intent_id, account_id, replay_reason, requested_by required' }), headers: {} };
+  }
+  const intent = await actionIntentService.getIntent(
+    body.action_intent_id,
+    tenantId,
+    body.account_id
+  );
+  if (!intent) {
+    return { statusCode: 404, body: JSON.stringify({ error: 'Intent not found' }), headers: {} };
+  }
+  const replayTraceId = `replay-request-${Date.now()}-${body.action_intent_id}`;
+  await ledgerService.append({
+    eventType: LedgerEventType.REPLAY_REQUESTED,
+    tenantId,
+    accountId: body.account_id,
+    traceId: replayTraceId,
+    data: {
+      action_intent_id: body.action_intent_id,
+      replay_reason: body.replay_reason,
+      requested_by: body.requested_by,
+    },
+  });
+  await putReplayEvent({
+    action_intent_id: body.action_intent_id,
+    tenant_id: tenantId,
+    account_id: body.account_id,
+    replay_reason: body.replay_reason,
+    requested_by: body.requested_by,
+  });
+  return { statusCode: 202, body: JSON.stringify({ status: 'replay_requested', action_intent_id: body.action_intent_id }), headers: {} };
 }
