@@ -10,6 +10,7 @@
  * causing seed script to fail during integration testing.
  */
 
+import * as cdk from 'aws-cdk-lib';
 import { App } from 'aws-cdk-lib';
 import { Template } from 'aws-cdk-lib/assertions';
 import { CCNativeStack } from '../../../stacks/CCNativeStack';
@@ -18,6 +19,7 @@ describe('CCNativeStack Infrastructure', () => {
   let app: App;
   let stack: CCNativeStack;
   let template: Template;
+  let executionNestedTemplate: Template;
 
   // Synth once for the whole suite (beforeEach caused 22 full synths + Lambda bundling).
   beforeAll(() => {
@@ -31,61 +33,57 @@ describe('CCNativeStack Infrastructure', () => {
       env: { account: '123456789012', region: 'us-west-2' },
     });
     template = Template.fromStack(stack);
+    const executionNestedStack = stack.node.findChild('ExecutionInfrastructureNestedStack') as cdk.NestedStack;
+    executionNestedTemplate = Template.fromStack(executionNestedStack);
   });
 
   describe('ExecutionInfrastructure', () => {
     /**
      * CRITICAL TEST: Validates ExecutionInfrastructure is instantiated in CCNativeStack.
-     * 
+     *
      * This test catches the defect where ExecutionInfrastructure was not instantiated,
      * causing ActionTypeRegistry table to be missing and seed script to fail.
-     * 
-     * If ExecutionInfrastructure is missing:
-     * - Stack synthesis will succeed (no error)
-     * - But ActionTypeRegistry table won't exist
-     * - Seed script will fail during integration testing
-     * 
-     * This test catches it at unit test time, before deployment.
+     *
+     * Resources live in ExecutionInfrastructureNestedStack.
      */
     it('should create ActionTypeRegistry table (validates ExecutionInfrastructure is instantiated)', () => {
-      // If ExecutionInfrastructure is not instantiated, this table won't exist
-      template.hasResourceProperties('AWS::DynamoDB::Table', {
+      executionNestedTemplate.hasResourceProperties('AWS::DynamoDB::Table', {
         TableName: 'cc-native-action-type-registry',
       });
     });
 
     it('should create ExecutionAttempts table', () => {
-      template.hasResourceProperties('AWS::DynamoDB::Table', {
+      executionNestedTemplate.hasResourceProperties('AWS::DynamoDB::Table', {
         TableName: 'cc-native-execution-attempts',
       });
     });
 
     it('should create ExecutionOutcomes table', () => {
-      template.hasResourceProperties('AWS::DynamoDB::Table', {
+      executionNestedTemplate.hasResourceProperties('AWS::DynamoDB::Table', {
         TableName: 'cc-native-execution-outcomes',
       });
     });
 
     it('should create ExternalWriteDedupe table', () => {
-      template.hasResourceProperties('AWS::DynamoDB::Table', {
+      executionNestedTemplate.hasResourceProperties('AWS::DynamoDB::Table', {
         TableName: 'cc-native-external-write-dedupe',
       });
     });
 
     it('should create ConnectorConfig table', () => {
-      template.hasResourceProperties('AWS::DynamoDB::Table', {
+      executionNestedTemplate.hasResourceProperties('AWS::DynamoDB::Table', {
         TableName: 'cc-native-connector-config',
       });
     });
 
     it('should create InternalNotes table', () => {
-      template.hasResourceProperties('AWS::DynamoDB::Table', {
+      executionNestedTemplate.hasResourceProperties('AWS::DynamoDB::Table', {
         TableName: 'cc-native-internal-notes',
       });
     });
 
     it('should create InternalTasks table', () => {
-      template.hasResourceProperties('AWS::DynamoDB::Table', {
+      executionNestedTemplate.hasResourceProperties('AWS::DynamoDB::Table', {
         TableName: 'cc-native-internal-tasks',
       });
     });
@@ -119,14 +117,14 @@ describe('CCNativeStack Infrastructure', () => {
     });
 
     it('should create AgentCore Gateway', () => {
-      template.hasResourceProperties('AWS::BedrockAgentCore::Gateway', {
+      executionNestedTemplate.hasResourceProperties('AWS::BedrockAgentCore::Gateway', {
         Name: 'cc-native-execution-gateway',
         ProtocolType: 'MCP',
       });
     });
 
     it('should create Connectors VPC', () => {
-      template.hasResourceProperties('AWS::EC2::VPC', {
+      executionNestedTemplate.hasResourceProperties('AWS::EC2::VPC', {
         Tags: [
           {
             Key: 'Name',
@@ -137,13 +135,13 @@ describe('CCNativeStack Infrastructure', () => {
     });
 
     it('should create InternalAdapter Lambda function', () => {
-      template.hasResourceProperties('AWS::Lambda::Function', {
+      executionNestedTemplate.hasResourceProperties('AWS::Lambda::Function', {
         FunctionName: 'cc-native-internal-adapter-handler',
       });
     });
 
     it('should create CrmAdapter Lambda function', () => {
-      template.hasResourceProperties('AWS::Lambda::Function', {
+      executionNestedTemplate.hasResourceProperties('AWS::Lambda::Function', {
         FunctionName: 'cc-native-crm-adapter-handler',
       });
     });

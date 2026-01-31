@@ -2,10 +2,11 @@
 
 *Always-On Autonomy (Controlled) + Learning Loop*
 
-**Status:** 🟡 **PLANNING**  
+**Status:** 🟢 **IMPLEMENTED**  
 **Created:** 2026-01-28  
 **Last Updated:** 2026-01-28  
-**Prerequisites:** Phase 4 complete (4.5A signed off 2026-01-28). End-to-end spine: **Decide → Approve → Execute → Outcome → Ledger**.
+**Prerequisites:** Phase 4 complete (4.5A signed off 2026-01-28). End-to-end spine: **Decide → Approve → Execute → Outcome → Ledger**.  
+**Progress:** 5.1–5.7 implemented; see [PHASE_5_CODE_LEVEL_PLAN.md](PHASE_5_CODE_LEVEL_PLAN.md) and sub-phase docs.
 
 ---
 
@@ -30,7 +31,7 @@ Turn the system from "executes approved intents" into an **always-on revenue eng
 | **Next** | 5.2 + 5.3 — Perception scheduling + Decision triggers | Always-on push + pull; when to run Phase 3. |
 | **Then** | 5.5 — Outcome feedback → ranking | Learning loop (scoring, ranking, calibration). |
 | **Then** | 5.6 — Autonomy Control Center (UI) | Seller + admin surfaces for legibility and control. |
-| **Ongoing** | 5.7 — Reliability hardening | Circuit breakers, SLOs, replay, backpressure, tenant isolation. |
+| **Then** | 5.7 — Reliability hardening | Circuit breakers, SLOs, replay, backpressure, tenant isolation. |
 
 ---
 

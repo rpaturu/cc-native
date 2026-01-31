@@ -2,14 +2,14 @@
 
 *Always-On Autonomy (Controlled) + Learning Loop*
 
-**Status:** 🟡 **PLANNING**  
-**Progress:** 5.1, 5.2, 5.3 implemented (see sub-phase docs).  
+**Status:** 🟢 **COMPLETE** (5.1–5.7 implemented; E2E suite passing)  
 **Created:** 2026-01-28  
 **Last Updated:** 2026-01-28  
+**Sign-off:** Sub-phases 5.1–5.7 implemented; Phase 5 E2E suite (auto-exec, fallback, decision-scheduler, audit-export) passing. Production readiness: see [PHASE_5_OPERATIONAL_READINESS_EXIT_CHECKLIST.md](PHASE_5_OPERATIONAL_READINESS_EXIT_CHECKLIST.md).  
 **Parent:** [PHASE_5_OUTLINE.md](PHASE_5_OUTLINE.md) | [PHASE_5_IMPLEMENTATION_PLAN.md](PHASE_5_IMPLEMENTATION_PLAN.md)  
 **Prerequisites:** Phase 4 complete (4.5A signed off). End-to-end spine: **Decide → Approve → Execute → Outcome → Ledger**.
 
-**Note:** Test plans will be created after implementation. This plan is code-level only. Each PHASE_5_x_CODE_LEVEL_PLAN may include a test strategy section; formal test plans are created after implementation.
+**Note:** Test plans exist for each sub-phase (see `testing/PHASE_5_x_TEST_PLAN.md`). This plan remains the code-level reference; sub-phase docs and test plans track implementation and coverage.
 
 ---
 
@@ -49,7 +49,7 @@ For detailed code-level plans, see:
 | **5.6** | `PHASE_5_6_CODE_LEVEL_PLAN.md` | Autonomy Control Center (APIs in cc-native; UI in cc-dealmind) |
 | **5.7** | `PHASE_5_7_CODE_LEVEL_PLAN.md` | Reliability Hardening (circuit breakers, SLOs, replay, backpressure, tenant isolation) |
 
-**Implementation order (recommended):** 5.1 + 5.4 first → 5.2 + 5.3 → 5.5 → 5.6 → 5.7 ongoing.
+**Implementation order (completed):** 5.1 + 5.4 → 5.2 + 5.3 → 5.5 → 5.6 → 5.7 (all done).
 
 ---
 
@@ -147,6 +147,14 @@ Autonomy Control Center **UI** (seller timeline, admin config, kill switches, au
 - Ledger and execution outcome storage (Phase 4) available for audit and learning inputs.
 
 **See:** `PHASE_5_IMPLEMENTATION_PLAN.md` §1 Core Principles and §1.1 Architecture Review (risks and upgrades must be implemented).
+
+---
+
+## Operational Readiness (5.1–5.7 done)
+
+Before declaring Phase 5 production-ready, complete the **Phase 5 Operational Readiness Exit Checklist**: dashboards/alarms, breaker state view in Control Center, replay permission tests, tenant isolation harness green in CI, budget/cost reports per tenant.
+
+**Checklist:** [PHASE_5_OPERATIONAL_READINESS_EXIT_CHECKLIST.md](PHASE_5_OPERATIONAL_READINESS_EXIT_CHECKLIST.md)
 
 ---
 

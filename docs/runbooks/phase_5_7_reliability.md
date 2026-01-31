@@ -4,6 +4,24 @@ Operational guidance when reliability controls trigger. See [PHASE_5_7_CODE_LEVE
 
 ---
 
+## Verification (don’t get burned)
+
+Two high-leverage checks confirmed in implementation:
+
+### 1) Breaker state transitions are race-safe under burst
+
+- **half_open_probe_in_flight cleared on success:** `recordSuccess` when state is HALF_OPEN does a full Put (state CLOSED, no probe flag); item overwrite clears the flag.
+- **half_open_probe_in_flight cleared on failure:** `recordFailure` when state is HALF_OPEN calls `openCircuit`, which Puts state OPEN (no probe flag); item overwrite clears the flag.
+- **OPEN → HALF_OPEN:** Single probe enforced via conditional write: `ConditionExpression` requires `state = OPEN` and `(attribute_not_exists(half_open_probe_in_flight) OR half_open_probe_in_flight = false)`. Only one caller wins; others get ConditionalCheckFailed and receive DEFER/retry.
+- **TTL vs active OPEN:** TTL is set to `nowSec + stateTtlDays * 86400` (e.g. 14 days). Cooldown uses `open_until_epoch_sec` (e.g. 10–30 s). TTL does not delete active OPEN state prematurely.
+
+### 2) Concurrency limits are connector-scoped
+
+- **Current implementation:** DDB-backed in-flight semaphore per connector. Key: `CONNECTOR#<connector_id>`, sk `CONCURRENCY`. Each connector has its own `in_flight_count`; no shared queue. Tool invoker derives `connectorId` from `tool_name` and passes it to `ConnectorConcurrencyService.tryAcquire(connectorId)`.
+- **If moving to SQS later:** Ensure either separate queues per connector or a dispatcher that routes into connector-specific worker pools so limits remain connector-scoped.
+
+---
+
 ## Circuit breaker OPEN
 
 - **Do not manually close** without verifying connector health.

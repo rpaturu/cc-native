@@ -79,7 +79,7 @@ export const handler: Handler = async (event: unknown) => {
   if (!validationResult.success) {
     const error = new Error(
       `[ToolMapperHandler] Invalid Step Functions input: ${validationResult.error.message}. ` +
-      `Expected: { action_intent_id: string, tenant_id: string, account_id: string, idempotency_key: string, trace_id: string, registry_version: number, attempt_count: number, started_at: string }. ` +
+      `Expected: { action_intent_id, tenant_id, account_id, idempotency_key, trace_id, registry_version, attempt_count, started_at; optional: approval_source, auto_executed, validation_result }. ` +
       `Received: ${JSON.stringify(event)}. ` +
       `Check Step Functions state machine definition to ensure all required fields are passed from execution-starter-handler output.`
     );
@@ -87,7 +87,7 @@ export const handler: Handler = async (event: unknown) => {
     throw error;
   }
   
-  const { action_intent_id, tenant_id, account_id, idempotency_key, trace_id, registry_version, attempt_count, started_at } = validationResult.data;
+  const { action_intent_id, tenant_id, account_id, idempotency_key, trace_id, registry_version, attempt_count, started_at, approval_source, auto_executed } = validationResult.data;
   
   logger.info('Tool mapper invoked', { action_intent_id, tenant_id, account_id, trace_id, registry_version });
   
@@ -139,6 +139,7 @@ export const handler: Handler = async (event: unknown) => {
     // 5. Return for Step Functions (JWT token retrieval moved to ToolInvoker)
     // Note: trace_id is execution_trace_id (from starter handler), not decision_trace_id
     // Note: registry_version, attempt_count, started_at are passed through for execution recorder
+    // Note: approval_source, auto_executed passed through for Phase 5.4 (RecordOutcome persists for audit)
     // Note: compensation_strategy is included for SFN Choice state to determine if compensation is needed
     // Gateway expects {target-name}___{tool-name} for MCP tools/call (see gateway-tool-naming docs)
     return {
@@ -155,6 +156,8 @@ export const handler: Handler = async (event: unknown) => {
       trace_id, // execution_trace_id (from starter handler), not intent.trace_id
       attempt_count, // Pass through for execution recorder
       started_at, // Pass through for execution recorder
+      approval_source, // Phase 5.4: pass through for RecordOutcome (audit)
+      auto_executed, // Phase 5.4: pass through for RecordOutcome (audit)
     };
   } catch (error: any) {
     logger.error('Tool mapping failed', { action_intent_id, error: error.message, errorName: error.name, stack: error.stack });

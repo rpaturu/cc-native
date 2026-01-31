@@ -9,10 +9,18 @@ scripts/
 ├── common/           # Shared scripts used across multiple phases
 ├── phase_2/         # Phase 2 specific scripts
 ├── phase_3/         # Phase 3 specific scripts
+├── delete-retained-resources.sh   # Delete retained resources after ./destroy
 └── README.md        # This file
 ```
 
 ## Scripts by Phase
+
+### Stack / Infra (repo root `scripts/`)
+
+**`delete-retained-resources.sh`**
+- Deletes CCNativeStack resources retained or left behind after `./destroy`: S3 buckets (evidence-ledger, world-state-snapshots, schema-registry, artifacts, ledger-archives) and **all** cc-native DynamoDB tables (37 tables: root, Decision, Execution, Autonomy, Graph, Scheduling, Perception).
+- Run from repo root after destroy when you need a clean state before `./deploy`.
+- Usage: `./scripts/delete-retained-resources.sh [--profile PROFILE] [--region REGION] [--force]`
 
 ### Common Scripts (`common/`)
 

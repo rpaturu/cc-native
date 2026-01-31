@@ -114,34 +114,61 @@ export class AutonomyBudgetService {
     const pkVal = pk(tenantId, accountId);
     const skVal = skState(dateKey);
 
+    const now = new Date().toISOString();
+    const firstUpdateValues = {
+      ':zero': 0,
+      ':one': 1,
+      ':emptyMap': {} as Record<string, number>,
+      ':now': now,
+      ':tid': tenantId,
+      ':aid': accountId,
+      ':dk': dateKey,
+      ':maxDaily': maxDaily,
+    };
+    const secondUpdateValues = {
+      ':zero': 0,
+      ':one': 1,
+      ':now': now,
+      ':maxPerType': maxPerType,
+    };
+
     try {
+      // First update: increment total and ensure counts map exists. Do not reference #counts.#at here:
+      // DynamoDB can reject "document path invalid" when SET #counts and ConditionExpression #counts.#at are in the same request.
       await this.dynamoClient.send(
         new UpdateCommand({
           TableName: this.tableName,
           Key: { pk: pkVal, sk: skVal },
           UpdateExpression:
-            'SET #total = if_not_exists(#total, :zero) + :one, #counts.#at = if_not_exists(#counts.#at, :zero) + :one, #updated_at = :now, #tenant_id = :tid, #account_id = :aid, #date_key = :dk',
-          ConditionExpression:
-            '(attribute_not_exists(#total) OR #total < :maxDaily) AND (attribute_not_exists(#counts.#at) OR #counts.#at < :maxPerType)',
+            'SET #total = if_not_exists(#total, :zero) + :one, #counts = if_not_exists(#counts, :emptyMap), #updated_at = :now, #tenant_id = :tid, #account_id = :aid, #date_key = :dk',
+          ConditionExpression: 'attribute_not_exists(#total) OR #total < :maxDaily',
           ExpressionAttributeNames: {
             '#total': 'total',
             '#counts': 'counts',
-            '#at': actionType,
             '#updated_at': 'updated_at',
             '#tenant_id': 'tenant_id',
             '#account_id': 'account_id',
             '#date_key': 'date_key',
           },
-          ExpressionAttributeValues: {
-            ':zero': 0,
-            ':one': 1,
-            ':now': new Date().toISOString(),
-            ':tid': tenantId,
-            ':aid': accountId,
-            ':dk': dateKey,
-            ':maxDaily': maxDaily,
-            ':maxPerType': maxPerType,
+          ExpressionAttributeValues: firstUpdateValues,
+        })
+      );
+      // Second update: enforce per-type limit and increment (counts map now exists).
+      // Only pass names used in this expression (DynamoDB rejects unused ExpressionAttributeNames).
+      await this.dynamoClient.send(
+        new UpdateCommand({
+          TableName: this.tableName,
+          Key: { pk: pkVal, sk: skVal },
+          UpdateExpression:
+            'SET #counts.#at = if_not_exists(#counts.#at, :zero) + :one, #updated_at = :now',
+          ConditionExpression:
+            'attribute_not_exists(#counts.#at) OR #counts.#at < :maxPerType',
+          ExpressionAttributeNames: {
+            '#counts': 'counts',
+            '#at': actionType,
+            '#updated_at': 'updated_at',
           },
+          ExpressionAttributeValues: secondUpdateValues,
         })
       );
       return true;
@@ -154,6 +181,21 @@ export class AutonomyBudgetService {
           actionType,
           dateKey,
         });
+        // First update already incremented total; roll it back so total stays consistent with counts.
+        try {
+          await this.dynamoClient.send(
+            new UpdateCommand({
+              TableName: this.tableName,
+              Key: { pk: pkVal, sk: skVal },
+              UpdateExpression: 'SET #total = #total - :one, #updated_at = :now',
+              ConditionExpression: 'attribute_exists(#total) AND #total >= :one',
+              ExpressionAttributeNames: { '#total': 'total', '#updated_at': 'updated_at' },
+              ExpressionAttributeValues: { ':one': 1, ':now': new Date().toISOString() },
+            })
+          );
+        } catch {
+          // Best-effort rollback; ignore so caller still gets false
+        }
         return false;
       }
       throw err;

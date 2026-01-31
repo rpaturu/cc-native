@@ -663,7 +663,9 @@ export class CCNativeStack extends cdk.Stack {
     const executionsResource = executionStatusApi.root.addResource('executions');
     const accountsResource = executionStatusApi.root.addResource('accounts');
 
-    const executionInfrastructure = new ExecutionInfrastructure(this, 'ExecutionInfrastructure', {
+    // Execution Infrastructure in Nested Stack to stay under CloudFormation 500-resource limit (dev: destroy stack then deploy for clean nested-stack creation)
+    const executionInfrastructureNestedStack = new cdk.NestedStack(this, 'ExecutionInfrastructureNestedStack', {});
+    const executionInfrastructure = new ExecutionInfrastructure(executionInfrastructureNestedStack, 'ExecutionInfrastructure', {
       eventBus: this.eventBus,
       ledgerTable: this.ledgerTable,
       actionIntentTable: this.actionIntentTable,

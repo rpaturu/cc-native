@@ -144,17 +144,19 @@ describe('AutonomyBudgetService', () => {
             updated_at: '2026-01-28T00:00:00Z',
           },
         })
+        .mockResolvedValueOnce({})
         .mockResolvedValueOnce({});
 
       const result = await service.checkAndConsume('t1', 'a1', 'CREATE_INTERNAL_NOTE');
 
       expect(result).toBe(true);
-      expect(UpdateCommand).toHaveBeenCalled();
-      const updateCall = (UpdateCommand as unknown as jest.Mock).mock.calls[0][0];
-      expect(updateCall.TableName).toBe(tableName);
-      expect(updateCall.Key.pk).toBe('TENANT#t1#ACCOUNT#a1');
-      expect(updateCall.ConditionExpression).toContain('maxDaily');
-      expect(updateCall.ConditionExpression).toContain('maxPerType');
+      expect(UpdateCommand).toHaveBeenCalledTimes(2);
+      const firstUpdate = (UpdateCommand as unknown as jest.Mock).mock.calls[0][0];
+      const secondUpdate = (UpdateCommand as unknown as jest.Mock).mock.calls[1][0];
+      expect(firstUpdate.TableName).toBe(tableName);
+      expect(firstUpdate.Key.pk).toBe('TENANT#t1#ACCOUNT#a1');
+      expect(firstUpdate.ConditionExpression).toContain('maxDaily');
+      expect(secondUpdate.ConditionExpression).toContain('maxPerType');
     });
 
     it('returns false when ConditionalCheckFailedException (over limit)', async () => {
@@ -169,7 +171,9 @@ describe('AutonomyBudgetService', () => {
             updated_at: '2026-01-28T00:00:00Z',
           },
         })
-        .mockRejectedValueOnce({ name: 'ConditionalCheckFailedException' });
+        .mockResolvedValueOnce({})
+        .mockRejectedValueOnce({ name: 'ConditionalCheckFailedException' })
+        .mockResolvedValueOnce({});
 
       const result = await service.checkAndConsume('t1', 'a1', 'CREATE_INTERNAL_NOTE');
 

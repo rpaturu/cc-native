@@ -84,9 +84,26 @@ echo ""
 echo "Destroying stack: $STACK_NAME"
 echo "This may take several minutes..."
 
+# CDK context required so CCNativeStack constructor can load (same params as deploy)
+# Use .env.local values when set; otherwise defaults so destroy works without full .env.local
+BEDROCK_MODEL=${BEDROCK_MODEL:-anthropic.claude-3-5-sonnet-20240620-v1:0}
+# Look up DynamoDB managed prefix list ID (ExecutionInfrastructure requires it)
+DYNAMODB_PREFIX_LIST_ID=$(aws ec2 describe-managed-prefix-lists \
+  --profile $CDK_PROFILE \
+  --region $AWS_REGION \
+  --no-cli-pager \
+  --filters "Name=prefix-list-name,Values=com.amazonaws.$AWS_REGION.dynamodb" \
+  --query 'PrefixLists[0].PrefixListId' \
+  --output text) || DYNAMODB_PREFIX_LIST_ID=""
+if [ -z "$DYNAMODB_PREFIX_LIST_ID" ]; then
+  echo "Error: Could not look up DynamoDB prefix list for $AWS_REGION. Set dynamoDbPrefixListId in .env.local or run: aws ec2 describe-managed-prefix-lists --region $AWS_REGION --filters Name=prefix-list-name,Values=com.amazonaws.$AWS_REGION.dynamodb --query 'PrefixLists[0].PrefixListId' --output text"
+  exit 1
+fi
+CDK_CONTEXT_PARAMS="-c bedrockModel=$BEDROCK_MODEL -c awsRegion=$AWS_REGION -c nodeEnv=development -c logLevel=info -c dynamoDbPrefixListId=$DYNAMODB_PREFIX_LIST_ID"
+
 # Destroy the stack
 # Use a different output directory to avoid conflicts with other CDK processes
-npx cdk --profile $CDK_PROFILE --region $AWS_REGION destroy CCNativeStack --force --output cdk-destroy-out
+npx cdk --profile $CDK_PROFILE --region $AWS_REGION destroy CCNativeStack --force --output cdk-destroy-out $CDK_CONTEXT_PARAMS
 
 echo ""
 echo "✅ Stack destruction complete!"

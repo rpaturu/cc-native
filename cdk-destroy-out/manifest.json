@@ -18,7 +18,7 @@
         "validateOnSynth": false,
         "assumeRoleArn": "arn:${AWS::Partition}:iam::661268174397:role/cdk-hnb659fds-deploy-role-661268174397-us-west-2",
         "cloudFormationExecutionRoleArn": "arn:${AWS::Partition}:iam::661268174397:role/cdk-hnb659fds-cfn-exec-role-661268174397-us-west-2",
-        "stackTemplateAssetObjectUrl": "s3://cdk-hnb659fds-assets-661268174397-us-west-2/4b4610e1ec9519b1965532d654696a2b90f3b30106486f3d09ff948d47c5f018.json",
+        "stackTemplateAssetObjectUrl": "s3://cdk-hnb659fds-assets-661268174397-us-west-2/3f3aac6085a6fcf9aebfabc2c61998ddc55fafe39ad23675b1d174e976abb145.json",
         "requiresBootstrapStackVersion": 6,
         "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version",
         "additionalDependencies": [
@@ -332,6 +332,48 @@
             "data": "IdentitiesTableCD62DAD4"
           }
         ],
+        "/CCNativeStack/DecisionBudgetTable": [
+          {
+            "type": "aws:cdk:hasPhysicalName",
+            "data": {
+              "Ref": "DecisionBudgetTable24B12A3D"
+            }
+          }
+        ],
+        "/CCNativeStack/DecisionBudgetTable/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionBudgetTable24B12A3D"
+          }
+        ],
+        "/CCNativeStack/ActionIntentTable": [
+          {
+            "type": "aws:cdk:hasPhysicalName",
+            "data": {
+              "Ref": "ActionIntentTable72DEAEAE"
+            }
+          }
+        ],
+        "/CCNativeStack/ActionIntentTable/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ActionIntentTable72DEAEAE"
+          }
+        ],
+        "/CCNativeStack/DecisionProposalTable": [
+          {
+            "type": "aws:cdk:hasPhysicalName",
+            "data": {
+              "Ref": "DecisionProposalTable5A1A6F51"
+            }
+          }
+        ],
+        "/CCNativeStack/DecisionProposalTable/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionProposalTable5A1A6F51"
+          }
+        ],
         "/CCNativeStack/CCNativeEventBus/Resource": [
           {
             "type": "aws:cdk:logicalId",
@@ -476,6 +518,12 @@
             "data": "NeptuneInfrastructureNeptuneSecurityGroupfromCCNativeStackNeptuneInfrastructureSynthesisEngineSecurityGroup3BB6D47F8182C918F650"
           }
         ],
+        "/CCNativeStack/NeptuneInfrastructure/NeptuneSecurityGroup/from CCNativeStackDecisionInfrastructureDecisionEvaluationSecurityGroup56ACEE37:8182": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "NeptuneInfrastructureNeptuneSecurityGroupfromCCNativeStackDecisionInfrastructureDecisionEvaluationSecurityGroup56ACEE378182D5CF84D1"
+          }
+        ],
         "/CCNativeStack/NeptuneInfrastructure/GraphMaterializerSecurityGroup/Resource": [
           {
             "type": "aws:cdk:logicalId",
@@ -606,6 +654,42 @@
           {
             "type": "aws:cdk:logicalId",
             "data": "NeptuneInfrastructureCloudWatchLogsEndpoint6ED07965"
+          }
+        ],
+        "/CCNativeStack/NeptuneInfrastructure/STSEndpoint/SecurityGroup/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "NeptuneInfrastructureSTSEndpointSecurityGroup666BFA17"
+          }
+        ],
+        "/CCNativeStack/NeptuneInfrastructure/STSEndpoint/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "NeptuneInfrastructureSTSEndpointC7DDAEEB"
+          }
+        ],
+        "/CCNativeStack/NeptuneInfrastructure/CloudFormationEndpoint/SecurityGroup/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "NeptuneInfrastructureCloudFormationEndpointSecurityGroup12F5A4E1"
+          }
+        ],
+        "/CCNativeStack/NeptuneInfrastructure/CloudFormationEndpoint/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "NeptuneInfrastructureCloudFormationEndpoint44681D32"
+          }
+        ],
+        "/CCNativeStack/NeptuneInfrastructure/BedrockRuntimeEndpoint/SecurityGroup/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "NeptuneInfrastructureBedrockRuntimeEndpointSecurityGroup12694BD3"
+          }
+        ],
+        "/CCNativeStack/NeptuneInfrastructure/BedrockRuntimeEndpoint/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "NeptuneInfrastructureBedrockRuntimeEndpointF1DA8A0E"
           }
         ],
         "/CCNativeStack/Custom::VpcRestrictDefaultSGCustomResourceProvider": [
@@ -802,6 +886,2235 @@
           {
             "type": "aws:cdk:logicalId",
             "data": "SecurityMonitoringNeptuneIAMAuthFailureAlarmF4453F7B"
+          }
+        ],
+        "/CCNativeStack/DecisionInfrastructure/DecisionEvaluationDlq/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionInfrastructureDecisionEvaluationDlq97E1320F"
+          }
+        ],
+        "/CCNativeStack/DecisionInfrastructure/DecisionTriggerDlq/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionInfrastructureDecisionTriggerDlq6811F631"
+          }
+        ],
+        "/CCNativeStack/DecisionInfrastructure/DecisionEvaluationSecurityGroup/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionInfrastructureDecisionEvaluationSecurityGroup0DDCFEF6"
+          }
+        ],
+        "/CCNativeStack/DecisionInfrastructure/DecisionEvaluationSecurityGroup/to CCNativeStackNeptuneInfrastructureNeptuneSecurityGroup570D658A:8182": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionInfrastructureDecisionEvaluationSecurityGrouptoCCNativeStackNeptuneInfrastructureNeptuneSecurityGroup570D658A8182F9D07BC5"
+          }
+        ],
+        "/CCNativeStack/DecisionInfrastructure/DecisionEvaluationRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionInfrastructureDecisionEvaluationRole85692DD2"
+          }
+        ],
+        "/CCNativeStack/DecisionInfrastructure/DecisionEvaluationRole/DefaultPolicy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionInfrastructureDecisionEvaluationRoleDefaultPolicy1AC40134"
+          }
+        ],
+        "/CCNativeStack/DecisionInfrastructure/DecisionEvaluationHandler/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionInfrastructureDecisionEvaluationHandler8D3F092E"
+          }
+        ],
+        "/CCNativeStack/DecisionInfrastructure/DecisionEvaluationHandler/EventInvokeConfig/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionInfrastructureDecisionEvaluationHandlerEventInvokeConfigF4BBA8E8"
+          }
+        ],
+        "/CCNativeStack/DecisionInfrastructure/DecisionTriggerHandler/ServiceRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionInfrastructureDecisionTriggerHandlerServiceRoleAC7EF664"
+          }
+        ],
+        "/CCNativeStack/DecisionInfrastructure/DecisionTriggerHandler/ServiceRole/DefaultPolicy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionInfrastructureDecisionTriggerHandlerServiceRoleDefaultPolicyB0216342"
+          }
+        ],
+        "/CCNativeStack/DecisionInfrastructure/DecisionTriggerHandler/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionInfrastructureDecisionTriggerHandler2F0CD40A"
+          }
+        ],
+        "/CCNativeStack/DecisionInfrastructure/DecisionTriggerHandler/EventInvokeConfig/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionInfrastructureDecisionTriggerHandlerEventInvokeConfigCD73DC86"
+          }
+        ],
+        "/CCNativeStack/DecisionInfrastructure/DecisionApiHandler/ServiceRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionInfrastructureDecisionApiHandlerServiceRoleD413C70C"
+          }
+        ],
+        "/CCNativeStack/DecisionInfrastructure/DecisionApiHandler/ServiceRole/DefaultPolicy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionInfrastructureDecisionApiHandlerServiceRoleDefaultPolicy69037719"
+          }
+        ],
+        "/CCNativeStack/DecisionInfrastructure/DecisionApiHandler/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionInfrastructureDecisionApiHandler34C8795E"
+          }
+        ],
+        "/CCNativeStack/DecisionInfrastructure/DecisionApi/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionInfrastructureDecisionApiE67E0AE4"
+          }
+        ],
+        "/CCNativeStack/DecisionInfrastructure/DecisionApi/Deployment/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionInfrastructureDecisionApiDeployment0FBC1C0F13c127e98daba9683cb0717fdaef0eda"
+          }
+        ],
+        "/CCNativeStack/DecisionInfrastructure/DecisionApi/DeploymentStage.prod/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionInfrastructureDecisionApiDeploymentStageprod3AF0F7F3"
+          }
+        ],
+        "/CCNativeStack/DecisionInfrastructure/DecisionApi/Endpoint": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionInfrastructureDecisionApiEndpoint73DCA32F"
+          }
+        ],
+        "/CCNativeStack/DecisionInfrastructure/DecisionApi/Default/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionInfrastructureDecisionApiOPTIONS8E85EC86"
+          }
+        ],
+        "/CCNativeStack/DecisionInfrastructure/DecisionApi/Default/decisions/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionInfrastructureDecisionApidecisions17D4B7C8"
+          }
+        ],
+        "/CCNativeStack/DecisionInfrastructure/DecisionApi/Default/decisions/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionInfrastructureDecisionApidecisionsOPTIONSBCB0A202"
+          }
+        ],
+        "/CCNativeStack/DecisionInfrastructure/DecisionApi/Default/decisions/evaluate/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionInfrastructureDecisionApidecisionsevaluateD3A16FF9"
+          }
+        ],
+        "/CCNativeStack/DecisionInfrastructure/DecisionApi/Default/decisions/evaluate/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionInfrastructureDecisionApidecisionsevaluateOPTIONSEB9C1683"
+          }
+        ],
+        "/CCNativeStack/DecisionInfrastructure/DecisionApi/Default/decisions/evaluate/POST/ApiPermission.CCNativeStackDecisionInfrastructureDecisionApi86383A64.POST..decisions.evaluate": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionInfrastructureDecisionApidecisionsevaluatePOSTApiPermissionCCNativeStackDecisionInfrastructureDecisionApi86383A64POSTdecisionsevaluate32BD6245"
+          }
+        ],
+        "/CCNativeStack/DecisionInfrastructure/DecisionApi/Default/decisions/evaluate/POST/ApiPermission.Test.CCNativeStackDecisionInfrastructureDecisionApi86383A64.POST..decisions.evaluate": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionInfrastructureDecisionApidecisionsevaluatePOSTApiPermissionTestCCNativeStackDecisionInfrastructureDecisionApi86383A64POSTdecisionsevaluate9479506D"
+          }
+        ],
+        "/CCNativeStack/DecisionInfrastructure/DecisionApi/Default/decisions/evaluate/POST/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionInfrastructureDecisionApidecisionsevaluatePOST5C5BD30A"
+          }
+        ],
+        "/CCNativeStack/DecisionInfrastructure/DecisionApi/Default/decisions/{evaluation_id}/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionInfrastructureDecisionApidecisionsevaluationid42DBD698"
+          }
+        ],
+        "/CCNativeStack/DecisionInfrastructure/DecisionApi/Default/decisions/{evaluation_id}/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionInfrastructureDecisionApidecisionsevaluationidOPTIONS47F9FCAC"
+          }
+        ],
+        "/CCNativeStack/DecisionInfrastructure/DecisionApi/Default/decisions/{evaluation_id}/status/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionInfrastructureDecisionApidecisionsevaluationidstatus9E7120F0"
+          }
+        ],
+        "/CCNativeStack/DecisionInfrastructure/DecisionApi/Default/decisions/{evaluation_id}/status/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionInfrastructureDecisionApidecisionsevaluationidstatusOPTIONSB298ECA4"
+          }
+        ],
+        "/CCNativeStack/DecisionInfrastructure/DecisionApi/Default/decisions/{evaluation_id}/status/GET/ApiPermission.CCNativeStackDecisionInfrastructureDecisionApi86383A64.GET..decisions.{evaluation_id}.status": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionInfrastructureDecisionApidecisionsevaluationidstatusGETApiPermissionCCNativeStackDecisionInfrastructureDecisionApi86383A64GETdecisionsevaluationidstatusF3C15761"
+          }
+        ],
+        "/CCNativeStack/DecisionInfrastructure/DecisionApi/Default/decisions/{evaluation_id}/status/GET/ApiPermission.Test.CCNativeStackDecisionInfrastructureDecisionApi86383A64.GET..decisions.{evaluation_id}.status": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionInfrastructureDecisionApidecisionsevaluationidstatusGETApiPermissionTestCCNativeStackDecisionInfrastructureDecisionApi86383A64GETdecisionsevaluationidstatusF40BC49F"
+          }
+        ],
+        "/CCNativeStack/DecisionInfrastructure/DecisionApi/Default/decisions/{evaluation_id}/status/GET/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionInfrastructureDecisionApidecisionsevaluationidstatusGET43D1484A"
+          }
+        ],
+        "/CCNativeStack/DecisionInfrastructure/DecisionApi/Default/accounts/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionInfrastructureDecisionApiaccounts092411B8"
+          }
+        ],
+        "/CCNativeStack/DecisionInfrastructure/DecisionApi/Default/accounts/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionInfrastructureDecisionApiaccountsOPTIONS2BF5C48C"
+          }
+        ],
+        "/CCNativeStack/DecisionInfrastructure/DecisionApi/Default/accounts/{account_id}/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionInfrastructureDecisionApiaccountsaccountidE2BD3D03"
+          }
+        ],
+        "/CCNativeStack/DecisionInfrastructure/DecisionApi/Default/accounts/{account_id}/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionInfrastructureDecisionApiaccountsaccountidOPTIONSB61E9683"
+          }
+        ],
+        "/CCNativeStack/DecisionInfrastructure/DecisionApi/Default/accounts/{account_id}/decisions/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionInfrastructureDecisionApiaccountsaccountiddecisionsDAA2822A"
+          }
+        ],
+        "/CCNativeStack/DecisionInfrastructure/DecisionApi/Default/accounts/{account_id}/decisions/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionInfrastructureDecisionApiaccountsaccountiddecisionsOPTIONS2366DD38"
+          }
+        ],
+        "/CCNativeStack/DecisionInfrastructure/DecisionApi/Default/accounts/{account_id}/decisions/GET/ApiPermission.CCNativeStackDecisionInfrastructureDecisionApi86383A64.GET..accounts.{account_id}.decisions": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionInfrastructureDecisionApiaccountsaccountiddecisionsGETApiPermissionCCNativeStackDecisionInfrastructureDecisionApi86383A64GETaccountsaccountiddecisions43859595"
+          }
+        ],
+        "/CCNativeStack/DecisionInfrastructure/DecisionApi/Default/accounts/{account_id}/decisions/GET/ApiPermission.Test.CCNativeStackDecisionInfrastructureDecisionApi86383A64.GET..accounts.{account_id}.decisions": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionInfrastructureDecisionApiaccountsaccountiddecisionsGETApiPermissionTestCCNativeStackDecisionInfrastructureDecisionApi86383A64GETaccountsaccountiddecisionsAB1CFC2C"
+          }
+        ],
+        "/CCNativeStack/DecisionInfrastructure/DecisionApi/Default/accounts/{account_id}/decisions/GET/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionInfrastructureDecisionApiaccountsaccountiddecisionsGETD93B393B"
+          }
+        ],
+        "/CCNativeStack/DecisionInfrastructure/DecisionApi/Default/actions/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionInfrastructureDecisionApiactionsADF2227F"
+          }
+        ],
+        "/CCNativeStack/DecisionInfrastructure/DecisionApi/Default/actions/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionInfrastructureDecisionApiactionsOPTIONS55E49B7A"
+          }
+        ],
+        "/CCNativeStack/DecisionInfrastructure/DecisionApi/Default/actions/{action_id}/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionInfrastructureDecisionApiactionsactionid665D7267"
+          }
+        ],
+        "/CCNativeStack/DecisionInfrastructure/DecisionApi/Default/actions/{action_id}/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionInfrastructureDecisionApiactionsactionidOPTIONS171F6394"
+          }
+        ],
+        "/CCNativeStack/DecisionInfrastructure/DecisionApi/Default/actions/{action_id}/approve/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionInfrastructureDecisionApiactionsactionidapprove856291A9"
+          }
+        ],
+        "/CCNativeStack/DecisionInfrastructure/DecisionApi/Default/actions/{action_id}/approve/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionInfrastructureDecisionApiactionsactionidapproveOPTIONS9624D961"
+          }
+        ],
+        "/CCNativeStack/DecisionInfrastructure/DecisionApi/Default/actions/{action_id}/approve/POST/ApiPermission.CCNativeStackDecisionInfrastructureDecisionApi86383A64.POST..actions.{action_id}.approve": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionInfrastructureDecisionApiactionsactionidapprovePOSTApiPermissionCCNativeStackDecisionInfrastructureDecisionApi86383A64POSTactionsactionidapproveD1216C87"
+          }
+        ],
+        "/CCNativeStack/DecisionInfrastructure/DecisionApi/Default/actions/{action_id}/approve/POST/ApiPermission.Test.CCNativeStackDecisionInfrastructureDecisionApi86383A64.POST..actions.{action_id}.approve": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionInfrastructureDecisionApiactionsactionidapprovePOSTApiPermissionTestCCNativeStackDecisionInfrastructureDecisionApi86383A64POSTactionsactionidapprove84D0DC18"
+          }
+        ],
+        "/CCNativeStack/DecisionInfrastructure/DecisionApi/Default/actions/{action_id}/approve/POST/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionInfrastructureDecisionApiactionsactionidapprovePOSTC1629F0B"
+          }
+        ],
+        "/CCNativeStack/DecisionInfrastructure/DecisionApi/Default/actions/{action_id}/reject/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionInfrastructureDecisionApiactionsactionidreject07691836"
+          }
+        ],
+        "/CCNativeStack/DecisionInfrastructure/DecisionApi/Default/actions/{action_id}/reject/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionInfrastructureDecisionApiactionsactionidrejectOPTIONS78CCE605"
+          }
+        ],
+        "/CCNativeStack/DecisionInfrastructure/DecisionApi/Default/actions/{action_id}/reject/POST/ApiPermission.CCNativeStackDecisionInfrastructureDecisionApi86383A64.POST..actions.{action_id}.reject": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionInfrastructureDecisionApiactionsactionidrejectPOSTApiPermissionCCNativeStackDecisionInfrastructureDecisionApi86383A64POSTactionsactionidreject8DD98F2F"
+          }
+        ],
+        "/CCNativeStack/DecisionInfrastructure/DecisionApi/Default/actions/{action_id}/reject/POST/ApiPermission.Test.CCNativeStackDecisionInfrastructureDecisionApi86383A64.POST..actions.{action_id}.reject": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionInfrastructureDecisionApiactionsactionidrejectPOSTApiPermissionTestCCNativeStackDecisionInfrastructureDecisionApi86383A64POSTactionsactionidrejectA5451AB8"
+          }
+        ],
+        "/CCNativeStack/DecisionInfrastructure/DecisionApi/Default/actions/{action_id}/reject/POST/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionInfrastructureDecisionApiactionsactionidrejectPOST532B9544"
+          }
+        ],
+        "/CCNativeStack/DecisionInfrastructure/DecisionApiCognitoAuthorizer/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionInfrastructureDecisionApiCognitoAuthorizer44458B1E"
+          }
+        ],
+        "/CCNativeStack/DecisionInfrastructure/DecisionApiKey/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionInfrastructureDecisionApiKey4D053422"
+          }
+        ],
+        "/CCNativeStack/DecisionInfrastructure/DecisionApiUsagePlan/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionInfrastructureDecisionApiUsagePlanE4794753"
+          }
+        ],
+        "/CCNativeStack/DecisionInfrastructure/DecisionApiUsagePlan/UsagePlanKeyResource:CCNativeStackDecisionInfrastructureDecisionApiKeyCFC7E4FF": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionInfrastructureDecisionApiUsagePlanUsagePlanKeyResourceCCNativeStackDecisionInfrastructureDecisionApiKeyCFC7E4FFDE3E110E"
+          }
+        ],
+        "/CCNativeStack/DecisionInfrastructure/LifecycleDecisionTriggerRule/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionInfrastructureLifecycleDecisionTriggerRule6526AA52"
+          }
+        ],
+        "/CCNativeStack/DecisionInfrastructure/LifecycleDecisionTriggerRule/AllowEventRuleCCNativeStackDecisionInfrastructureDecisionTriggerHandler379F7866": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionInfrastructureLifecycleDecisionTriggerRuleAllowEventRuleCCNativeStackDecisionInfrastructureDecisionTriggerHandler379F7866FD5EC258"
+          }
+        ],
+        "/CCNativeStack/DecisionInfrastructure/HighSignalDecisionTriggerRule/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionInfrastructureHighSignalDecisionTriggerRuleC6F185DA"
+          }
+        ],
+        "/CCNativeStack/DecisionInfrastructure/HighSignalDecisionTriggerRule/AllowEventRuleCCNativeStackDecisionInfrastructureDecisionTriggerHandler379F7866": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionInfrastructureHighSignalDecisionTriggerRuleAllowEventRuleCCNativeStackDecisionInfrastructureDecisionTriggerHandler379F7866DC4D6405"
+          }
+        ],
+        "/CCNativeStack/DecisionInfrastructure/DecisionEvaluationRule/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionInfrastructureDecisionEvaluationRule790E1C57"
+          }
+        ],
+        "/CCNativeStack/DecisionInfrastructure/DecisionEvaluationRule/AllowEventRuleCCNativeStackDecisionInfrastructureDecisionEvaluationHandlerE24EBB36": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionInfrastructureDecisionEvaluationRuleAllowEventRuleCCNativeStackDecisionInfrastructureDecisionEvaluationHandlerE24EBB36613C6B22"
+          }
+        ],
+        "/CCNativeStack/DecisionInfrastructure/BudgetResetHandler/ServiceRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionInfrastructureBudgetResetHandlerServiceRole845AD482"
+          }
+        ],
+        "/CCNativeStack/DecisionInfrastructure/BudgetResetHandler/ServiceRole/DefaultPolicy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionInfrastructureBudgetResetHandlerServiceRoleDefaultPolicy3D045514"
+          }
+        ],
+        "/CCNativeStack/DecisionInfrastructure/BudgetResetHandler/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionInfrastructureBudgetResetHandlerBD838B1E"
+          }
+        ],
+        "/CCNativeStack/DecisionInfrastructure/BudgetResetScheduleRule/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionInfrastructureBudgetResetScheduleRule61745EC1"
+          }
+        ],
+        "/CCNativeStack/DecisionInfrastructure/BudgetResetScheduleRule/AllowEventRuleCCNativeStackDecisionInfrastructureBudgetResetHandlerFAFE0849": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionInfrastructureBudgetResetScheduleRuleAllowEventRuleCCNativeStackDecisionInfrastructureBudgetResetHandlerFAFE0849996ACE92"
+          }
+        ],
+        "/CCNativeStack/ExecutionStatusApi/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionStatusApi2E7AA195"
+          }
+        ],
+        "/CCNativeStack/ExecutionStatusApi/Deployment/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionStatusApiDeploymentBB536FDB93a456d9252facb98c40adcb95f31a8a"
+          }
+        ],
+        "/CCNativeStack/ExecutionStatusApi/DeploymentStage.prod/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionStatusApiDeploymentStageprod80307D0F"
+          }
+        ],
+        "/CCNativeStack/ExecutionStatusApi/Endpoint": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionStatusApiEndpointA9087346"
+          }
+        ],
+        "/CCNativeStack/ExecutionStatusApi/Default/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionStatusApiOPTIONS90673B66"
+          }
+        ],
+        "/CCNativeStack/ExecutionStatusApi/Default/executions/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionStatusApiexecutions1639356C"
+          }
+        ],
+        "/CCNativeStack/ExecutionStatusApi/Default/executions/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionStatusApiexecutionsOPTIONSF6854D4B"
+          }
+        ],
+        "/CCNativeStack/ExecutionStatusApi/Default/executions/{action_intent_id}/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionStatusApiexecutionsactionintentid9B3D34F9"
+          }
+        ],
+        "/CCNativeStack/ExecutionStatusApi/Default/executions/{action_intent_id}/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionStatusApiexecutionsactionintentidOPTIONSCBF76407"
+          }
+        ],
+        "/CCNativeStack/ExecutionStatusApi/Default/executions/{action_intent_id}/status/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionStatusApiexecutionsactionintentidstatus0A7054E9"
+          }
+        ],
+        "/CCNativeStack/ExecutionStatusApi/Default/executions/{action_intent_id}/status/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionStatusApiexecutionsactionintentidstatusOPTIONSFD11E5EE"
+          }
+        ],
+        "/CCNativeStack/ExecutionStatusApi/Default/executions/{action_intent_id}/status/GET/ApiPermission.CCNativeStackExecutionStatusApi5AA9581D.GET..executions.{action_intent_id}.status": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionStatusApiexecutionsactionintentidstatusGETApiPermissionCCNativeStackExecutionStatusApi5AA9581DGETexecutionsactionintentidstatusA1118C63"
+          }
+        ],
+        "/CCNativeStack/ExecutionStatusApi/Default/executions/{action_intent_id}/status/GET/ApiPermission.Test.CCNativeStackExecutionStatusApi5AA9581D.GET..executions.{action_intent_id}.status": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionStatusApiexecutionsactionintentidstatusGETApiPermissionTestCCNativeStackExecutionStatusApi5AA9581DGETexecutionsactionintentidstatus639E7CB8"
+          }
+        ],
+        "/CCNativeStack/ExecutionStatusApi/Default/executions/{action_intent_id}/status/GET/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionStatusApiexecutionsactionintentidstatusGET00DE633F"
+          }
+        ],
+        "/CCNativeStack/ExecutionStatusApi/Default/accounts/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionStatusApiaccounts321B49B7"
+          }
+        ],
+        "/CCNativeStack/ExecutionStatusApi/Default/accounts/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionStatusApiaccountsOPTIONS89359389"
+          }
+        ],
+        "/CCNativeStack/ExecutionStatusApi/Default/accounts/{account_id}/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionStatusApiaccountsaccountid962DCB51"
+          }
+        ],
+        "/CCNativeStack/ExecutionStatusApi/Default/accounts/{account_id}/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionStatusApiaccountsaccountidOPTIONS8CD86C58"
+          }
+        ],
+        "/CCNativeStack/ExecutionStatusApi/Default/accounts/{account_id}/executions/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionStatusApiaccountsaccountidexecutions3796AA0A"
+          }
+        ],
+        "/CCNativeStack/ExecutionStatusApi/Default/accounts/{account_id}/executions/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionStatusApiaccountsaccountidexecutionsOPTIONS799116E3"
+          }
+        ],
+        "/CCNativeStack/ExecutionStatusApi/Default/accounts/{account_id}/executions/GET/ApiPermission.CCNativeStackExecutionStatusApi5AA9581D.GET..accounts.{account_id}.executions": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionStatusApiaccountsaccountidexecutionsGETApiPermissionCCNativeStackExecutionStatusApi5AA9581DGETaccountsaccountidexecutions0AEEC8FC"
+          }
+        ],
+        "/CCNativeStack/ExecutionStatusApi/Default/accounts/{account_id}/executions/GET/ApiPermission.Test.CCNativeStackExecutionStatusApi5AA9581D.GET..accounts.{account_id}.executions": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionStatusApiaccountsaccountidexecutionsGETApiPermissionTestCCNativeStackExecutionStatusApi5AA9581DGETaccountsaccountidexecutions54EE319B"
+          }
+        ],
+        "/CCNativeStack/ExecutionStatusApi/Default/accounts/{account_id}/executions/GET/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionStatusApiaccountsaccountidexecutionsGET76D41F70"
+          }
+        ],
+        "/CCNativeStack/ExecutionStatusApiCognitoAuthorizer/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionStatusApiCognitoAuthorizer534415ED"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ExecutionAttemptsTable": [
+          {
+            "type": "aws:cdk:hasPhysicalName",
+            "data": {
+              "Fn::GetAtt": [
+                "ExecutionInfrastructureNestedStackNestedStackExecutionInfrastructureNestedStackNestedStackResource65F6CDCB",
+                "Outputs.CCNativeStackExecutionInfrastructureNestedStackExecutionInfrastructureExecutionAttemptsTableF3C0C258Ref"
+              ]
+            }
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ExecutionAttemptsTable/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureExecutionAttemptsTableD1619A75"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ExecutionOutcomesTable": [
+          {
+            "type": "aws:cdk:hasPhysicalName",
+            "data": {
+              "Fn::GetAtt": [
+                "ExecutionInfrastructureNestedStackNestedStackExecutionInfrastructureNestedStackNestedStackResource65F6CDCB",
+                "Outputs.CCNativeStackExecutionInfrastructureNestedStackExecutionInfrastructureExecutionOutcomesTableD8F81003Ref"
+              ]
+            }
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ExecutionOutcomesTable/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureExecutionOutcomesTableFA67D167"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ActionTypeRegistryTable": [
+          {
+            "type": "aws:cdk:hasPhysicalName",
+            "data": {
+              "Fn::GetAtt": [
+                "ExecutionInfrastructureNestedStackNestedStackExecutionInfrastructureNestedStackNestedStackResource65F6CDCB",
+                "Outputs.CCNativeStackExecutionInfrastructureNestedStackExecutionInfrastructureActionTypeRegistryTableF54D0F46Ref"
+              ]
+            }
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ActionTypeRegistryTable/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureActionTypeRegistryTableADE245F0"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ExternalWriteDedupeTable": [
+          {
+            "type": "aws:cdk:hasPhysicalName",
+            "data": {
+              "Fn::GetAtt": [
+                "ExecutionInfrastructureNestedStackNestedStackExecutionInfrastructureNestedStackNestedStackResource65F6CDCB",
+                "Outputs.CCNativeStackExecutionInfrastructureNestedStackExecutionInfrastructureExternalWriteDedupeTable43FF3055Ref"
+              ]
+            }
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ExternalWriteDedupeTable/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureExternalWriteDedupeTable44853629"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ResilienceTable": [
+          {
+            "type": "aws:cdk:hasPhysicalName",
+            "data": {
+              "Ref": "ExecutionInfrastructureResilienceTableAD30852C"
+            }
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ResilienceTable/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureResilienceTableAD30852C"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ExecutionStarterDlq/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureExecutionStarterDlqE8C4A5C4"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ExecutionValidatorDlq/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureExecutionValidatorDlq6B0328BE"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ExecutionStarterHandler/ServiceRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureExecutionStarterHandlerServiceRoleA58EB79D"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ExecutionStarterHandler/ServiceRole/DefaultPolicy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureExecutionStarterHandlerServiceRoleDefaultPolicyDC92E048"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ExecutionStarterHandler/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureExecutionStarterHandlerEB3549AD"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ExecutionStarterHandler/EventInvokeConfig/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureExecutionStarterHandlerEventInvokeConfig26398E8B"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ExecutionValidatorHandler/ServiceRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureExecutionValidatorHandlerServiceRole49F8D007"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ExecutionValidatorHandler/ServiceRole/DefaultPolicy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureExecutionValidatorHandlerServiceRoleDefaultPolicyC85A9AE9"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ExecutionValidatorHandler/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureExecutionValidatorHandlerEBD0AC42"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ExecutionValidatorHandler/EventInvokeConfig/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureExecutionValidatorHandlerEventInvokeConfig158133C6"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ToolMapperDlq/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureToolMapperDlq40FC87A8"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ToolInvokerDlq/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureToolInvokerDlq4FD9B75F"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ExecutionRecorderDlq/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureExecutionRecorderDlq586A9A5D"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ExecutionFailureRecorderDlq/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureExecutionFailureRecorderDlqEE0C92AA"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/CompensationDlq/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureCompensationDlq37CE18B5"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ConnectorConfigTable": [
+          {
+            "type": "aws:cdk:hasPhysicalName",
+            "data": {
+              "Fn::GetAtt": [
+                "ExecutionInfrastructureNestedStackNestedStackExecutionInfrastructureNestedStackNestedStackResource65F6CDCB",
+                "Outputs.CCNativeStackExecutionInfrastructureNestedStackExecutionInfrastructureConnectorConfigTableAB947209Ref"
+              ]
+            }
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ConnectorConfigTable/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureConnectorConfigTable7E3D9124"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/InternalNotesTable": [
+          {
+            "type": "aws:cdk:hasPhysicalName",
+            "data": {
+              "Fn::GetAtt": [
+                "ExecutionInfrastructureNestedStackNestedStackExecutionInfrastructureNestedStackNestedStackResource65F6CDCB",
+                "Outputs.CCNativeStackExecutionInfrastructureNestedStackExecutionInfrastructureInternalNotesTable810F7240Ref"
+              ]
+            }
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/InternalNotesTable/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureInternalNotesTable79920A10"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/InternalTasksTable": [
+          {
+            "type": "aws:cdk:hasPhysicalName",
+            "data": {
+              "Fn::GetAtt": [
+                "ExecutionInfrastructureNestedStackNestedStackExecutionInfrastructureNestedStackNestedStackResource65F6CDCB",
+                "Outputs.CCNativeStackExecutionInfrastructureNestedStackExecutionInfrastructureInternalTasksTableC558E248Ref"
+              ]
+            }
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/InternalTasksTable/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureInternalTasksTable40EEE850"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ConnectorsVpc/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureConnectorsVpc5A2E5EDA"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ConnectorsVpc/ConnectorPublicSubnet1/Subnet": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureConnectorsVpcConnectorPublicSubnet1Subnet9BE41469"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ConnectorsVpc/ConnectorPublicSubnet1/RouteTable": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureConnectorsVpcConnectorPublicSubnet1RouteTable66C436FA"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ConnectorsVpc/ConnectorPublicSubnet1/RouteTableAssociation": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureConnectorsVpcConnectorPublicSubnet1RouteTableAssociationD61AA0D5"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ConnectorsVpc/ConnectorPublicSubnet1/DefaultRoute": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureConnectorsVpcConnectorPublicSubnet1DefaultRoute17FDD1E1"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ConnectorsVpc/ConnectorPublicSubnet1/EIP": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureConnectorsVpcConnectorPublicSubnet1EIPDA885AE5"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ConnectorsVpc/ConnectorPublicSubnet1/NATGateway": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureConnectorsVpcConnectorPublicSubnet1NATGateway558FB937"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ConnectorsVpc/ConnectorPublicSubnet2/Subnet": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureConnectorsVpcConnectorPublicSubnet2Subnet9D738083"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ConnectorsVpc/ConnectorPublicSubnet2/RouteTable": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureConnectorsVpcConnectorPublicSubnet2RouteTable59AEC5DB"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ConnectorsVpc/ConnectorPublicSubnet2/RouteTableAssociation": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureConnectorsVpcConnectorPublicSubnet2RouteTableAssociation2BBE769C"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ConnectorsVpc/ConnectorPublicSubnet2/DefaultRoute": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureConnectorsVpcConnectorPublicSubnet2DefaultRoute070C8124"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ConnectorsVpc/ConnectorPrivateSubnet1/Subnet": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureConnectorsVpcConnectorPrivateSubnet1SubnetD5396AA6"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ConnectorsVpc/ConnectorPrivateSubnet1/RouteTable": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureConnectorsVpcConnectorPrivateSubnet1RouteTableC1762CEC"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ConnectorsVpc/ConnectorPrivateSubnet1/RouteTableAssociation": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureConnectorsVpcConnectorPrivateSubnet1RouteTableAssociationE3E6F3A5"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ConnectorsVpc/ConnectorPrivateSubnet1/DefaultRoute": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureConnectorsVpcConnectorPrivateSubnet1DefaultRouteE2E3D744"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ConnectorsVpc/ConnectorPrivateSubnet2/Subnet": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureConnectorsVpcConnectorPrivateSubnet2SubnetD7FF5293"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ConnectorsVpc/ConnectorPrivateSubnet2/RouteTable": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureConnectorsVpcConnectorPrivateSubnet2RouteTableBC2ED354"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ConnectorsVpc/ConnectorPrivateSubnet2/RouteTableAssociation": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureConnectorsVpcConnectorPrivateSubnet2RouteTableAssociation95645782"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ConnectorsVpc/ConnectorPrivateSubnet2/DefaultRoute": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureConnectorsVpcConnectorPrivateSubnet2DefaultRoute53412F7C"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ConnectorsVpc/IGW": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureConnectorsVpcIGWFA4B023E"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ConnectorsVpc/VPCGW": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureConnectorsVpcVPCGWCC600261"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ConnectorsVpc/RestrictDefaultSecurityGroupCustomResource/Default": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureConnectorsVpcRestrictDefaultSecurityGroupCustomResourceB393B7DE"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ConnectorsVpc/ConnectorsVpcFlowLog/IAMRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureConnectorsVpcConnectorsVpcFlowLogIAMRoleE36ECA61"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ConnectorsVpc/ConnectorsVpcFlowLog/IAMRole/DefaultPolicy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureConnectorsVpcConnectorsVpcFlowLogIAMRoleDefaultPolicyFF1B03F8"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ConnectorsVpc/ConnectorsVpcFlowLog/LogGroup/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureConnectorsVpcConnectorsVpcFlowLogLogGroupA7B1930E"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ConnectorsVpc/ConnectorsVpcFlowLog/FlowLog": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureConnectorsVpcConnectorsVpcFlowLog952C7F43"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/DynamoDBEndpoint/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureDynamoDBEndpoint8140E82C"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/S3Endpoint/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureS3Endpoint25FAF2B8"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/CloudWatchLogsEndpoint/SecurityGroup/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureCloudWatchLogsEndpointSecurityGroup7F23505F"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/CloudWatchLogsEndpoint/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureCloudWatchLogsEndpointBF1686EE"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/STSEndpoint/SecurityGroup/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureSTSEndpointSecurityGroup0644FD46"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/STSEndpoint/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureSTSEndpoint350600B1"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/SecretsManagerEndpoint/SecurityGroup/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureSecretsManagerEndpointSecurityGroupA35798EA"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/SecretsManagerEndpoint/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureSecretsManagerEndpointAB7CCE8B"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/KMSEndpoint/SecurityGroup/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureKMSEndpointSecurityGroupA260A9F3"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/KMSEndpoint/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureKMSEndpoint7A225935"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/InternalAdapterSecurityGroup/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureInternalAdapterSecurityGroup8CBA9D06"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/InternalAdapterSecurityGroup/to pl-00a54069:443": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureInternalAdapterSecurityGrouptopl00a540694434669F378"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/CrmAdapterSecurityGroup/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureCrmAdapterSecurityGroupE11945D7"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ExecutionGatewayRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureExecutionGatewayRole056850A0"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ExecutionGatewayRole/DefaultPolicy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureExecutionGatewayRoleDefaultPolicyF37E2DD1"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ExecutionGateway": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureExecutionGatewayF1C40F42"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ToolMapperHandler/ServiceRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureToolMapperHandlerServiceRole7402F0E2"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ToolMapperHandler/ServiceRole/DefaultPolicy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureToolMapperHandlerServiceRoleDefaultPolicy7914CF4D"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ToolMapperHandler/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureToolMapperHandler600E8EAC"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ToolMapperHandler/EventInvokeConfig/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureToolMapperHandlerEventInvokeConfig50834A97"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/JwtGatewayServiceCredentials/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureJwtGatewayServiceCredentials706D68B9"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/CognitoGatewayServiceUserCustomResource/ServiceRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureCognitoGatewayServiceUserCustomResourceServiceRole71203F9E"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/CognitoGatewayServiceUserCustomResource/ServiceRole/DefaultPolicy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureCognitoGatewayServiceUserCustomResourceServiceRoleDefaultPolicy18EC7BE2"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/CognitoGatewayServiceUserCustomResource/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureCognitoGatewayServiceUserCustomResourceF5568D33"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/CognitoGatewayServiceUserProvider/framework-onEvent/ServiceRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureCognitoGatewayServiceUserProviderframeworkonEventServiceRole7A4E7DCD"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/CognitoGatewayServiceUserProvider/framework-onEvent/ServiceRole/DefaultPolicy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureCognitoGatewayServiceUserProviderframeworkonEventServiceRoleDefaultPolicyE3D5678F"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/CognitoGatewayServiceUserProvider/framework-onEvent/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureCognitoGatewayServiceUserProviderframeworkonEvent476B1AE8"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/CognitoGatewayServiceUser/Default": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureCognitoGatewayServiceUser20E19CC3"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ToolInvokerHandler/ServiceRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureToolInvokerHandlerServiceRole5F3B5974"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ToolInvokerHandler/ServiceRole/DefaultPolicy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureToolInvokerHandlerServiceRoleDefaultPolicy6B891881"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ToolInvokerHandler/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureToolInvokerHandlerF3E699A0"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ToolInvokerHandler/EventInvokeConfig/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureToolInvokerHandlerEventInvokeConfig1D16714B"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ExecutionRecorderHandler/ServiceRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureExecutionRecorderHandlerServiceRole4227CE9E"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ExecutionRecorderHandler/ServiceRole/DefaultPolicy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureExecutionRecorderHandlerServiceRoleDefaultPolicyA1972197"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ExecutionRecorderHandler/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureExecutionRecorderHandlerFA16105F"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ExecutionRecorderHandler/EventInvokeConfig/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureExecutionRecorderHandlerEventInvokeConfigAB1BA38F"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ExecutionFailureRecorderHandler/ServiceRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureExecutionFailureRecorderHandlerServiceRole1CF0BC0C"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ExecutionFailureRecorderHandler/ServiceRole/DefaultPolicy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureExecutionFailureRecorderHandlerServiceRoleDefaultPolicyAF2E6BCA"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ExecutionFailureRecorderHandler/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureExecutionFailureRecorderHandler80AB4CE7"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ExecutionFailureRecorderHandler/EventInvokeConfig/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureExecutionFailureRecorderHandlerEventInvokeConfigAC80FBE9"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/CompensationHandler/ServiceRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureCompensationHandlerServiceRoleEDE35E7C"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/CompensationHandler/ServiceRole/DefaultPolicy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureCompensationHandlerServiceRoleDefaultPolicy9F0EA64F"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/CompensationHandler/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureCompensationHandler83FA5D97"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/CompensationHandler/EventInvokeConfig/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureCompensationHandlerEventInvokeConfig3782050D"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ExecutionStateMachine/Role/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureExecutionStateMachineRole5D0E6667"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ExecutionStateMachine/Role/DefaultPolicy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureExecutionStateMachineRoleDefaultPolicy20DBAF48"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ExecutionStateMachine/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureExecutionStateMachineC7C00A9C"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ExecutionStateMachine/EventsRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureExecutionStateMachineEventsRoleDB80792B"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ExecutionStateMachine/EventsRole/DefaultPolicy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureExecutionStateMachineEventsRoleDefaultPolicy6C5FF472"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ExecutionTriggerRule/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureExecutionTriggerRule13F48D13"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/InternalAdapterHandler/ServiceRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureInternalAdapterHandlerServiceRole4D6A3AD7"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/InternalAdapterHandler/ServiceRole/DefaultPolicy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureInternalAdapterHandlerServiceRoleDefaultPolicyF8E7CD2C"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/InternalAdapterHandler/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureInternalAdapterHandler201A3427"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/InternalAdapterHandler/AllowGatewayInvoke-internal-create_note": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureInternalAdapterHandlerAllowGatewayInvokeinternalcreatenote4D3F65AC"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/InternalAdapterHandler/AllowGatewayInvoke-internal-create_task": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureInternalAdapterHandlerAllowGatewayInvokeinternalcreatetask40C0EC4E"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/CrmAdapterHandler/ServiceRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureCrmAdapterHandlerServiceRole0CCEFF1A"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/CrmAdapterHandler/ServiceRole/DefaultPolicy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureCrmAdapterHandlerServiceRoleDefaultPolicyDD30BD87"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/CrmAdapterHandler/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureCrmAdapterHandler5F3551C4"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/CrmAdapterHandler/AllowGatewayInvoke-crm-create_task": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureCrmAdapterHandlerAllowGatewayInvokecrmcreatetaskC33A9536"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/GatewayTarget-internal-create-note": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureGatewayTargetinternalcreatenoteD4806E2E"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/GatewayTarget-internal-create-task": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureGatewayTargetinternalcreatetask06948D3D"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/GatewayTarget-crm-create-task": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureGatewayTargetcrmcreatetask0B5A268B"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ExecutionStatusAPIHandler/ServiceRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureExecutionStatusAPIHandlerServiceRole49311BE3"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ExecutionStatusAPIHandler/ServiceRole/DefaultPolicy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureExecutionStatusAPIHandlerServiceRoleDefaultPolicyE47CA3B2"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ExecutionStatusAPIHandler/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureExecutionStatusAPIHandler756F77F5"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ExecutionFailureAlarm/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureExecutionFailureAlarm9D44B8A2"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ExecutionDurationAlarm/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureExecutionDurationAlarm48604006"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ExecutionThrottleAlarm/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureExecutionThrottleAlarmDFCBF653"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ToolInvokerErrors/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureToolInvokerErrors0022B1B6"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ExecutionRecorderErrors/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureExecutionRecorderErrors78D24000"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ExecutionFailureRecorderErrors/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureExecutionFailureRecorderErrors04B7AF08"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/Custom::VpcRestrictDefaultSGCustomResourceProvider": [
+          {
+            "type": "aws:cdk:is-custom-resource-handler-customResourceProvider",
+            "data": true
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/Custom::VpcRestrictDefaultSGCustomResourceProvider/Role": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CustomVpcRestrictDefaultSGCustomResourceProviderRole26592FE0"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/Custom::VpcRestrictDefaultSGCustomResourceProvider/Handler": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CustomVpcRestrictDefaultSGCustomResourceProviderHandlerDC833E5E"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/CDKMetadata/Default": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CDKMetadata"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/CCNativeStackExecutionInfrastructureNestedStackExecutionInfrastructureExecutionStatusAPIHandlerD6EA4E3CArn": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CCNativeStackExecutionInfrastructureNestedStackExecutionInfrastructureExecutionStatusAPIHandlerD6EA4E3CArn"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/reference-to-CCNativeStackActionIntentTable31610521Arn": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "referencetoCCNativeStackActionIntentTable31610521Arn"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/reference-to-CCNativeStackLedgerTableFA76C270Arn": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "referencetoCCNativeStackLedgerTableFA76C270Arn"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/reference-to-CCNativeStackActionIntentTable31610521Ref": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "referencetoCCNativeStackActionIntentTable31610521Ref"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/reference-to-CCNativeStackLedgerTableFA76C270Ref": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "referencetoCCNativeStackLedgerTableFA76C270Ref"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/reference-to-CCNativeStackTenantsTable4B06C921Arn": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "referencetoCCNativeStackTenantsTable4B06C921Arn"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/reference-to-CCNativeStackTenantsTable4B06C921Ref": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "referencetoCCNativeStackTenantsTable4B06C921Ref"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/reference-to-CCNativeStackUserPoolWebClient6BD81726Ref": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "referencetoCCNativeStackUserPoolWebClient6BD81726Ref"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/reference-to-CCNativeStackUserPoolCA4F225ARef": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "referencetoCCNativeStackUserPoolCA4F225ARef"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/reference-to-CCNativeStackUserPoolCA4F225AArn": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "referencetoCCNativeStackUserPoolCA4F225AArn"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/reference-to-CCNativeStackArtifactsBucketCE1423ECArn": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "referencetoCCNativeStackArtifactsBucketCE1423ECArn"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/reference-to-CCNativeStackArtifactsBucketCE1423ECRef": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "referencetoCCNativeStackArtifactsBucketCE1423ECRef"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/reference-to-CCNativeStackSignalsTableC39AB6D7Arn": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "referencetoCCNativeStackSignalsTableC39AB6D7Arn"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/reference-to-CCNativeStackCCNativeEventBus60C230DFArn": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "referencetoCCNativeStackCCNativeEventBus60C230DFArn"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/reference-to-CCNativeStackSignalsTableC39AB6D7Ref": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "referencetoCCNativeStackSignalsTableC39AB6D7Ref"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/reference-to-CCNativeStackCCNativeEventBus60C230DFRef": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "referencetoCCNativeStackCCNativeEventBus60C230DFRef"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/CCNativeStackExecutionInfrastructureNestedStackExecutionInfrastructureExecutionOutcomesTableD8F81003Arn": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CCNativeStackExecutionInfrastructureNestedStackExecutionInfrastructureExecutionOutcomesTableD8F81003Arn"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/CCNativeStackExecutionInfrastructureNestedStackExecutionInfrastructureExecutionOutcomesTableD8F81003Ref": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CCNativeStackExecutionInfrastructureNestedStackExecutionInfrastructureExecutionOutcomesTableD8F81003Ref"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/CCNativeStackExecutionInfrastructureNestedStackExecutionInfrastructureActionTypeRegistryTableF54D0F46Ref": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CCNativeStackExecutionInfrastructureNestedStackExecutionInfrastructureActionTypeRegistryTableF54D0F46Ref"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/CCNativeStackExecutionInfrastructureNestedStackExecutionInfrastructureExecutionAttemptsTableF3C0C258Ref": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CCNativeStackExecutionInfrastructureNestedStackExecutionInfrastructureExecutionAttemptsTableF3C0C258Ref"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/CCNativeStackExecutionInfrastructureNestedStackExecutionInfrastructureExternalWriteDedupeTable43FF3055Ref": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CCNativeStackExecutionInfrastructureNestedStackExecutionInfrastructureExternalWriteDedupeTable43FF3055Ref"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/CCNativeStackExecutionInfrastructureNestedStackExecutionInfrastructureConnectorConfigTableAB947209Ref": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CCNativeStackExecutionInfrastructureNestedStackExecutionInfrastructureConnectorConfigTableAB947209Ref"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/CCNativeStackExecutionInfrastructureNestedStackExecutionInfrastructureInternalNotesTable810F7240Ref": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CCNativeStackExecutionInfrastructureNestedStackExecutionInfrastructureInternalNotesTable810F7240Ref"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack/CCNativeStackExecutionInfrastructureNestedStackExecutionInfrastructureInternalTasksTableC558E248Ref": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CCNativeStackExecutionInfrastructureNestedStackExecutionInfrastructureInternalTasksTableC558E248Ref"
+          }
+        ],
+        "/CCNativeStack/ExecutionInfrastructureNestedStack.NestedStack/ExecutionInfrastructureNestedStack.NestedStackResource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionInfrastructureNestedStackNestedStackExecutionInfrastructureNestedStackNestedStackResource65F6CDCB"
+          }
+        ],
+        "/CCNativeStack/AutonomyInfrastructure/AutonomyConfigTable": [
+          {
+            "type": "aws:cdk:hasPhysicalName",
+            "data": {
+              "Ref": "AutonomyInfrastructureAutonomyConfigTableB0A451FC"
+            }
+          }
+        ],
+        "/CCNativeStack/AutonomyInfrastructure/AutonomyConfigTable/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AutonomyInfrastructureAutonomyConfigTableB0A451FC"
+          }
+        ],
+        "/CCNativeStack/AutonomyInfrastructure/AutonomyBudgetStateTable": [
+          {
+            "type": "aws:cdk:hasPhysicalName",
+            "data": {
+              "Ref": "AutonomyInfrastructureAutonomyBudgetStateTableD25ABDF3"
+            }
+          }
+        ],
+        "/CCNativeStack/AutonomyInfrastructure/AutonomyBudgetStateTable/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AutonomyInfrastructureAutonomyBudgetStateTableD25ABDF3"
+          }
+        ],
+        "/CCNativeStack/AutonomyInfrastructure/AuditExportTable": [
+          {
+            "type": "aws:cdk:hasPhysicalName",
+            "data": {
+              "Ref": "AutonomyInfrastructureAuditExportTableE767D8B7"
+            }
+          }
+        ],
+        "/CCNativeStack/AutonomyInfrastructure/AuditExportTable/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AutonomyInfrastructureAuditExportTableE767D8B7"
+          }
+        ],
+        "/CCNativeStack/AutonomyInfrastructure/AuditExportBucket/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AutonomyInfrastructureAuditExportBucket69E79BB1"
+          }
+        ],
+        "/CCNativeStack/AutonomyInfrastructure/AuditExportBucket/Policy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AutonomyInfrastructureAuditExportBucketPolicyAB0BFE28"
+          }
+        ],
+        "/CCNativeStack/AutonomyInfrastructure/AutonomyAdminApiHandler/ServiceRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AutonomyInfrastructureAutonomyAdminApiHandlerServiceRole16A3763F"
+          }
+        ],
+        "/CCNativeStack/AutonomyInfrastructure/AutonomyAdminApiHandler/ServiceRole/DefaultPolicy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AutonomyInfrastructureAutonomyAdminApiHandlerServiceRoleDefaultPolicyCA445691"
+          }
+        ],
+        "/CCNativeStack/AutonomyInfrastructure/AutonomyAdminApiHandler/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AutonomyInfrastructureAutonomyAdminApiHandler4B6D2AAD"
+          }
+        ],
+        "/CCNativeStack/AutonomyInfrastructure/AutonomyApi/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AutonomyInfrastructureAutonomyApi709694A0"
+          }
+        ],
+        "/CCNativeStack/AutonomyInfrastructure/AutonomyApi/Deployment/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AutonomyInfrastructureAutonomyApiDeployment1C07CBFB02049d4aceac58e93b9c8ffb6166867b"
+          }
+        ],
+        "/CCNativeStack/AutonomyInfrastructure/AutonomyApi/DeploymentStage.prod/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AutonomyInfrastructureAutonomyApiDeploymentStageprod4962370A"
+          }
+        ],
+        "/CCNativeStack/AutonomyInfrastructure/AutonomyApi/Endpoint": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AutonomyInfrastructureAutonomyApiEndpointDB651C20"
+          }
+        ],
+        "/CCNativeStack/AutonomyInfrastructure/AutonomyApi/Default/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AutonomyInfrastructureAutonomyApiOPTIONS18CE20F2"
+          }
+        ],
+        "/CCNativeStack/AutonomyInfrastructure/AutonomyApi/Default/config/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AutonomyInfrastructureAutonomyApiconfigC0C62407"
+          }
+        ],
+        "/CCNativeStack/AutonomyInfrastructure/AutonomyApi/Default/config/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AutonomyInfrastructureAutonomyApiconfigOPTIONSA0E7A2EF"
+          }
+        ],
+        "/CCNativeStack/AutonomyInfrastructure/AutonomyApi/Default/config/GET/ApiPermission.CCNativeStackAutonomyInfrastructureAutonomyApiF6660AE7.GET..config": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AutonomyInfrastructureAutonomyApiconfigGETApiPermissionCCNativeStackAutonomyInfrastructureAutonomyApiF6660AE7GETconfig073DF5E8"
+          }
+        ],
+        "/CCNativeStack/AutonomyInfrastructure/AutonomyApi/Default/config/GET/ApiPermission.Test.CCNativeStackAutonomyInfrastructureAutonomyApiF6660AE7.GET..config": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AutonomyInfrastructureAutonomyApiconfigGETApiPermissionTestCCNativeStackAutonomyInfrastructureAutonomyApiF6660AE7GETconfigADCF9F2E"
+          }
+        ],
+        "/CCNativeStack/AutonomyInfrastructure/AutonomyApi/Default/config/GET/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AutonomyInfrastructureAutonomyApiconfigGET7ABCC228"
+          }
+        ],
+        "/CCNativeStack/AutonomyInfrastructure/AutonomyApi/Default/config/PUT/ApiPermission.CCNativeStackAutonomyInfrastructureAutonomyApiF6660AE7.PUT..config": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AutonomyInfrastructureAutonomyApiconfigPUTApiPermissionCCNativeStackAutonomyInfrastructureAutonomyApiF6660AE7PUTconfigA763C296"
+          }
+        ],
+        "/CCNativeStack/AutonomyInfrastructure/AutonomyApi/Default/config/PUT/ApiPermission.Test.CCNativeStackAutonomyInfrastructureAutonomyApiF6660AE7.PUT..config": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AutonomyInfrastructureAutonomyApiconfigPUTApiPermissionTestCCNativeStackAutonomyInfrastructureAutonomyApiF6660AE7PUTconfig8B2ED420"
+          }
+        ],
+        "/CCNativeStack/AutonomyInfrastructure/AutonomyApi/Default/config/PUT/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AutonomyInfrastructureAutonomyApiconfigPUT2D49A097"
+          }
+        ],
+        "/CCNativeStack/AutonomyInfrastructure/AutonomyApi/Default/budget/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AutonomyInfrastructureAutonomyApibudget86CAFB24"
+          }
+        ],
+        "/CCNativeStack/AutonomyInfrastructure/AutonomyApi/Default/budget/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AutonomyInfrastructureAutonomyApibudgetOPTIONS6F265644"
+          }
+        ],
+        "/CCNativeStack/AutonomyInfrastructure/AutonomyApi/Default/budget/GET/ApiPermission.CCNativeStackAutonomyInfrastructureAutonomyApiF6660AE7.GET..budget": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AutonomyInfrastructureAutonomyApibudgetGETApiPermissionCCNativeStackAutonomyInfrastructureAutonomyApiF6660AE7GETbudgetF8404E5A"
+          }
+        ],
+        "/CCNativeStack/AutonomyInfrastructure/AutonomyApi/Default/budget/GET/ApiPermission.Test.CCNativeStackAutonomyInfrastructureAutonomyApiF6660AE7.GET..budget": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AutonomyInfrastructureAutonomyApibudgetGETApiPermissionTestCCNativeStackAutonomyInfrastructureAutonomyApiF6660AE7GETbudget6A1B3502"
+          }
+        ],
+        "/CCNativeStack/AutonomyInfrastructure/AutonomyApi/Default/budget/GET/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AutonomyInfrastructureAutonomyApibudgetGET7267797C"
+          }
+        ],
+        "/CCNativeStack/AutonomyInfrastructure/AutonomyApi/Default/budget/PUT/ApiPermission.CCNativeStackAutonomyInfrastructureAutonomyApiF6660AE7.PUT..budget": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AutonomyInfrastructureAutonomyApibudgetPUTApiPermissionCCNativeStackAutonomyInfrastructureAutonomyApiF6660AE7PUTbudgetCF58DCAC"
+          }
+        ],
+        "/CCNativeStack/AutonomyInfrastructure/AutonomyApi/Default/budget/PUT/ApiPermission.Test.CCNativeStackAutonomyInfrastructureAutonomyApiF6660AE7.PUT..budget": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AutonomyInfrastructureAutonomyApibudgetPUTApiPermissionTestCCNativeStackAutonomyInfrastructureAutonomyApiF6660AE7PUTbudgetE60CB14F"
+          }
+        ],
+        "/CCNativeStack/AutonomyInfrastructure/AutonomyApi/Default/budget/PUT/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AutonomyInfrastructureAutonomyApibudgetPUT48D44B11"
+          }
+        ],
+        "/CCNativeStack/AutonomyInfrastructure/AutonomyApi/Default/budget/state/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AutonomyInfrastructureAutonomyApibudgetstateB1680FEC"
+          }
+        ],
+        "/CCNativeStack/AutonomyInfrastructure/AutonomyApi/Default/budget/state/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AutonomyInfrastructureAutonomyApibudgetstateOPTIONS6AF71D30"
+          }
+        ],
+        "/CCNativeStack/AutonomyInfrastructure/AutonomyApi/Default/budget/state/GET/ApiPermission.CCNativeStackAutonomyInfrastructureAutonomyApiF6660AE7.GET..budget.state": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AutonomyInfrastructureAutonomyApibudgetstateGETApiPermissionCCNativeStackAutonomyInfrastructureAutonomyApiF6660AE7GETbudgetstate1CF1456A"
+          }
+        ],
+        "/CCNativeStack/AutonomyInfrastructure/AutonomyApi/Default/budget/state/GET/ApiPermission.Test.CCNativeStackAutonomyInfrastructureAutonomyApiF6660AE7.GET..budget.state": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AutonomyInfrastructureAutonomyApibudgetstateGETApiPermissionTestCCNativeStackAutonomyInfrastructureAutonomyApiF6660AE7GETbudgetstateB6E8F8EE"
+          }
+        ],
+        "/CCNativeStack/AutonomyInfrastructure/AutonomyApi/Default/budget/state/GET/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AutonomyInfrastructureAutonomyApibudgetstateGET1693BFEA"
+          }
+        ],
+        "/CCNativeStack/AutonomyInfrastructure/AutonomyApi/Default/kill-switches/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AutonomyInfrastructureAutonomyApikillswitches772DD280"
+          }
+        ],
+        "/CCNativeStack/AutonomyInfrastructure/AutonomyApi/Default/kill-switches/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AutonomyInfrastructureAutonomyApikillswitchesOPTIONSD5CEF4AD"
+          }
+        ],
+        "/CCNativeStack/AutonomyInfrastructure/AutonomyApi/Default/kill-switches/GET/ApiPermission.CCNativeStackAutonomyInfrastructureAutonomyApiF6660AE7.GET..kill-switches": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AutonomyInfrastructureAutonomyApikillswitchesGETApiPermissionCCNativeStackAutonomyInfrastructureAutonomyApiF6660AE7GETkillswitches041A80E9"
+          }
+        ],
+        "/CCNativeStack/AutonomyInfrastructure/AutonomyApi/Default/kill-switches/GET/ApiPermission.Test.CCNativeStackAutonomyInfrastructureAutonomyApiF6660AE7.GET..kill-switches": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AutonomyInfrastructureAutonomyApikillswitchesGETApiPermissionTestCCNativeStackAutonomyInfrastructureAutonomyApiF6660AE7GETkillswitchesB8EE0DC9"
+          }
+        ],
+        "/CCNativeStack/AutonomyInfrastructure/AutonomyApi/Default/kill-switches/GET/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AutonomyInfrastructureAutonomyApikillswitchesGET9274D3FB"
+          }
+        ],
+        "/CCNativeStack/AutonomyInfrastructure/AutonomyApi/Default/kill-switches/PUT/ApiPermission.CCNativeStackAutonomyInfrastructureAutonomyApiF6660AE7.PUT..kill-switches": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AutonomyInfrastructureAutonomyApikillswitchesPUTApiPermissionCCNativeStackAutonomyInfrastructureAutonomyApiF6660AE7PUTkillswitches23C9D2E5"
+          }
+        ],
+        "/CCNativeStack/AutonomyInfrastructure/AutonomyApi/Default/kill-switches/PUT/ApiPermission.Test.CCNativeStackAutonomyInfrastructureAutonomyApiF6660AE7.PUT..kill-switches": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AutonomyInfrastructureAutonomyApikillswitchesPUTApiPermissionTestCCNativeStackAutonomyInfrastructureAutonomyApiF6660AE7PUTkillswitchesF0073C49"
+          }
+        ],
+        "/CCNativeStack/AutonomyInfrastructure/AutonomyApi/Default/kill-switches/PUT/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AutonomyInfrastructureAutonomyApikillswitchesPUT2E298081"
+          }
+        ],
+        "/CCNativeStack/AutonomyInfrastructure/AutonomyApi/Default/replay/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AutonomyInfrastructureAutonomyApireplayA3AFB565"
+          }
+        ],
+        "/CCNativeStack/AutonomyInfrastructure/AutonomyApi/Default/replay/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AutonomyInfrastructureAutonomyApireplayOPTIONS8E07CBDD"
+          }
+        ],
+        "/CCNativeStack/AutonomyInfrastructure/AutonomyApi/Default/replay/POST/ApiPermission.CCNativeStackAutonomyInfrastructureAutonomyApiF6660AE7.POST..replay": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AutonomyInfrastructureAutonomyApireplayPOSTApiPermissionCCNativeStackAutonomyInfrastructureAutonomyApiF6660AE7POSTreplay433FB88C"
+          }
+        ],
+        "/CCNativeStack/AutonomyInfrastructure/AutonomyApi/Default/replay/POST/ApiPermission.Test.CCNativeStackAutonomyInfrastructureAutonomyApiF6660AE7.POST..replay": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AutonomyInfrastructureAutonomyApireplayPOSTApiPermissionTestCCNativeStackAutonomyInfrastructureAutonomyApiF6660AE7POSTreplayDBEE229E"
+          }
+        ],
+        "/CCNativeStack/AutonomyInfrastructure/AutonomyApi/Default/replay/POST/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AutonomyInfrastructureAutonomyApireplayPOST4956ED26"
+          }
+        ],
+        "/CCNativeStack/AutonomyInfrastructure/AutonomyApi/Default/ledger/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AutonomyInfrastructureAutonomyApiledger6BB426D0"
+          }
+        ],
+        "/CCNativeStack/AutonomyInfrastructure/AutonomyApi/Default/ledger/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AutonomyInfrastructureAutonomyApiledgerOPTIONS5EFD876F"
+          }
+        ],
+        "/CCNativeStack/AutonomyInfrastructure/AutonomyApi/Default/ledger/explanation/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AutonomyInfrastructureAutonomyApiledgerexplanationA37A96F5"
+          }
+        ],
+        "/CCNativeStack/AutonomyInfrastructure/AutonomyApi/Default/ledger/explanation/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AutonomyInfrastructureAutonomyApiledgerexplanationOPTIONS5E6A6231"
+          }
+        ],
+        "/CCNativeStack/AutonomyInfrastructure/AutonomyApi/Default/ledger/explanation/GET/ApiPermission.CCNativeStackAutonomyInfrastructureAutonomyApiF6660AE7.GET..ledger.explanation": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AutonomyInfrastructureAutonomyApiledgerexplanationGETApiPermissionCCNativeStackAutonomyInfrastructureAutonomyApiF6660AE7GETledgerexplanationB81829EB"
+          }
+        ],
+        "/CCNativeStack/AutonomyInfrastructure/AutonomyApi/Default/ledger/explanation/GET/ApiPermission.Test.CCNativeStackAutonomyInfrastructureAutonomyApiF6660AE7.GET..ledger.explanation": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AutonomyInfrastructureAutonomyApiledgerexplanationGETApiPermissionTestCCNativeStackAutonomyInfrastructureAutonomyApiF6660AE7GETledgerexplanation16115EF7"
+          }
+        ],
+        "/CCNativeStack/AutonomyInfrastructure/AutonomyApi/Default/ledger/explanation/GET/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AutonomyInfrastructureAutonomyApiledgerexplanationGET45D7FA17"
+          }
+        ],
+        "/CCNativeStack/AutonomyInfrastructure/AutonomyApi/Default/audit/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AutonomyInfrastructureAutonomyApiaudit1CD6B5BB"
+          }
+        ],
+        "/CCNativeStack/AutonomyInfrastructure/AutonomyApi/Default/audit/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AutonomyInfrastructureAutonomyApiauditOPTIONSB9D5C7A2"
+          }
+        ],
+        "/CCNativeStack/AutonomyInfrastructure/AutonomyApi/Default/audit/exports/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AutonomyInfrastructureAutonomyApiauditexports3348E991"
+          }
+        ],
+        "/CCNativeStack/AutonomyInfrastructure/AutonomyApi/Default/audit/exports/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AutonomyInfrastructureAutonomyApiauditexportsOPTIONS1F808FCA"
+          }
+        ],
+        "/CCNativeStack/AutonomyInfrastructure/AutonomyApi/Default/audit/exports/POST/ApiPermission.CCNativeStackAutonomyInfrastructureAutonomyApiF6660AE7.POST..audit.exports": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AutonomyInfrastructureAutonomyApiauditexportsPOSTApiPermissionCCNativeStackAutonomyInfrastructureAutonomyApiF6660AE7POSTauditexports63920941"
+          }
+        ],
+        "/CCNativeStack/AutonomyInfrastructure/AutonomyApi/Default/audit/exports/POST/ApiPermission.Test.CCNativeStackAutonomyInfrastructureAutonomyApiF6660AE7.POST..audit.exports": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AutonomyInfrastructureAutonomyApiauditexportsPOSTApiPermissionTestCCNativeStackAutonomyInfrastructureAutonomyApiF6660AE7POSTauditexports7D3B5066"
+          }
+        ],
+        "/CCNativeStack/AutonomyInfrastructure/AutonomyApi/Default/audit/exports/POST/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AutonomyInfrastructureAutonomyApiauditexportsPOST89BA5DD0"
+          }
+        ],
+        "/CCNativeStack/AutonomyInfrastructure/AutonomyApi/Default/audit/exports/{id}/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AutonomyInfrastructureAutonomyApiauditexportsidE8384FD0"
+          }
+        ],
+        "/CCNativeStack/AutonomyInfrastructure/AutonomyApi/Default/audit/exports/{id}/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AutonomyInfrastructureAutonomyApiauditexportsidOPTIONS520DDC28"
+          }
+        ],
+        "/CCNativeStack/AutonomyInfrastructure/AutonomyApi/Default/audit/exports/{id}/GET/ApiPermission.CCNativeStackAutonomyInfrastructureAutonomyApiF6660AE7.GET..audit.exports.{id}": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AutonomyInfrastructureAutonomyApiauditexportsidGETApiPermissionCCNativeStackAutonomyInfrastructureAutonomyApiF6660AE7GETauditexportsidBE141CEA"
+          }
+        ],
+        "/CCNativeStack/AutonomyInfrastructure/AutonomyApi/Default/audit/exports/{id}/GET/ApiPermission.Test.CCNativeStackAutonomyInfrastructureAutonomyApiF6660AE7.GET..audit.exports.{id}": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AutonomyInfrastructureAutonomyApiauditexportsidGETApiPermissionTestCCNativeStackAutonomyInfrastructureAutonomyApiF6660AE7GETauditexportsidC92904AE"
+          }
+        ],
+        "/CCNativeStack/AutonomyInfrastructure/AutonomyApi/Default/audit/exports/{id}/GET/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AutonomyInfrastructureAutonomyApiauditexportsidGET2013A8E1"
+          }
+        ],
+        "/CCNativeStack/AutonomyInfrastructure/AutonomyApiCognitoAuthorizer/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AutonomyInfrastructureAutonomyApiCognitoAuthorizerDAB05044"
+          }
+        ],
+        "/CCNativeStack/AutonomyInfrastructure/AutoApprovalGateHandler/ServiceRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AutonomyInfrastructureAutoApprovalGateHandlerServiceRole1899710B"
+          }
+        ],
+        "/CCNativeStack/AutonomyInfrastructure/AutoApprovalGateHandler/ServiceRole/DefaultPolicy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AutonomyInfrastructureAutoApprovalGateHandlerServiceRoleDefaultPolicy7768B22F"
+          }
+        ],
+        "/CCNativeStack/AutonomyInfrastructure/AutoApprovalGateHandler/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AutonomyInfrastructureAutoApprovalGateHandlerFECE0F53"
+          }
+        ],
+        "/CCNativeStack/AutonomyInfrastructure/AuditExportWorkerHandler/ServiceRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AutonomyInfrastructureAuditExportWorkerHandlerServiceRole739BA09C"
+          }
+        ],
+        "/CCNativeStack/AutonomyInfrastructure/AuditExportWorkerHandler/ServiceRole/DefaultPolicy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AutonomyInfrastructureAuditExportWorkerHandlerServiceRoleDefaultPolicy195B4DC3"
+          }
+        ],
+        "/CCNativeStack/AutonomyInfrastructure/AuditExportWorkerHandler/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AutonomyInfrastructureAuditExportWorkerHandlerDB28BFAD"
+          }
+        ],
+        "/CCNativeStack/AutonomyInfrastructure/AuditExportRequestedRule/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AutonomyInfrastructureAuditExportRequestedRuleF748FE0A"
+          }
+        ],
+        "/CCNativeStack/AutonomyInfrastructure/AuditExportRequestedRule/AllowEventRuleCCNativeStackAutonomyInfrastructureAuditExportWorkerHandlerE816F92C": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AutonomyInfrastructureAuditExportRequestedRuleAllowEventRuleCCNativeStackAutonomyInfrastructureAuditExportWorkerHandlerE816F92CA8C48B72"
+          }
+        ],
+        "/CCNativeStack/DecisionSchedulingInfrastructure/DecisionRunStateTable": [
+          {
+            "type": "aws:cdk:hasPhysicalName",
+            "data": {
+              "Ref": "DecisionSchedulingInfrastructureDecisionRunStateTable903D6786"
+            }
+          }
+        ],
+        "/CCNativeStack/DecisionSchedulingInfrastructure/DecisionRunStateTable/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionSchedulingInfrastructureDecisionRunStateTable903D6786"
+          }
+        ],
+        "/CCNativeStack/DecisionSchedulingInfrastructure/IdempotencyStoreTable": [
+          {
+            "type": "aws:cdk:hasPhysicalName",
+            "data": {
+              "Ref": "DecisionSchedulingInfrastructureIdempotencyStoreTableD3467EE9"
+            }
+          }
+        ],
+        "/CCNativeStack/DecisionSchedulingInfrastructure/IdempotencyStoreTable/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionSchedulingInfrastructureIdempotencyStoreTableD3467EE9"
+          }
+        ],
+        "/CCNativeStack/DecisionSchedulingInfrastructure/DecisionCostGateHandler/ServiceRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionSchedulingInfrastructureDecisionCostGateHandlerServiceRoleA21A1B89"
+          }
+        ],
+        "/CCNativeStack/DecisionSchedulingInfrastructure/DecisionCostGateHandler/ServiceRole/DefaultPolicy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionSchedulingInfrastructureDecisionCostGateHandlerServiceRoleDefaultPolicy90D90748"
+          }
+        ],
+        "/CCNativeStack/DecisionSchedulingInfrastructure/DecisionCostGateHandler/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionSchedulingInfrastructureDecisionCostGateHandlerD710B9CB"
+          }
+        ],
+        "/CCNativeStack/DecisionSchedulingInfrastructure/DecisionSchedulerRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionSchedulingInfrastructureDecisionSchedulerRole239E02E0"
+          }
+        ],
+        "/CCNativeStack/DecisionSchedulingInfrastructure/DecisionSchedulerRole/DefaultPolicy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionSchedulingInfrastructureDecisionSchedulerRoleDefaultPolicyF8DB0149"
+          }
+        ],
+        "/CCNativeStack/DecisionSchedulingInfrastructure/DecisionDeferredRequeueHandler/ServiceRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionSchedulingInfrastructureDecisionDeferredRequeueHandlerServiceRole14037155"
+          }
+        ],
+        "/CCNativeStack/DecisionSchedulingInfrastructure/DecisionDeferredRequeueHandler/ServiceRole/DefaultPolicy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionSchedulingInfrastructureDecisionDeferredRequeueHandlerServiceRoleDefaultPolicy6FAC9054"
+          }
+        ],
+        "/CCNativeStack/DecisionSchedulingInfrastructure/DecisionDeferredRequeueHandler/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionSchedulingInfrastructureDecisionDeferredRequeueHandler0554A09B"
+          }
+        ],
+        "/CCNativeStack/DecisionSchedulingInfrastructure/RunDecisionRule/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionSchedulingInfrastructureRunDecisionRule53E62145"
+          }
+        ],
+        "/CCNativeStack/DecisionSchedulingInfrastructure/RunDecisionRule/AllowEventRuleCCNativeStackDecisionSchedulingInfrastructureDecisionCostGateHandlerA6619AFE": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionSchedulingInfrastructureRunDecisionRuleAllowEventRuleCCNativeStackDecisionSchedulingInfrastructureDecisionCostGateHandlerA6619AFE58D2C034"
+          }
+        ],
+        "/CCNativeStack/DecisionSchedulingInfrastructure/RunDecisionDeferredRule/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionSchedulingInfrastructureRunDecisionDeferredRule43D2C6CE"
+          }
+        ],
+        "/CCNativeStack/DecisionSchedulingInfrastructure/RunDecisionDeferredRule/AllowEventRuleCCNativeStackDecisionSchedulingInfrastructureDecisionDeferredRequeueHandlerDE50097D": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionSchedulingInfrastructureRunDecisionDeferredRuleAllowEventRuleCCNativeStackDecisionSchedulingInfrastructureDecisionDeferredRequeueHandlerDE50097D6503A133"
+          }
+        ],
+        "/CCNativeStack/PerceptionSchedulerInfrastructure/PerceptionSchedulerTable": [
+          {
+            "type": "aws:cdk:hasPhysicalName",
+            "data": {
+              "Ref": "PerceptionSchedulerInfrastructurePerceptionSchedulerTable920E9628"
+            }
+          }
+        ],
+        "/CCNativeStack/PerceptionSchedulerInfrastructure/PerceptionSchedulerTable/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "PerceptionSchedulerInfrastructurePerceptionSchedulerTable920E9628"
+          }
+        ],
+        "/CCNativeStack/PerceptionSchedulerInfrastructure/PullIdempotencyStoreTable": [
+          {
+            "type": "aws:cdk:hasPhysicalName",
+            "data": {
+              "Ref": "PerceptionSchedulerInfrastructurePullIdempotencyStoreTable7B26BB29"
+            }
+          }
+        ],
+        "/CCNativeStack/PerceptionSchedulerInfrastructure/PullIdempotencyStoreTable/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "PerceptionSchedulerInfrastructurePullIdempotencyStoreTable7B26BB29"
+          }
+        ],
+        "/CCNativeStack/PerceptionSchedulerInfrastructure/HeatScoringHandler/ServiceRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "PerceptionSchedulerInfrastructureHeatScoringHandlerServiceRole7E7813A1"
+          }
+        ],
+        "/CCNativeStack/PerceptionSchedulerInfrastructure/HeatScoringHandler/ServiceRole/DefaultPolicy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "PerceptionSchedulerInfrastructureHeatScoringHandlerServiceRoleDefaultPolicy6C9BABF1"
+          }
+        ],
+        "/CCNativeStack/PerceptionSchedulerInfrastructure/HeatScoringHandler/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "PerceptionSchedulerInfrastructureHeatScoringHandler218F0305"
+          }
+        ],
+        "/CCNativeStack/PerceptionSchedulerInfrastructure/PerceptionPullOrchestratorHandler/ServiceRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "PerceptionSchedulerInfrastructurePerceptionPullOrchestratorHandlerServiceRoleC5B40CE6"
+          }
+        ],
+        "/CCNativeStack/PerceptionSchedulerInfrastructure/PerceptionPullOrchestratorHandler/ServiceRole/DefaultPolicy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "PerceptionSchedulerInfrastructurePerceptionPullOrchestratorHandlerServiceRoleDefaultPolicy17EF9FDA"
+          }
+        ],
+        "/CCNativeStack/PerceptionSchedulerInfrastructure/PerceptionPullOrchestratorHandler/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "PerceptionSchedulerInfrastructurePerceptionPullOrchestratorHandler10F319B8"
+          }
+        ],
+        "/CCNativeStack/PerceptionSchedulerInfrastructure/SignalDetectedHeatScoringRule/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "PerceptionSchedulerInfrastructureSignalDetectedHeatScoringRule2E3076CB"
+          }
+        ],
+        "/CCNativeStack/PerceptionSchedulerInfrastructure/SignalDetectedHeatScoringRule/AllowEventRuleCCNativeStackPerceptionSchedulerInfrastructureHeatScoringHandlerA426BA98": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "PerceptionSchedulerInfrastructureSignalDetectedHeatScoringRuleAllowEventRuleCCNativeStackPerceptionSchedulerInfrastructureHeatScoringHandlerA426BA98126E22EC"
+          }
+        ],
+        "/CCNativeStack/PerceptionSchedulerInfrastructure/HeatScoringScheduleRule/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "PerceptionSchedulerInfrastructureHeatScoringScheduleRule9D3FE9CA"
+          }
+        ],
+        "/CCNativeStack/PerceptionSchedulerInfrastructure/HeatScoringScheduleRule/AllowEventRuleCCNativeStackPerceptionSchedulerInfrastructureHeatScoringHandlerA426BA98": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "PerceptionSchedulerInfrastructureHeatScoringScheduleRuleAllowEventRuleCCNativeStackPerceptionSchedulerInfrastructureHeatScoringHandlerA426BA9862047F8C"
+          }
+        ],
+        "/CCNativeStack/PerceptionSchedulerInfrastructure/PerceptionPullScheduleRule/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "PerceptionSchedulerInfrastructurePerceptionPullScheduleRuleC8C86EEB"
+          }
+        ],
+        "/CCNativeStack/PerceptionSchedulerInfrastructure/PerceptionPullScheduleRule/AllowEventRuleCCNativeStackPerceptionSchedulerInfrastructurePerceptionPullOrchestratorHandler5138AAD6": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "PerceptionSchedulerInfrastructurePerceptionPullScheduleRuleAllowEventRuleCCNativeStackPerceptionSchedulerInfrastructurePerceptionPullOrchestratorHandler5138AAD66F324EE3"
           }
         ],
         "/CCNativeStack/EvidenceLedgerBucketName": [
@@ -1144,6 +3457,132 @@
           {
             "type": "aws:cdk:logicalId",
             "data": "GraphMaterializationStatusTableName"
+          }
+        ],
+        "/CCNativeStack/DecisionBudgetTableName": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionBudgetTableName"
+          }
+        ],
+        "/CCNativeStack/ActionIntentTableName": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ActionIntentTableName"
+          }
+        ],
+        "/CCNativeStack/DecisionProposalTableName": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionProposalTableName"
+          }
+        ],
+        "/CCNativeStack/DecisionEvaluationHandlerArn": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionEvaluationHandlerArn"
+          }
+        ],
+        "/CCNativeStack/DecisionTriggerHandlerArn": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionTriggerHandlerArn"
+          }
+        ],
+        "/CCNativeStack/DecisionApiUrl": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionApiUrl"
+          }
+        ],
+        "/CCNativeStack/DecisionApiKeyId": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionApiKeyId"
+          }
+        ],
+        "/CCNativeStack/BudgetResetHandlerArn": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "BudgetResetHandlerArn"
+          }
+        ],
+        "/CCNativeStack/ExecutionStatusApiUrl": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionStatusApiUrl"
+          }
+        ],
+        "/CCNativeStack/AutonomyApiUrl": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AutonomyApiUrl"
+          }
+        ],
+        "/CCNativeStack/ActionTypeRegistryTableName": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ActionTypeRegistryTableName"
+          }
+        ],
+        "/CCNativeStack/ExecutionAttemptsTableName": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionAttemptsTableName"
+          }
+        ],
+        "/CCNativeStack/ExecutionOutcomesTableName": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExecutionOutcomesTableName"
+          }
+        ],
+        "/CCNativeStack/ExternalWriteDedupeTableName": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExternalWriteDedupeTableName"
+          }
+        ],
+        "/CCNativeStack/ConnectorConfigTableName": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ConnectorConfigTableName"
+          }
+        ],
+        "/CCNativeStack/InternalNotesTableName": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "InternalNotesTableName"
+          }
+        ],
+        "/CCNativeStack/InternalTasksTableName": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "InternalTasksTableName"
+          }
+        ],
+        "/CCNativeStack/DecisionRunStateTableName": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DecisionRunStateTableName"
+          }
+        ],
+        "/CCNativeStack/IdempotencyStoreTableName": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "IdempotencyStoreTableName"
+          }
+        ],
+        "/CCNativeStack/PerceptionSchedulerTableName": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "PerceptionSchedulerTableName"
+          }
+        ],
+        "/CCNativeStack/PullIdempotencyStoreTableName": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "PullIdempotencyStoreTableName"
           }
         ],
         "/CCNativeStack/CDKMetadata/Default": [

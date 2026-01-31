@@ -7,7 +7,7 @@
 
 import { z } from 'zod';
 
-// Mirror handler schema: state after ValidatePreflight (execution context + optional validation_result)
+// Mirror handler schema (ToolMapperInputSchema): state after ValidatePreflight. Phase 5.4: approval_source, auto_executed.
 const StepFunctionsInputSchema = z.object({
   action_intent_id: z.string().min(1, 'action_intent_id is required'),
   tenant_id: z.string().min(1, 'tenant_id is required'),
@@ -17,6 +17,8 @@ const StepFunctionsInputSchema = z.object({
   registry_version: z.number().int().positive('registry_version must be positive integer'),
   attempt_count: z.number().int().positive('attempt_count must be positive integer'),
   started_at: z.string().min(1, 'started_at is required'),
+  approval_source: z.enum(['HUMAN', 'POLICY']).optional(),
+  auto_executed: z.boolean().optional(),
   validation_result: z.object({ valid: z.boolean(), action_intent: z.any() }).optional(),
 }).strict();
 
@@ -49,6 +51,25 @@ describe('ToolMapperHandler - StepFunctionsInputSchema Validation', () => {
         attempt_count: 1,
         started_at: '2026-01-26T12:00:00.000Z',
         validation_result: { valid: true, action_intent: { action_intent_id: 'ai_test_123' } },
+      };
+
+      const result = StepFunctionsInputSchema.safeParse(validInput);
+      expect(result.success).toBe(true);
+    });
+
+    it('should accept valid input with approval_source and auto_executed (Phase 5.4 auto-exec path)', () => {
+      const validInput = {
+        action_intent_id: 'ai_test_123',
+        tenant_id: 'tenant_test_1',
+        account_id: 'account_test_1',
+        idempotency_key: 'key_123',
+        trace_id: 'trace_123',
+        registry_version: 1,
+        attempt_count: 1,
+        started_at: '2026-01-26T12:00:00.000Z',
+        approval_source: 'POLICY',
+        auto_executed: true,
+        validation_result: { valid: true, action_intent: {} },
       };
 
       const result = StepFunctionsInputSchema.safeParse(validInput);

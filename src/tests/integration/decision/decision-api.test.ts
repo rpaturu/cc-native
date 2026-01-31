@@ -6,11 +6,19 @@
  *
  * Requires: DECISION_API_URL, DECISION_API_KEY (from .env after ./deploy).
  * Skip when: SKIP_DECISION_API_INTEGRATION=1 or env missing.
+ *
+ * Uses undici fetch with explicit Agent (dispatcher) so TLS connections are closed in afterAll and Jest exits cleanly.
  */
 
+import { Agent, fetch as undiciFetch, getGlobalDispatcher, setGlobalDispatcher } from 'undici';
 import { loadEnv } from '../loadEnv';
 
 loadEnv();
+
+let fetchAgent: Agent;
+let previousDispatcher: ReturnType<typeof getGlobalDispatcher>;
+/** All requests use this so they go through our Agent and can be torn down in afterAll. Set in beforeAll. */
+let apiFetch: typeof fetch = globalThis.fetch;
 
 const baseUrl = (process.env.DECISION_API_URL || '').replace(/\/$/, '');
 const apiKey = process.env.DECISION_API_KEY || '';
@@ -29,7 +37,7 @@ function headers(): Record<string, string> {
 }
 
 async function postEvaluate(body: { account_id: string; tenant_id: string; trigger_type?: string }) {
-  const res = await fetch(`${baseUrl}/decisions/evaluate`, {
+  const res = await apiFetch(`${baseUrl}/decisions/evaluate`, {
     method: 'POST',
     headers: headers(),
     body: JSON.stringify(body),
@@ -45,7 +53,7 @@ async function postEvaluate(body: { account_id: string; tenant_id: string; trigg
 }
 
 async function getEvaluationStatus(evaluationId: string) {
-  const res = await fetch(`${baseUrl}/decisions/${evaluationId}/status`, {
+  const res = await apiFetch(`${baseUrl}/decisions/${evaluationId}/status`, {
     method: 'GET',
     headers: headers(),
   });
@@ -60,7 +68,7 @@ async function getEvaluationStatus(evaluationId: string) {
 }
 
 async function getAccountDecisions(accountId: string) {
-  const res = await fetch(`${baseUrl}/accounts/${accountId}/decisions`, {
+  const res = await apiFetch(`${baseUrl}/accounts/${accountId}/decisions`, {
     method: 'GET',
     headers: headers(),
   });
@@ -83,6 +91,18 @@ async function getAccountDecisions(accountId: string) {
           '[Decision API integration] Missing DECISION_API_URL or DECISION_API_KEY. ' +
             'Run ./deploy to write .env or set SKIP_DECISION_API_INTEGRATION=1 to skip.'
         );
+      }
+      previousDispatcher = getGlobalDispatcher();
+      fetchAgent = new Agent({ keepAliveTimeout: 10, keepAliveMaxTimeout: 10 });
+      apiFetch = (input: string | URL | Request, init?: RequestInit) =>
+        undiciFetch(input, { ...init, dispatcher: fetchAgent } as RequestInit);
+      setGlobalDispatcher(fetchAgent);
+    });
+
+    afterAll(() => {
+      if (fetchAgent) {
+        fetchAgent.destroy();
+        setGlobalDispatcher(previousDispatcher);
       }
     });
 
@@ -113,7 +133,7 @@ async function getAccountDecisions(accountId: string) {
       });
 
       it('returns 4xx or 5xx with error when body is invalid', async () => {
-        const res = await fetch(`${baseUrl}/decisions/evaluate`, {
+        const res = await apiFetch(`${baseUrl}/decisions/evaluate`, {
           method: 'POST',
           headers: headers(),
           body: JSON.stringify({}),
@@ -129,10 +149,11 @@ async function getAccountDecisions(accountId: string) {
 
     describe('GET /decisions/{evaluation_id}/status', () => {
       it('returns 400 when x-tenant-id missing', async () => {
-        const res = await fetch(`${baseUrl}/decisions/eval-fake-123/status`, {
+        const res = await apiFetch(`${baseUrl}/decisions/eval-fake-123/status`, {
           method: 'GET',
           headers: { 'x-api-key': apiKey },
         });
+        await res.text();
         expect([400, 401, 403, 404]).toContain(res.status);
       });
 
@@ -163,21 +184,23 @@ async function getAccountDecisions(accountId: string) {
       });
 
       it('returns 400 when x-tenant-id missing', async () => {
-        const res = await fetch(`${baseUrl}/accounts/${testAccountId}/decisions`, {
+        const res = await apiFetch(`${baseUrl}/accounts/${testAccountId}/decisions`, {
           method: 'GET',
           headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey },
         });
+        await res.text();
         expect([400, 401, 403, 500]).toContain(res.status);
       });
     });
 
     describe('Contract: API key required', () => {
       it('returns 403 when x-api-key is missing', async () => {
-        const res = await fetch(`${baseUrl}/decisions/evaluate`, {
+        const res = await apiFetch(`${baseUrl}/decisions/evaluate`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'X-Tenant-Id': testTenantId },
           body: JSON.stringify({ account_id: testAccountId, tenant_id: testTenantId }),
         });
+        await res.text();
         expect([403, 401]).toContain(res.status);
       });
     });

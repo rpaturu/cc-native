@@ -26,6 +26,7 @@ export CDK_DEFAULT_REGION=$CDK_REGION
 SKIP_UNIT_TESTS=false
 SKIP_INTEGRATION_TESTS=false
 SKIP_E2E=false
+SKIP_PHASE5_E2E=false
 while [[ "$#" -gt 0 ]]; do case $1 in
   --profile) CDK_PROFILE="$2"; shift;;
   --region) AWS_REGION="$2"; shift;;
@@ -33,8 +34,9 @@ while [[ "$#" -gt 0 ]]; do case $1 in
   --skip-unit-tests) SKIP_UNIT_TESTS=true;;
   --skip-integration-tests) SKIP_INTEGRATION_TESTS=true;;
   --skip-e2e) SKIP_E2E=true;;
-  --skip-tests) SKIP_UNIT_TESTS=true; SKIP_INTEGRATION_TESTS=true; SKIP_E2E=true;;
-  --no-test) SKIP_UNIT_TESTS=true; SKIP_INTEGRATION_TESTS=true; SKIP_E2E=true;;
+  --skip-phase5-e2e) SKIP_PHASE5_E2E=true;;
+  --skip-tests) SKIP_UNIT_TESTS=true; SKIP_INTEGRATION_TESTS=true; SKIP_E2E=true; SKIP_PHASE5_E2E=true;;
+  --no-test) SKIP_UNIT_TESTS=true; SKIP_INTEGRATION_TESTS=true; SKIP_E2E=true; SKIP_PHASE5_E2E=true;;
 esac; shift; done
 
 # Check if region is set
@@ -44,12 +46,13 @@ if [ -z "$AWS_REGION" ]; then
   
   if [ -z "$AWS_REGION" ]; then
     echo "Error: AWS region is required"
-    echo "Usage: ./deploy [--profile <aws_profile>] [--region <aws_region>] [--env <environment>] [--skip-unit-tests] [--skip-integration-tests] [--skip-e2e] [--skip-tests] [--no-test]"
+    echo "Usage: ./deploy [--profile <aws_profile>] [--region <aws_region>] [--env <environment>] [--skip-unit-tests] [--skip-integration-tests] [--skip-e2e] [--skip-phase5-e2e] [--skip-tests] [--no-test]"
     echo "Example: ./deploy --profile dev --region us-west-2 --env development"
     echo "         ./deploy --skip-unit-tests  # Skip unit tests before deployment"
     echo "         ./deploy --skip-integration-tests  # Skip integration tests after deployment"
     echo "         ./deploy --skip-e2e  # Skip Phase 4 E2E test after deployment"
-    echo "         ./deploy --skip-tests  # Skip all tests (unit, integration, E2E)"
+    echo "         ./deploy --skip-phase5-e2e  # Skip Phase 5 E2E suite after deployment"
+    echo "         ./deploy --skip-tests  # Skip all tests (unit, integration, E2E, Phase 5 E2E)"
     echo "You may also configure your region by running 'aws configure'"
     exit 1
   fi
@@ -216,6 +219,8 @@ USER_POOL_ID_OUTPUT=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="U
 USER_POOL_CLIENT_ID_OUTPUT=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="UserPoolClientId") | .OutputValue')
 DECISION_API_URL_OUTPUT=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="DecisionApiUrl") | .OutputValue')
 DECISION_API_KEY_ID_OUTPUT=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="DecisionApiKeyId") | .OutputValue')
+AUTONOMY_API_URL_OUTPUT=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="AutonomyApiUrl") | .OutputValue')
+EXECUTION_STATUS_API_URL_OUTPUT=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="ExecutionStatusApiUrl") | .OutputValue')
 
 # Phase 4: Execution Infrastructure table outputs
 ACTION_TYPE_REGISTRY_TABLE_OUTPUT=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="ActionTypeRegistryTableName") | .OutputValue')
@@ -252,6 +257,27 @@ if [ -n "$DECISION_API_KEY_ID_OUTPUT" ] && [ "$DECISION_API_KEY_ID_OUTPUT" != "n
   fi
 else
   DECISION_API_KEY_VALUE=""
+fi
+
+# Optional: Control Center auth for Phase 5 audit export E2E (Cognito JWT from stack UserPool + test user)
+CONTROL_CENTER_AUTH_HEADER_VALUE=""
+if [ -n "$USER_POOL_CLIENT_ID_OUTPUT" ] && [ "$USER_POOL_CLIENT_ID_OUTPUT" != "null" ] && [ -n "${COGNITO_TEST_USER:-}" ] && [ -n "${COGNITO_TEST_PASSWORD:-}" ]; then
+  echo "Retrieving Cognito JWT for Control Center (Phase 5 audit export E2E)..."
+  COGNITO_ID_TOKEN=$(aws cognito-idp initiate-auth \
+    --auth-flow USER_PASSWORD_AUTH \
+    --client-id "$USER_POOL_CLIENT_ID_OUTPUT" \
+    --auth-parameters "USERNAME=$COGNITO_TEST_USER,PASSWORD=$COGNITO_TEST_PASSWORD" \
+    --profile "$CDK_PROFILE" \
+    --region "$AWS_REGION" \
+    --no-cli-pager \
+    --query 'AuthenticationResult.IdToken' \
+    --output text 2>/dev/null || true)
+  if [ -n "$COGNITO_ID_TOKEN" ]; then
+    CONTROL_CENTER_AUTH_HEADER_VALUE="Bearer $COGNITO_ID_TOKEN"
+    echo "  Cognito JWT retrieved; CONTROL_CENTER_AUTH_HEADER will be set in .env"
+  else
+    echo "  Could not get JWT (ensure app client allows USER_PASSWORD_AUTH and user exists); audit export E2E will skip"
+  fi
 fi
 
 # Use stack outputs (preferred) or fall back to .env.local values
@@ -347,6 +373,18 @@ DECISION_API_URL=$DECISION_API_URL_OUTPUT
 DECISION_API_KEY_ID=$DECISION_API_KEY_ID_OUTPUT
 DECISION_API_KEY=$DECISION_API_KEY_VALUE
 
+# Phase 4: Execution Status API (optional E2E: GET /executions/{id}/status; same Cognito JWT as Control Center)
+EXECUTION_STATUS_API_URL=$EXECUTION_STATUS_API_URL_OUTPUT
+EXECUTION_STATUS_API_AUTH_HEADER=$CONTROL_CENTER_AUTH_HEADER_VALUE
+
+# Phase 5: Autonomy (Control Center, auto-exec, audit export)
+AUTONOMY_CONFIG_TABLE_NAME=cc-native-autonomy-config
+AUTONOMY_BUDGET_STATE_TABLE_NAME=cc-native-autonomy-budget-state
+AUDIT_EXPORT_TABLE_NAME=cc-native-audit-export
+AUTONOMY_ADMIN_API_URL=$AUTONOMY_API_URL_OUTPUT
+# For Phase 5 audit export E2E: set COGNITO_TEST_USER and COGNITO_TEST_PASSWORD in .env.local to auto-fetch JWT, or set CONTROL_CENTER_AUTH_HEADER manually
+CONTROL_CENTER_AUTH_HEADER=$CONTROL_CENTER_AUTH_HEADER_VALUE
+
 # Logging
 LOG_LEVEL=$LOG_LEVEL
 EOF
@@ -367,8 +405,8 @@ fi
 # Run integration tests after deployment (uses .env written above)
 if [ "$SKIP_INTEGRATION_TESTS" = false ]; then
   echo ""
-  echo "🧪 Running integration tests (post-deploy)..."
-  if npm run test:integration; then
+  echo "🧪 Running integration tests (post-deploy, with --detectOpenHandles to surface leaks)..."
+  if npx jest --testPathPattern=tests/integration --detectOpenHandles; then
     echo "✅ Integration tests passed"
   else
     echo "❌ Integration tests failed - check .env and deployed resources"
@@ -395,6 +433,23 @@ if [ "$SKIP_E2E" = false ]; then
 else
   echo ""
   echo "⏭️  Skipping Phase 4 E2E test"
+fi
+
+# Run Phase 5 E2E suite (auto-exec, fallback, decision-scheduler, audit-export)
+if [ "$SKIP_PHASE5_E2E" = false ]; then
+  echo ""
+  echo "🧪 Running Phase 5 E2E suite (auto-exec, fallback, decision-scheduler, audit-export)..."
+  chmod +x scripts/phase_5/run-phase5-e2e.sh scripts/phase_5/test-phase5-autoexec.sh scripts/phase_5/test-phase5-fallback.sh scripts/phase_5/test-phase5-decision-scheduler.sh scripts/phase_5/test-phase5-audit-export.sh scripts/phase_5/seed-phase5-autoexec.sh scripts/phase_5/seed-phase5-fallback.sh 2>/dev/null || true
+  if ./scripts/phase_5/run-phase5-e2e.sh; then
+    echo "✅ Phase 5 E2E suite passed"
+  else
+    echo "❌ Phase 5 E2E suite failed - check .env (AUTONOMY_CONFIG_TABLE_NAME, AUTONOMY_BUDGET_STATE_TABLE_NAME, EVENT_BUS_NAME, execution tables; for audit export: AUTONOMY_ADMIN_API_URL, CONTROL_CENTER_AUTH_HEADER)"
+    echo "   Use --skip-phase5-e2e to complete deploy without running Phase 5 E2E"
+    exit 1
+  fi
+else
+  echo ""
+  echo "⏭️  Skipping Phase 5 E2E suite"
 fi
 
 echo ""
@@ -434,8 +489,8 @@ echo "   - cc-native-assessment"
 echo ""
 echo "📝 Configuration saved to .env file"
 echo ""
-echo "🧪 Next Steps:"
-echo "   1. Review .env file for configuration"
-echo "   2. Run integration tests anytime: npm run test:integration"
-echo "   3. Run Phase 4 E2E anytime: ./scripts/phase_4/test-phase4-execution.sh"
+echo "📌 Next steps:"
+echo "   1. Review .env for API URLs, table names, and keys"
+echo "   2. Use Decision API, Execution Status API, or Control Center as needed"
+echo "   3. Re-run tests only when needed: npm run test:integration, ./scripts/phase_4/test-phase4-execution.sh, or ./scripts/phase_5/run-phase5-e2e.sh"
 echo ""

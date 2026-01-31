@@ -52,7 +52,7 @@ export const ValidatorInputSchema = z.object({
   requested_by: z.string().min(1).optional(),
 }).strict();
 
-/** Input to MapActionToTool = state after ValidatePreflight (optional validation_result). */
+/** Input to MapActionToTool = state after ValidatePreflight (optional validation_result). Phase 5.4: approval_source, auto_executed from execution-starter. */
 export const ToolMapperInputSchema = z.object({
   action_intent_id: z.string().min(1, 'action_intent_id is required'),
   tenant_id: z.string().min(1, 'tenant_id is required'),
@@ -62,6 +62,8 @@ export const ToolMapperInputSchema = z.object({
   registry_version: z.number().int().positive('registry_version must be positive integer'),
   attempt_count: z.number().int().positive('attempt_count must be positive integer'),
   started_at: z.string().min(1, 'started_at is required'),
+  approval_source: z.enum(['HUMAN', 'POLICY']).optional(),
+  auto_executed: z.boolean().optional(),
   validation_result: z.object({ valid: z.boolean(), action_intent: z.any() }).optional(),
 }).strict();
 
@@ -78,7 +80,7 @@ const toolArgumentsSchema = z.record(z.any())
     { message: 'tool_arguments exceeds size limit (200KB). Large payloads should be passed via S3 artifact reference.' }
   );
 
-/** Input to InvokeTool = output of tool-mapper-handler. */
+/** Input to InvokeTool = output of tool-mapper-handler. Phase 5.4: approval_source, auto_executed passed through for RecordOutcome. */
 export const ToolInvocationRequestSchema = z.object({
   gateway_url: z.string().url('gateway_url must be a valid URL'),
   tool_name: z.string().min(1, 'tool_name is required'),
@@ -93,6 +95,8 @@ export const ToolInvocationRequestSchema = z.object({
   registry_version: z.number().int().positive().optional(),
   compensation_strategy: z.string().min(1).optional(),
   started_at: z.string().min(1).optional(),
+  approval_source: z.enum(['HUMAN', 'POLICY']).optional(),
+  auto_executed: z.boolean().optional(),
 }).strict();
 
 /** Input to RecordOutcome = state after InvokeTool (MapActionToTool state + tool_invocation_response). */

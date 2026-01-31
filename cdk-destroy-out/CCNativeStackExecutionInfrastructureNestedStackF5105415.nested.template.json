@@ -1,0 +1,4846 @@
+{
+ "Resources": {
+  "ExecutionInfrastructureExecutionAttemptsTableD1619A75": {
+   "Type": "AWS::DynamoDB::Table",
+   "Properties": {
+    "AttributeDefinitions": [
+     {
+      "AttributeName": "pk",
+      "AttributeType": "S"
+     },
+     {
+      "AttributeName": "sk",
+      "AttributeType": "S"
+     },
+     {
+      "AttributeName": "gsi1pk",
+      "AttributeType": "S"
+     },
+     {
+      "AttributeName": "gsi1sk",
+      "AttributeType": "S"
+     },
+     {
+      "AttributeName": "gsi2pk",
+      "AttributeType": "S"
+     },
+     {
+      "AttributeName": "gsi2sk",
+      "AttributeType": "S"
+     }
+    ],
+    "BillingMode": "PAY_PER_REQUEST",
+    "GlobalSecondaryIndexes": [
+     {
+      "IndexName": "gsi1-index",
+      "KeySchema": [
+       {
+        "AttributeName": "gsi1pk",
+        "KeyType": "HASH"
+       },
+       {
+        "AttributeName": "gsi1sk",
+        "KeyType": "RANGE"
+       }
+      ],
+      "Projection": {
+       "ProjectionType": "ALL"
+      }
+     },
+     {
+      "IndexName": "gsi2-index",
+      "KeySchema": [
+       {
+        "AttributeName": "gsi2pk",
+        "KeyType": "HASH"
+       },
+       {
+        "AttributeName": "gsi2sk",
+        "KeyType": "RANGE"
+       }
+      ],
+      "Projection": {
+       "ProjectionType": "ALL"
+      }
+     }
+    ],
+    "KeySchema": [
+     {
+      "AttributeName": "pk",
+      "KeyType": "HASH"
+     },
+     {
+      "AttributeName": "sk",
+      "KeyType": "RANGE"
+     }
+    ],
+    "PointInTimeRecoverySpecification": {
+     "PointInTimeRecoveryEnabled": true
+    },
+    "TableName": "cc-native-execution-attempts",
+    "TimeToLiveSpecification": {
+     "AttributeName": "ttl",
+     "Enabled": true
+    }
+   },
+   "UpdateReplacePolicy": "Retain",
+   "DeletionPolicy": "Retain",
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ExecutionAttemptsTable/Resource"
+   }
+  },
+  "ExecutionInfrastructureExecutionOutcomesTableFA67D167": {
+   "Type": "AWS::DynamoDB::Table",
+   "Properties": {
+    "AttributeDefinitions": [
+     {
+      "AttributeName": "pk",
+      "AttributeType": "S"
+     },
+     {
+      "AttributeName": "sk",
+      "AttributeType": "S"
+     },
+     {
+      "AttributeName": "gsi1pk",
+      "AttributeType": "S"
+     },
+     {
+      "AttributeName": "gsi1sk",
+      "AttributeType": "S"
+     },
+     {
+      "AttributeName": "gsi2pk",
+      "AttributeType": "S"
+     },
+     {
+      "AttributeName": "gsi2sk",
+      "AttributeType": "S"
+     }
+    ],
+    "BillingMode": "PAY_PER_REQUEST",
+    "GlobalSecondaryIndexes": [
+     {
+      "IndexName": "gsi1-index",
+      "KeySchema": [
+       {
+        "AttributeName": "gsi1pk",
+        "KeyType": "HASH"
+       },
+       {
+        "AttributeName": "gsi1sk",
+        "KeyType": "RANGE"
+       }
+      ],
+      "Projection": {
+       "ProjectionType": "ALL"
+      }
+     },
+     {
+      "IndexName": "gsi2-index",
+      "KeySchema": [
+       {
+        "AttributeName": "gsi2pk",
+        "KeyType": "HASH"
+       },
+       {
+        "AttributeName": "gsi2sk",
+        "KeyType": "RANGE"
+       }
+      ],
+      "Projection": {
+       "ProjectionType": "ALL"
+      }
+     }
+    ],
+    "KeySchema": [
+     {
+      "AttributeName": "pk",
+      "KeyType": "HASH"
+     },
+     {
+      "AttributeName": "sk",
+      "KeyType": "RANGE"
+     }
+    ],
+    "PointInTimeRecoverySpecification": {
+     "PointInTimeRecoveryEnabled": true
+    },
+    "TableName": "cc-native-execution-outcomes",
+    "TimeToLiveSpecification": {
+     "AttributeName": "ttl",
+     "Enabled": true
+    }
+   },
+   "UpdateReplacePolicy": "Retain",
+   "DeletionPolicy": "Retain",
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ExecutionOutcomesTable/Resource"
+   }
+  },
+  "ExecutionInfrastructureActionTypeRegistryTableADE245F0": {
+   "Type": "AWS::DynamoDB::Table",
+   "Properties": {
+    "AttributeDefinitions": [
+     {
+      "AttributeName": "pk",
+      "AttributeType": "S"
+     },
+     {
+      "AttributeName": "sk",
+      "AttributeType": "S"
+     }
+    ],
+    "BillingMode": "PAY_PER_REQUEST",
+    "KeySchema": [
+     {
+      "AttributeName": "pk",
+      "KeyType": "HASH"
+     },
+     {
+      "AttributeName": "sk",
+      "KeyType": "RANGE"
+     }
+    ],
+    "PointInTimeRecoverySpecification": {
+     "PointInTimeRecoveryEnabled": true
+    },
+    "TableName": "cc-native-action-type-registry"
+   },
+   "UpdateReplacePolicy": "Retain",
+   "DeletionPolicy": "Retain",
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ActionTypeRegistryTable/Resource"
+   }
+  },
+  "ExecutionInfrastructureExternalWriteDedupeTable44853629": {
+   "Type": "AWS::DynamoDB::Table",
+   "Properties": {
+    "AttributeDefinitions": [
+     {
+      "AttributeName": "pk",
+      "AttributeType": "S"
+     },
+     {
+      "AttributeName": "sk",
+      "AttributeType": "S"
+     }
+    ],
+    "BillingMode": "PAY_PER_REQUEST",
+    "KeySchema": [
+     {
+      "AttributeName": "pk",
+      "KeyType": "HASH"
+     },
+     {
+      "AttributeName": "sk",
+      "KeyType": "RANGE"
+     }
+    ],
+    "TableName": "cc-native-external-write-dedupe",
+    "TimeToLiveSpecification": {
+     "AttributeName": "ttl",
+     "Enabled": true
+    }
+   },
+   "UpdateReplacePolicy": "Retain",
+   "DeletionPolicy": "Retain",
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ExternalWriteDedupeTable/Resource"
+   }
+  },
+  "ExecutionInfrastructureResilienceTableAD30852C": {
+   "Type": "AWS::DynamoDB::Table",
+   "Properties": {
+    "AttributeDefinitions": [
+     {
+      "AttributeName": "pk",
+      "AttributeType": "S"
+     },
+     {
+      "AttributeName": "sk",
+      "AttributeType": "S"
+     }
+    ],
+    "BillingMode": "PAY_PER_REQUEST",
+    "KeySchema": [
+     {
+      "AttributeName": "pk",
+      "KeyType": "HASH"
+     },
+     {
+      "AttributeName": "sk",
+      "KeyType": "RANGE"
+     }
+    ],
+    "TableName": "cc-native-resilience",
+    "TimeToLiveSpecification": {
+     "AttributeName": "ttl_epoch_sec",
+     "Enabled": true
+    }
+   },
+   "UpdateReplacePolicy": "Retain",
+   "DeletionPolicy": "Retain",
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ResilienceTable/Resource"
+   }
+  },
+  "ExecutionInfrastructureExecutionStarterDlqE8C4A5C4": {
+   "Type": "AWS::SQS::Queue",
+   "Properties": {
+    "MessageRetentionPeriod": 1209600,
+    "QueueName": "cc-native-execution-starter-handler-dlq"
+   },
+   "UpdateReplacePolicy": "Delete",
+   "DeletionPolicy": "Delete",
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ExecutionStarterDlq/Resource"
+   }
+  },
+  "ExecutionInfrastructureExecutionValidatorDlq6B0328BE": {
+   "Type": "AWS::SQS::Queue",
+   "Properties": {
+    "MessageRetentionPeriod": 1209600,
+    "QueueName": "cc-native-execution-validator-handler-dlq"
+   },
+   "UpdateReplacePolicy": "Delete",
+   "DeletionPolicy": "Delete",
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ExecutionValidatorDlq/Resource"
+   }
+  },
+  "ExecutionInfrastructureExecutionStarterHandlerServiceRoleA58EB79D": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+       ]
+      ]
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ExecutionStarterHandler/ServiceRole/Resource"
+   }
+  },
+  "ExecutionInfrastructureExecutionStarterHandlerServiceRoleDefaultPolicyDC92E048": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sqs:SendMessage",
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::GetAtt": [
+         "ExecutionInfrastructureExecutionStarterDlqE8C4A5C4",
+         "Arn"
+        ]
+       }
+      },
+      {
+       "Action": [
+        "dynamodb:BatchGetItem",
+        "dynamodb:BatchWriteItem",
+        "dynamodb:ConditionCheckItem",
+        "dynamodb:DeleteItem",
+        "dynamodb:DescribeTable",
+        "dynamodb:GetItem",
+        "dynamodb:GetRecords",
+        "dynamodb:GetShardIterator",
+        "dynamodb:PutItem",
+        "dynamodb:Query",
+        "dynamodb:Scan",
+        "dynamodb:UpdateItem"
+       ],
+       "Effect": "Allow",
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "ExecutionInfrastructureExecutionAttemptsTableD1619A75",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "ExecutionInfrastructureExecutionAttemptsTableD1619A75",
+             "Arn"
+            ]
+           },
+           "/index/*"
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "Action": [
+        "dynamodb:BatchGetItem",
+        "dynamodb:ConditionCheckItem",
+        "dynamodb:DescribeTable",
+        "dynamodb:GetItem",
+        "dynamodb:GetRecords",
+        "dynamodb:GetShardIterator",
+        "dynamodb:Query",
+        "dynamodb:Scan"
+       ],
+       "Effect": "Allow",
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "ExecutionInfrastructureActionTypeRegistryTableADE245F0",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Ref": "referencetoCCNativeStackActionIntentTable31610521Arn"
+           },
+           "/index/*"
+          ]
+         ]
+        },
+        {
+         "Ref": "referencetoCCNativeStackActionIntentTable31610521Arn"
+        }
+       ]
+      },
+      {
+       "Action": [
+        "dynamodb:BatchWriteItem",
+        "dynamodb:DeleteItem",
+        "dynamodb:DescribeTable",
+        "dynamodb:PutItem",
+        "dynamodb:UpdateItem"
+       ],
+       "Effect": "Allow",
+       "Resource": [
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Ref": "referencetoCCNativeStackLedgerTableFA76C270Arn"
+           },
+           "/index/*"
+          ]
+         ]
+        },
+        {
+         "Ref": "referencetoCCNativeStackLedgerTableFA76C270Arn"
+        }
+       ]
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "ExecutionInfrastructureExecutionStarterHandlerServiceRoleDefaultPolicyDC92E048",
+    "Roles": [
+     {
+      "Ref": "ExecutionInfrastructureExecutionStarterHandlerServiceRoleA58EB79D"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ExecutionStarterHandler/ServiceRole/DefaultPolicy/Resource"
+   }
+  },
+  "ExecutionInfrastructureExecutionStarterHandlerEB3549AD": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Code": {
+     "S3Bucket": "cdk-hnb659fds-assets-661268174397-us-west-2",
+     "S3Key": "4ea9448254812ef270c5d98bc3b062b87446031c087d506bfef70da5ac9e9e27.zip"
+    },
+    "DeadLetterConfig": {
+     "TargetArn": {
+      "Fn::GetAtt": [
+       "ExecutionInfrastructureExecutionStarterDlqE8C4A5C4",
+       "Arn"
+      ]
+     }
+    },
+    "Environment": {
+     "Variables": {
+      "EXECUTION_ATTEMPTS_TABLE_NAME": {
+       "Ref": "ExecutionInfrastructureExecutionAttemptsTableD1619A75"
+      },
+      "ACTION_INTENT_TABLE_NAME": {
+       "Ref": "referencetoCCNativeStackActionIntentTable31610521Ref"
+      },
+      "ACTION_TYPE_REGISTRY_TABLE_NAME": {
+       "Ref": "ExecutionInfrastructureActionTypeRegistryTableADE245F0"
+      },
+      "LEDGER_TABLE_NAME": {
+       "Ref": "referencetoCCNativeStackLedgerTableFA76C270Ref"
+      },
+      "STATE_MACHINE_TIMEOUT_HOURS": "1"
+     }
+    },
+    "FunctionName": "cc-native-execution-starter",
+    "Handler": "index.handler",
+    "Role": {
+     "Fn::GetAtt": [
+      "ExecutionInfrastructureExecutionStarterHandlerServiceRoleA58EB79D",
+      "Arn"
+     ]
+    },
+    "Runtime": "nodejs20.x",
+    "Timeout": 30
+   },
+   "DependsOn": [
+    "ExecutionInfrastructureExecutionStarterHandlerServiceRoleDefaultPolicyDC92E048",
+    "ExecutionInfrastructureExecutionStarterHandlerServiceRoleA58EB79D"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ExecutionStarterHandler/Resource",
+    "aws:asset:path": "/Users/rameshpaturu/Documents/projects/lambda/cc-native",
+    "aws:asset:is-bundled": true,
+    "aws:asset:property": "Code"
+   }
+  },
+  "ExecutionInfrastructureExecutionStarterHandlerEventInvokeConfig26398E8B": {
+   "Type": "AWS::Lambda::EventInvokeConfig",
+   "Properties": {
+    "FunctionName": {
+     "Ref": "ExecutionInfrastructureExecutionStarterHandlerEB3549AD"
+    },
+    "MaximumRetryAttempts": 2,
+    "Qualifier": "$LATEST"
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ExecutionStarterHandler/EventInvokeConfig/Resource"
+   }
+  },
+  "ExecutionInfrastructureExecutionValidatorHandlerServiceRole49F8D007": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+       ]
+      ]
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ExecutionValidatorHandler/ServiceRole/Resource"
+   }
+  },
+  "ExecutionInfrastructureExecutionValidatorHandlerServiceRoleDefaultPolicyC85A9AE9": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sqs:SendMessage",
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::GetAtt": [
+         "ExecutionInfrastructureExecutionValidatorDlq6B0328BE",
+         "Arn"
+        ]
+       }
+      },
+      {
+       "Action": [
+        "dynamodb:BatchGetItem",
+        "dynamodb:ConditionCheckItem",
+        "dynamodb:DescribeTable",
+        "dynamodb:GetItem",
+        "dynamodb:GetRecords",
+        "dynamodb:GetShardIterator",
+        "dynamodb:Query",
+        "dynamodb:Scan"
+       ],
+       "Effect": "Allow",
+       "Resource": [
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Ref": "referencetoCCNativeStackActionIntentTable31610521Arn"
+           },
+           "/index/*"
+          ]
+         ]
+        },
+        {
+         "Ref": "referencetoCCNativeStackActionIntentTable31610521Arn"
+        },
+        {
+         "Ref": "referencetoCCNativeStackTenantsTable4B06C921Arn"
+        }
+       ]
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "ExecutionInfrastructureExecutionValidatorHandlerServiceRoleDefaultPolicyC85A9AE9",
+    "Roles": [
+     {
+      "Ref": "ExecutionInfrastructureExecutionValidatorHandlerServiceRole49F8D007"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ExecutionValidatorHandler/ServiceRole/DefaultPolicy/Resource"
+   }
+  },
+  "ExecutionInfrastructureExecutionValidatorHandlerEBD0AC42": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Code": {
+     "S3Bucket": "cdk-hnb659fds-assets-661268174397-us-west-2",
+     "S3Key": "75fd0113bd49c7ff17d915ab04a0d2a55a2607dd0c39f906cac4c2bd877a2859.zip"
+    },
+    "DeadLetterConfig": {
+     "TargetArn": {
+      "Fn::GetAtt": [
+       "ExecutionInfrastructureExecutionValidatorDlq6B0328BE",
+       "Arn"
+      ]
+     }
+    },
+    "Environment": {
+     "Variables": {
+      "ACTION_INTENT_TABLE_NAME": {
+       "Ref": "referencetoCCNativeStackActionIntentTable31610521Ref"
+      },
+      "TENANTS_TABLE_NAME": {
+       "Ref": "referencetoCCNativeStackTenantsTable4B06C921Ref"
+      }
+     }
+    },
+    "FunctionName": "cc-native-execution-validator",
+    "Handler": "index.handler",
+    "Role": {
+     "Fn::GetAtt": [
+      "ExecutionInfrastructureExecutionValidatorHandlerServiceRole49F8D007",
+      "Arn"
+     ]
+    },
+    "Runtime": "nodejs20.x",
+    "Timeout": 30
+   },
+   "DependsOn": [
+    "ExecutionInfrastructureExecutionValidatorHandlerServiceRoleDefaultPolicyC85A9AE9",
+    "ExecutionInfrastructureExecutionValidatorHandlerServiceRole49F8D007"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ExecutionValidatorHandler/Resource",
+    "aws:asset:path": "/Users/rameshpaturu/Documents/projects/lambda/cc-native",
+    "aws:asset:is-bundled": true,
+    "aws:asset:property": "Code"
+   }
+  },
+  "ExecutionInfrastructureExecutionValidatorHandlerEventInvokeConfig158133C6": {
+   "Type": "AWS::Lambda::EventInvokeConfig",
+   "Properties": {
+    "FunctionName": {
+     "Ref": "ExecutionInfrastructureExecutionValidatorHandlerEBD0AC42"
+    },
+    "MaximumRetryAttempts": 2,
+    "Qualifier": "$LATEST"
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ExecutionValidatorHandler/EventInvokeConfig/Resource"
+   }
+  },
+  "ExecutionInfrastructureToolMapperDlq40FC87A8": {
+   "Type": "AWS::SQS::Queue",
+   "Properties": {
+    "MessageRetentionPeriod": 1209600,
+    "QueueName": "cc-native-tool-mapper-handler-dlq"
+   },
+   "UpdateReplacePolicy": "Delete",
+   "DeletionPolicy": "Delete",
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ToolMapperDlq/Resource"
+   }
+  },
+  "ExecutionInfrastructureToolInvokerDlq4FD9B75F": {
+   "Type": "AWS::SQS::Queue",
+   "Properties": {
+    "MessageRetentionPeriod": 1209600,
+    "QueueName": "cc-native-tool-invoker-handler-dlq"
+   },
+   "UpdateReplacePolicy": "Delete",
+   "DeletionPolicy": "Delete",
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ToolInvokerDlq/Resource"
+   }
+  },
+  "ExecutionInfrastructureExecutionRecorderDlq586A9A5D": {
+   "Type": "AWS::SQS::Queue",
+   "Properties": {
+    "MessageRetentionPeriod": 1209600,
+    "QueueName": "cc-native-execution-recorder-handler-dlq"
+   },
+   "UpdateReplacePolicy": "Delete",
+   "DeletionPolicy": "Delete",
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ExecutionRecorderDlq/Resource"
+   }
+  },
+  "ExecutionInfrastructureExecutionFailureRecorderDlqEE0C92AA": {
+   "Type": "AWS::SQS::Queue",
+   "Properties": {
+    "MessageRetentionPeriod": 1209600,
+    "QueueName": "cc-native-execution-failure-recorder-handler-dlq"
+   },
+   "UpdateReplacePolicy": "Delete",
+   "DeletionPolicy": "Delete",
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ExecutionFailureRecorderDlq/Resource"
+   }
+  },
+  "ExecutionInfrastructureCompensationDlq37CE18B5": {
+   "Type": "AWS::SQS::Queue",
+   "Properties": {
+    "MessageRetentionPeriod": 1209600,
+    "QueueName": "cc-native-compensation-handler-dlq"
+   },
+   "UpdateReplacePolicy": "Delete",
+   "DeletionPolicy": "Delete",
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/CompensationDlq/Resource"
+   }
+  },
+  "ExecutionInfrastructureConnectorConfigTable7E3D9124": {
+   "Type": "AWS::DynamoDB::Table",
+   "Properties": {
+    "AttributeDefinitions": [
+     {
+      "AttributeName": "pk",
+      "AttributeType": "S"
+     },
+     {
+      "AttributeName": "sk",
+      "AttributeType": "S"
+     }
+    ],
+    "BillingMode": "PAY_PER_REQUEST",
+    "KeySchema": [
+     {
+      "AttributeName": "pk",
+      "KeyType": "HASH"
+     },
+     {
+      "AttributeName": "sk",
+      "KeyType": "RANGE"
+     }
+    ],
+    "PointInTimeRecoverySpecification": {
+     "PointInTimeRecoveryEnabled": true
+    },
+    "TableName": "cc-native-connector-config"
+   },
+   "UpdateReplacePolicy": "Retain",
+   "DeletionPolicy": "Retain",
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ConnectorConfigTable/Resource"
+   }
+  },
+  "ExecutionInfrastructureInternalNotesTable79920A10": {
+   "Type": "AWS::DynamoDB::Table",
+   "Properties": {
+    "AttributeDefinitions": [
+     {
+      "AttributeName": "pk",
+      "AttributeType": "S"
+     },
+     {
+      "AttributeName": "sk",
+      "AttributeType": "S"
+     }
+    ],
+    "BillingMode": "PAY_PER_REQUEST",
+    "KeySchema": [
+     {
+      "AttributeName": "pk",
+      "KeyType": "HASH"
+     },
+     {
+      "AttributeName": "sk",
+      "KeyType": "RANGE"
+     }
+    ],
+    "PointInTimeRecoverySpecification": {
+     "PointInTimeRecoveryEnabled": true
+    },
+    "TableName": "cc-native-internal-notes"
+   },
+   "UpdateReplacePolicy": "Retain",
+   "DeletionPolicy": "Retain",
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/InternalNotesTable/Resource"
+   }
+  },
+  "ExecutionInfrastructureInternalTasksTable40EEE850": {
+   "Type": "AWS::DynamoDB::Table",
+   "Properties": {
+    "AttributeDefinitions": [
+     {
+      "AttributeName": "pk",
+      "AttributeType": "S"
+     },
+     {
+      "AttributeName": "sk",
+      "AttributeType": "S"
+     }
+    ],
+    "BillingMode": "PAY_PER_REQUEST",
+    "KeySchema": [
+     {
+      "AttributeName": "pk",
+      "KeyType": "HASH"
+     },
+     {
+      "AttributeName": "sk",
+      "KeyType": "RANGE"
+     }
+    ],
+    "PointInTimeRecoverySpecification": {
+     "PointInTimeRecoveryEnabled": true
+    },
+    "TableName": "cc-native-internal-tasks"
+   },
+   "UpdateReplacePolicy": "Retain",
+   "DeletionPolicy": "Retain",
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/InternalTasksTable/Resource"
+   }
+  },
+  "ExecutionInfrastructureConnectorsVpc5A2E5EDA": {
+   "Type": "AWS::EC2::VPC",
+   "Properties": {
+    "CidrBlock": "10.0.0.0/16",
+    "EnableDnsHostnames": true,
+    "EnableDnsSupport": true,
+    "InstanceTenancy": "default",
+    "Tags": [
+     {
+      "Key": "Name",
+      "Value": "ConnectorsVpc"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ConnectorsVpc/Resource"
+   }
+  },
+  "ExecutionInfrastructureConnectorsVpcConnectorPublicSubnet1Subnet9BE41469": {
+   "Type": "AWS::EC2::Subnet",
+   "Properties": {
+    "AvailabilityZone": "us-west-2a",
+    "CidrBlock": "10.0.0.0/24",
+    "MapPublicIpOnLaunch": true,
+    "Tags": [
+     {
+      "Key": "aws-cdk:subnet-name",
+      "Value": "ConnectorPublic"
+     },
+     {
+      "Key": "aws-cdk:subnet-type",
+      "Value": "Public"
+     },
+     {
+      "Key": "Name",
+      "Value": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ConnectorsVpc/ConnectorPublicSubnet1"
+     }
+    ],
+    "VpcId": {
+     "Ref": "ExecutionInfrastructureConnectorsVpc5A2E5EDA"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ConnectorsVpc/ConnectorPublicSubnet1/Subnet"
+   }
+  },
+  "ExecutionInfrastructureConnectorsVpcConnectorPublicSubnet1RouteTable66C436FA": {
+   "Type": "AWS::EC2::RouteTable",
+   "Properties": {
+    "Tags": [
+     {
+      "Key": "Name",
+      "Value": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ConnectorsVpc/ConnectorPublicSubnet1"
+     }
+    ],
+    "VpcId": {
+     "Ref": "ExecutionInfrastructureConnectorsVpc5A2E5EDA"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ConnectorsVpc/ConnectorPublicSubnet1/RouteTable"
+   }
+  },
+  "ExecutionInfrastructureConnectorsVpcConnectorPublicSubnet1RouteTableAssociationD61AA0D5": {
+   "Type": "AWS::EC2::SubnetRouteTableAssociation",
+   "Properties": {
+    "RouteTableId": {
+     "Ref": "ExecutionInfrastructureConnectorsVpcConnectorPublicSubnet1RouteTable66C436FA"
+    },
+    "SubnetId": {
+     "Ref": "ExecutionInfrastructureConnectorsVpcConnectorPublicSubnet1Subnet9BE41469"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ConnectorsVpc/ConnectorPublicSubnet1/RouteTableAssociation"
+   }
+  },
+  "ExecutionInfrastructureConnectorsVpcConnectorPublicSubnet1DefaultRoute17FDD1E1": {
+   "Type": "AWS::EC2::Route",
+   "Properties": {
+    "DestinationCidrBlock": "0.0.0.0/0",
+    "GatewayId": {
+     "Ref": "ExecutionInfrastructureConnectorsVpcIGWFA4B023E"
+    },
+    "RouteTableId": {
+     "Ref": "ExecutionInfrastructureConnectorsVpcConnectorPublicSubnet1RouteTable66C436FA"
+    }
+   },
+   "DependsOn": [
+    "ExecutionInfrastructureConnectorsVpcVPCGWCC600261"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ConnectorsVpc/ConnectorPublicSubnet1/DefaultRoute"
+   }
+  },
+  "ExecutionInfrastructureConnectorsVpcConnectorPublicSubnet1EIPDA885AE5": {
+   "Type": "AWS::EC2::EIP",
+   "Properties": {
+    "Domain": "vpc",
+    "Tags": [
+     {
+      "Key": "Name",
+      "Value": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ConnectorsVpc/ConnectorPublicSubnet1"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ConnectorsVpc/ConnectorPublicSubnet1/EIP"
+   }
+  },
+  "ExecutionInfrastructureConnectorsVpcConnectorPublicSubnet1NATGateway558FB937": {
+   "Type": "AWS::EC2::NatGateway",
+   "Properties": {
+    "AllocationId": {
+     "Fn::GetAtt": [
+      "ExecutionInfrastructureConnectorsVpcConnectorPublicSubnet1EIPDA885AE5",
+      "AllocationId"
+     ]
+    },
+    "SubnetId": {
+     "Ref": "ExecutionInfrastructureConnectorsVpcConnectorPublicSubnet1Subnet9BE41469"
+    },
+    "Tags": [
+     {
+      "Key": "Name",
+      "Value": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ConnectorsVpc/ConnectorPublicSubnet1"
+     }
+    ]
+   },
+   "DependsOn": [
+    "ExecutionInfrastructureConnectorsVpcConnectorPublicSubnet1DefaultRoute17FDD1E1",
+    "ExecutionInfrastructureConnectorsVpcConnectorPublicSubnet1RouteTableAssociationD61AA0D5"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ConnectorsVpc/ConnectorPublicSubnet1/NATGateway"
+   }
+  },
+  "ExecutionInfrastructureConnectorsVpcConnectorPublicSubnet2Subnet9D738083": {
+   "Type": "AWS::EC2::Subnet",
+   "Properties": {
+    "AvailabilityZone": "us-west-2b",
+    "CidrBlock": "10.0.1.0/24",
+    "MapPublicIpOnLaunch": true,
+    "Tags": [
+     {
+      "Key": "aws-cdk:subnet-name",
+      "Value": "ConnectorPublic"
+     },
+     {
+      "Key": "aws-cdk:subnet-type",
+      "Value": "Public"
+     },
+     {
+      "Key": "Name",
+      "Value": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ConnectorsVpc/ConnectorPublicSubnet2"
+     }
+    ],
+    "VpcId": {
+     "Ref": "ExecutionInfrastructureConnectorsVpc5A2E5EDA"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ConnectorsVpc/ConnectorPublicSubnet2/Subnet"
+   }
+  },
+  "ExecutionInfrastructureConnectorsVpcConnectorPublicSubnet2RouteTable59AEC5DB": {
+   "Type": "AWS::EC2::RouteTable",
+   "Properties": {
+    "Tags": [
+     {
+      "Key": "Name",
+      "Value": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ConnectorsVpc/ConnectorPublicSubnet2"
+     }
+    ],
+    "VpcId": {
+     "Ref": "ExecutionInfrastructureConnectorsVpc5A2E5EDA"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ConnectorsVpc/ConnectorPublicSubnet2/RouteTable"
+   }
+  },
+  "ExecutionInfrastructureConnectorsVpcConnectorPublicSubnet2RouteTableAssociation2BBE769C": {
+   "Type": "AWS::EC2::SubnetRouteTableAssociation",
+   "Properties": {
+    "RouteTableId": {
+     "Ref": "ExecutionInfrastructureConnectorsVpcConnectorPublicSubnet2RouteTable59AEC5DB"
+    },
+    "SubnetId": {
+     "Ref": "ExecutionInfrastructureConnectorsVpcConnectorPublicSubnet2Subnet9D738083"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ConnectorsVpc/ConnectorPublicSubnet2/RouteTableAssociation"
+   }
+  },
+  "ExecutionInfrastructureConnectorsVpcConnectorPublicSubnet2DefaultRoute070C8124": {
+   "Type": "AWS::EC2::Route",
+   "Properties": {
+    "DestinationCidrBlock": "0.0.0.0/0",
+    "GatewayId": {
+     "Ref": "ExecutionInfrastructureConnectorsVpcIGWFA4B023E"
+    },
+    "RouteTableId": {
+     "Ref": "ExecutionInfrastructureConnectorsVpcConnectorPublicSubnet2RouteTable59AEC5DB"
+    }
+   },
+   "DependsOn": [
+    "ExecutionInfrastructureConnectorsVpcVPCGWCC600261"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ConnectorsVpc/ConnectorPublicSubnet2/DefaultRoute"
+   }
+  },
+  "ExecutionInfrastructureConnectorsVpcConnectorPrivateSubnet1SubnetD5396AA6": {
+   "Type": "AWS::EC2::Subnet",
+   "Properties": {
+    "AvailabilityZone": "us-west-2a",
+    "CidrBlock": "10.0.2.0/24",
+    "MapPublicIpOnLaunch": false,
+    "Tags": [
+     {
+      "Key": "aws-cdk:subnet-name",
+      "Value": "ConnectorPrivate"
+     },
+     {
+      "Key": "aws-cdk:subnet-type",
+      "Value": "Private"
+     },
+     {
+      "Key": "Name",
+      "Value": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ConnectorsVpc/ConnectorPrivateSubnet1"
+     }
+    ],
+    "VpcId": {
+     "Ref": "ExecutionInfrastructureConnectorsVpc5A2E5EDA"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ConnectorsVpc/ConnectorPrivateSubnet1/Subnet"
+   }
+  },
+  "ExecutionInfrastructureConnectorsVpcConnectorPrivateSubnet1RouteTableC1762CEC": {
+   "Type": "AWS::EC2::RouteTable",
+   "Properties": {
+    "Tags": [
+     {
+      "Key": "Name",
+      "Value": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ConnectorsVpc/ConnectorPrivateSubnet1"
+     }
+    ],
+    "VpcId": {
+     "Ref": "ExecutionInfrastructureConnectorsVpc5A2E5EDA"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ConnectorsVpc/ConnectorPrivateSubnet1/RouteTable"
+   }
+  },
+  "ExecutionInfrastructureConnectorsVpcConnectorPrivateSubnet1RouteTableAssociationE3E6F3A5": {
+   "Type": "AWS::EC2::SubnetRouteTableAssociation",
+   "Properties": {
+    "RouteTableId": {
+     "Ref": "ExecutionInfrastructureConnectorsVpcConnectorPrivateSubnet1RouteTableC1762CEC"
+    },
+    "SubnetId": {
+     "Ref": "ExecutionInfrastructureConnectorsVpcConnectorPrivateSubnet1SubnetD5396AA6"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ConnectorsVpc/ConnectorPrivateSubnet1/RouteTableAssociation"
+   }
+  },
+  "ExecutionInfrastructureConnectorsVpcConnectorPrivateSubnet1DefaultRouteE2E3D744": {
+   "Type": "AWS::EC2::Route",
+   "Properties": {
+    "DestinationCidrBlock": "0.0.0.0/0",
+    "NatGatewayId": {
+     "Ref": "ExecutionInfrastructureConnectorsVpcConnectorPublicSubnet1NATGateway558FB937"
+    },
+    "RouteTableId": {
+     "Ref": "ExecutionInfrastructureConnectorsVpcConnectorPrivateSubnet1RouteTableC1762CEC"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ConnectorsVpc/ConnectorPrivateSubnet1/DefaultRoute"
+   }
+  },
+  "ExecutionInfrastructureConnectorsVpcConnectorPrivateSubnet2SubnetD7FF5293": {
+   "Type": "AWS::EC2::Subnet",
+   "Properties": {
+    "AvailabilityZone": "us-west-2b",
+    "CidrBlock": "10.0.3.0/24",
+    "MapPublicIpOnLaunch": false,
+    "Tags": [
+     {
+      "Key": "aws-cdk:subnet-name",
+      "Value": "ConnectorPrivate"
+     },
+     {
+      "Key": "aws-cdk:subnet-type",
+      "Value": "Private"
+     },
+     {
+      "Key": "Name",
+      "Value": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ConnectorsVpc/ConnectorPrivateSubnet2"
+     }
+    ],
+    "VpcId": {
+     "Ref": "ExecutionInfrastructureConnectorsVpc5A2E5EDA"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ConnectorsVpc/ConnectorPrivateSubnet2/Subnet"
+   }
+  },
+  "ExecutionInfrastructureConnectorsVpcConnectorPrivateSubnet2RouteTableBC2ED354": {
+   "Type": "AWS::EC2::RouteTable",
+   "Properties": {
+    "Tags": [
+     {
+      "Key": "Name",
+      "Value": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ConnectorsVpc/ConnectorPrivateSubnet2"
+     }
+    ],
+    "VpcId": {
+     "Ref": "ExecutionInfrastructureConnectorsVpc5A2E5EDA"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ConnectorsVpc/ConnectorPrivateSubnet2/RouteTable"
+   }
+  },
+  "ExecutionInfrastructureConnectorsVpcConnectorPrivateSubnet2RouteTableAssociation95645782": {
+   "Type": "AWS::EC2::SubnetRouteTableAssociation",
+   "Properties": {
+    "RouteTableId": {
+     "Ref": "ExecutionInfrastructureConnectorsVpcConnectorPrivateSubnet2RouteTableBC2ED354"
+    },
+    "SubnetId": {
+     "Ref": "ExecutionInfrastructureConnectorsVpcConnectorPrivateSubnet2SubnetD7FF5293"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ConnectorsVpc/ConnectorPrivateSubnet2/RouteTableAssociation"
+   }
+  },
+  "ExecutionInfrastructureConnectorsVpcConnectorPrivateSubnet2DefaultRoute53412F7C": {
+   "Type": "AWS::EC2::Route",
+   "Properties": {
+    "DestinationCidrBlock": "0.0.0.0/0",
+    "NatGatewayId": {
+     "Ref": "ExecutionInfrastructureConnectorsVpcConnectorPublicSubnet1NATGateway558FB937"
+    },
+    "RouteTableId": {
+     "Ref": "ExecutionInfrastructureConnectorsVpcConnectorPrivateSubnet2RouteTableBC2ED354"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ConnectorsVpc/ConnectorPrivateSubnet2/DefaultRoute"
+   }
+  },
+  "ExecutionInfrastructureConnectorsVpcIGWFA4B023E": {
+   "Type": "AWS::EC2::InternetGateway",
+   "Properties": {
+    "Tags": [
+     {
+      "Key": "Name",
+      "Value": "ConnectorsVpc"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ConnectorsVpc/IGW"
+   }
+  },
+  "ExecutionInfrastructureConnectorsVpcVPCGWCC600261": {
+   "Type": "AWS::EC2::VPCGatewayAttachment",
+   "Properties": {
+    "InternetGatewayId": {
+     "Ref": "ExecutionInfrastructureConnectorsVpcIGWFA4B023E"
+    },
+    "VpcId": {
+     "Ref": "ExecutionInfrastructureConnectorsVpc5A2E5EDA"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ConnectorsVpc/VPCGW"
+   }
+  },
+  "ExecutionInfrastructureConnectorsVpcRestrictDefaultSecurityGroupCustomResourceB393B7DE": {
+   "Type": "Custom::VpcRestrictDefaultSG",
+   "Properties": {
+    "ServiceToken": {
+     "Fn::GetAtt": [
+      "CustomVpcRestrictDefaultSGCustomResourceProviderHandlerDC833E5E",
+      "Arn"
+     ]
+    },
+    "DefaultSecurityGroupId": {
+     "Fn::GetAtt": [
+      "ExecutionInfrastructureConnectorsVpc5A2E5EDA",
+      "DefaultSecurityGroup"
+     ]
+    },
+    "Account": "661268174397"
+   },
+   "UpdateReplacePolicy": "Delete",
+   "DeletionPolicy": "Delete",
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ConnectorsVpc/RestrictDefaultSecurityGroupCustomResource/Default"
+   }
+  },
+  "ExecutionInfrastructureConnectorsVpcConnectorsVpcFlowLogIAMRoleE36ECA61": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "vpc-flow-logs.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "Tags": [
+     {
+      "Key": "Name",
+      "Value": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ConnectorsVpc/ConnectorsVpcFlowLog"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ConnectorsVpc/ConnectorsVpcFlowLog/IAMRole/Resource"
+   }
+  },
+  "ExecutionInfrastructureConnectorsVpcConnectorsVpcFlowLogIAMRoleDefaultPolicyFF1B03F8": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": [
+        "logs:CreateLogStream",
+        "logs:DescribeLogStreams",
+        "logs:PutLogEvents"
+       ],
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::GetAtt": [
+         "ExecutionInfrastructureConnectorsVpcConnectorsVpcFlowLogLogGroupA7B1930E",
+         "Arn"
+        ]
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "ExecutionInfrastructureConnectorsVpcConnectorsVpcFlowLogIAMRoleDefaultPolicyFF1B03F8",
+    "Roles": [
+     {
+      "Ref": "ExecutionInfrastructureConnectorsVpcConnectorsVpcFlowLogIAMRoleE36ECA61"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ConnectorsVpc/ConnectorsVpcFlowLog/IAMRole/DefaultPolicy/Resource"
+   }
+  },
+  "ExecutionInfrastructureConnectorsVpcConnectorsVpcFlowLogLogGroupA7B1930E": {
+   "Type": "AWS::Logs::LogGroup",
+   "Properties": {
+    "RetentionInDays": 731,
+    "Tags": [
+     {
+      "Key": "Name",
+      "Value": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ConnectorsVpc/ConnectorsVpcFlowLog"
+     }
+    ]
+   },
+   "UpdateReplacePolicy": "Retain",
+   "DeletionPolicy": "Retain",
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ConnectorsVpc/ConnectorsVpcFlowLog/LogGroup/Resource"
+   }
+  },
+  "ExecutionInfrastructureConnectorsVpcConnectorsVpcFlowLog952C7F43": {
+   "Type": "AWS::EC2::FlowLog",
+   "Properties": {
+    "DeliverLogsPermissionArn": {
+     "Fn::GetAtt": [
+      "ExecutionInfrastructureConnectorsVpcConnectorsVpcFlowLogIAMRoleE36ECA61",
+      "Arn"
+     ]
+    },
+    "LogDestinationType": "cloud-watch-logs",
+    "LogGroupName": {
+     "Ref": "ExecutionInfrastructureConnectorsVpcConnectorsVpcFlowLogLogGroupA7B1930E"
+    },
+    "ResourceId": {
+     "Ref": "ExecutionInfrastructureConnectorsVpc5A2E5EDA"
+    },
+    "ResourceType": "VPC",
+    "Tags": [
+     {
+      "Key": "Name",
+      "Value": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ConnectorsVpc/ConnectorsVpcFlowLog"
+     }
+    ],
+    "TrafficType": "ALL"
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ConnectorsVpc/ConnectorsVpcFlowLog/FlowLog"
+   }
+  },
+  "ExecutionInfrastructureDynamoDBEndpoint8140E82C": {
+   "Type": "AWS::EC2::VPCEndpoint",
+   "Properties": {
+    "RouteTableIds": [
+     {
+      "Ref": "ExecutionInfrastructureConnectorsVpcConnectorPrivateSubnet1RouteTableC1762CEC"
+     },
+     {
+      "Ref": "ExecutionInfrastructureConnectorsVpcConnectorPrivateSubnet2RouteTableBC2ED354"
+     },
+     {
+      "Ref": "ExecutionInfrastructureConnectorsVpcConnectorPublicSubnet1RouteTable66C436FA"
+     },
+     {
+      "Ref": "ExecutionInfrastructureConnectorsVpcConnectorPublicSubnet2RouteTable59AEC5DB"
+     }
+    ],
+    "ServiceName": {
+     "Fn::Join": [
+      "",
+      [
+       "com.amazonaws.",
+       {
+        "Ref": "AWS::Region"
+       },
+       ".dynamodb"
+      ]
+     ]
+    },
+    "VpcEndpointType": "Gateway",
+    "VpcId": {
+     "Ref": "ExecutionInfrastructureConnectorsVpc5A2E5EDA"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/DynamoDBEndpoint/Resource"
+   }
+  },
+  "ExecutionInfrastructureS3Endpoint25FAF2B8": {
+   "Type": "AWS::EC2::VPCEndpoint",
+   "Properties": {
+    "RouteTableIds": [
+     {
+      "Ref": "ExecutionInfrastructureConnectorsVpcConnectorPrivateSubnet1RouteTableC1762CEC"
+     },
+     {
+      "Ref": "ExecutionInfrastructureConnectorsVpcConnectorPrivateSubnet2RouteTableBC2ED354"
+     },
+     {
+      "Ref": "ExecutionInfrastructureConnectorsVpcConnectorPublicSubnet1RouteTable66C436FA"
+     },
+     {
+      "Ref": "ExecutionInfrastructureConnectorsVpcConnectorPublicSubnet2RouteTable59AEC5DB"
+     }
+    ],
+    "ServiceName": {
+     "Fn::Join": [
+      "",
+      [
+       "com.amazonaws.",
+       {
+        "Ref": "AWS::Region"
+       },
+       ".s3"
+      ]
+     ]
+    },
+    "VpcEndpointType": "Gateway",
+    "VpcId": {
+     "Ref": "ExecutionInfrastructureConnectorsVpc5A2E5EDA"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/S3Endpoint/Resource"
+   }
+  },
+  "ExecutionInfrastructureCloudWatchLogsEndpointSecurityGroup7F23505F": {
+   "Type": "AWS::EC2::SecurityGroup",
+   "Properties": {
+    "GroupDescription": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/CloudWatchLogsEndpoint/SecurityGroup",
+    "SecurityGroupEgress": [
+     {
+      "CidrIp": "0.0.0.0/0",
+      "Description": "Allow all outbound traffic by default",
+      "IpProtocol": "-1"
+     }
+    ],
+    "SecurityGroupIngress": [
+     {
+      "CidrIp": {
+       "Fn::GetAtt": [
+        "ExecutionInfrastructureConnectorsVpc5A2E5EDA",
+        "CidrBlock"
+       ]
+      },
+      "Description": {
+       "Fn::Join": [
+        "",
+        [
+         "from ",
+         {
+          "Fn::GetAtt": [
+           "ExecutionInfrastructureConnectorsVpc5A2E5EDA",
+           "CidrBlock"
+          ]
+         },
+         ":443"
+        ]
+       ]
+      },
+      "FromPort": 443,
+      "IpProtocol": "tcp",
+      "ToPort": 443
+     }
+    ],
+    "VpcId": {
+     "Ref": "ExecutionInfrastructureConnectorsVpc5A2E5EDA"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/CloudWatchLogsEndpoint/SecurityGroup/Resource"
+   }
+  },
+  "ExecutionInfrastructureCloudWatchLogsEndpointBF1686EE": {
+   "Type": "AWS::EC2::VPCEndpoint",
+   "Properties": {
+    "PrivateDnsEnabled": true,
+    "SecurityGroupIds": [
+     {
+      "Fn::GetAtt": [
+       "ExecutionInfrastructureCloudWatchLogsEndpointSecurityGroup7F23505F",
+       "GroupId"
+      ]
+     }
+    ],
+    "ServiceName": "com.amazonaws.us-west-2.logs",
+    "SubnetIds": [
+     {
+      "Ref": "ExecutionInfrastructureConnectorsVpcConnectorPrivateSubnet1SubnetD5396AA6"
+     },
+     {
+      "Ref": "ExecutionInfrastructureConnectorsVpcConnectorPrivateSubnet2SubnetD7FF5293"
+     }
+    ],
+    "VpcEndpointType": "Interface",
+    "VpcId": {
+     "Ref": "ExecutionInfrastructureConnectorsVpc5A2E5EDA"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/CloudWatchLogsEndpoint/Resource"
+   }
+  },
+  "ExecutionInfrastructureSTSEndpointSecurityGroup0644FD46": {
+   "Type": "AWS::EC2::SecurityGroup",
+   "Properties": {
+    "GroupDescription": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/STSEndpoint/SecurityGroup",
+    "SecurityGroupEgress": [
+     {
+      "CidrIp": "0.0.0.0/0",
+      "Description": "Allow all outbound traffic by default",
+      "IpProtocol": "-1"
+     }
+    ],
+    "SecurityGroupIngress": [
+     {
+      "CidrIp": {
+       "Fn::GetAtt": [
+        "ExecutionInfrastructureConnectorsVpc5A2E5EDA",
+        "CidrBlock"
+       ]
+      },
+      "Description": {
+       "Fn::Join": [
+        "",
+        [
+         "from ",
+         {
+          "Fn::GetAtt": [
+           "ExecutionInfrastructureConnectorsVpc5A2E5EDA",
+           "CidrBlock"
+          ]
+         },
+         ":443"
+        ]
+       ]
+      },
+      "FromPort": 443,
+      "IpProtocol": "tcp",
+      "ToPort": 443
+     }
+    ],
+    "VpcId": {
+     "Ref": "ExecutionInfrastructureConnectorsVpc5A2E5EDA"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/STSEndpoint/SecurityGroup/Resource"
+   }
+  },
+  "ExecutionInfrastructureSTSEndpoint350600B1": {
+   "Type": "AWS::EC2::VPCEndpoint",
+   "Properties": {
+    "PrivateDnsEnabled": true,
+    "SecurityGroupIds": [
+     {
+      "Fn::GetAtt": [
+       "ExecutionInfrastructureSTSEndpointSecurityGroup0644FD46",
+       "GroupId"
+      ]
+     }
+    ],
+    "ServiceName": "com.amazonaws.us-west-2.sts",
+    "SubnetIds": [
+     {
+      "Ref": "ExecutionInfrastructureConnectorsVpcConnectorPrivateSubnet1SubnetD5396AA6"
+     },
+     {
+      "Ref": "ExecutionInfrastructureConnectorsVpcConnectorPrivateSubnet2SubnetD7FF5293"
+     }
+    ],
+    "VpcEndpointType": "Interface",
+    "VpcId": {
+     "Ref": "ExecutionInfrastructureConnectorsVpc5A2E5EDA"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/STSEndpoint/Resource"
+   }
+  },
+  "ExecutionInfrastructureSecretsManagerEndpointSecurityGroupA35798EA": {
+   "Type": "AWS::EC2::SecurityGroup",
+   "Properties": {
+    "GroupDescription": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/SecretsManagerEndpoint/SecurityGroup",
+    "SecurityGroupEgress": [
+     {
+      "CidrIp": "0.0.0.0/0",
+      "Description": "Allow all outbound traffic by default",
+      "IpProtocol": "-1"
+     }
+    ],
+    "SecurityGroupIngress": [
+     {
+      "CidrIp": {
+       "Fn::GetAtt": [
+        "ExecutionInfrastructureConnectorsVpc5A2E5EDA",
+        "CidrBlock"
+       ]
+      },
+      "Description": {
+       "Fn::Join": [
+        "",
+        [
+         "from ",
+         {
+          "Fn::GetAtt": [
+           "ExecutionInfrastructureConnectorsVpc5A2E5EDA",
+           "CidrBlock"
+          ]
+         },
+         ":443"
+        ]
+       ]
+      },
+      "FromPort": 443,
+      "IpProtocol": "tcp",
+      "ToPort": 443
+     }
+    ],
+    "VpcId": {
+     "Ref": "ExecutionInfrastructureConnectorsVpc5A2E5EDA"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/SecretsManagerEndpoint/SecurityGroup/Resource"
+   }
+  },
+  "ExecutionInfrastructureSecretsManagerEndpointAB7CCE8B": {
+   "Type": "AWS::EC2::VPCEndpoint",
+   "Properties": {
+    "PrivateDnsEnabled": true,
+    "SecurityGroupIds": [
+     {
+      "Fn::GetAtt": [
+       "ExecutionInfrastructureSecretsManagerEndpointSecurityGroupA35798EA",
+       "GroupId"
+      ]
+     }
+    ],
+    "ServiceName": "com.amazonaws.us-west-2.secretsmanager",
+    "SubnetIds": [
+     {
+      "Ref": "ExecutionInfrastructureConnectorsVpcConnectorPrivateSubnet1SubnetD5396AA6"
+     },
+     {
+      "Ref": "ExecutionInfrastructureConnectorsVpcConnectorPrivateSubnet2SubnetD7FF5293"
+     }
+    ],
+    "VpcEndpointType": "Interface",
+    "VpcId": {
+     "Ref": "ExecutionInfrastructureConnectorsVpc5A2E5EDA"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/SecretsManagerEndpoint/Resource"
+   }
+  },
+  "ExecutionInfrastructureKMSEndpointSecurityGroupA260A9F3": {
+   "Type": "AWS::EC2::SecurityGroup",
+   "Properties": {
+    "GroupDescription": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/KMSEndpoint/SecurityGroup",
+    "SecurityGroupEgress": [
+     {
+      "CidrIp": "0.0.0.0/0",
+      "Description": "Allow all outbound traffic by default",
+      "IpProtocol": "-1"
+     }
+    ],
+    "SecurityGroupIngress": [
+     {
+      "CidrIp": {
+       "Fn::GetAtt": [
+        "ExecutionInfrastructureConnectorsVpc5A2E5EDA",
+        "CidrBlock"
+       ]
+      },
+      "Description": {
+       "Fn::Join": [
+        "",
+        [
+         "from ",
+         {
+          "Fn::GetAtt": [
+           "ExecutionInfrastructureConnectorsVpc5A2E5EDA",
+           "CidrBlock"
+          ]
+         },
+         ":443"
+        ]
+       ]
+      },
+      "FromPort": 443,
+      "IpProtocol": "tcp",
+      "ToPort": 443
+     }
+    ],
+    "VpcId": {
+     "Ref": "ExecutionInfrastructureConnectorsVpc5A2E5EDA"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/KMSEndpoint/SecurityGroup/Resource"
+   }
+  },
+  "ExecutionInfrastructureKMSEndpoint7A225935": {
+   "Type": "AWS::EC2::VPCEndpoint",
+   "Properties": {
+    "PrivateDnsEnabled": true,
+    "SecurityGroupIds": [
+     {
+      "Fn::GetAtt": [
+       "ExecutionInfrastructureKMSEndpointSecurityGroupA260A9F3",
+       "GroupId"
+      ]
+     }
+    ],
+    "ServiceName": "com.amazonaws.us-west-2.kms",
+    "SubnetIds": [
+     {
+      "Ref": "ExecutionInfrastructureConnectorsVpcConnectorPrivateSubnet1SubnetD5396AA6"
+     },
+     {
+      "Ref": "ExecutionInfrastructureConnectorsVpcConnectorPrivateSubnet2SubnetD7FF5293"
+     }
+    ],
+    "VpcEndpointType": "Interface",
+    "VpcId": {
+     "Ref": "ExecutionInfrastructureConnectorsVpc5A2E5EDA"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/KMSEndpoint/Resource"
+   }
+  },
+  "ExecutionInfrastructureInternalAdapterSecurityGroup8CBA9D06": {
+   "Type": "AWS::EC2::SecurityGroup",
+   "Properties": {
+    "GroupDescription": "Security group for Internal adapter",
+    "SecurityGroupEgress": [
+     {
+      "CidrIp": {
+       "Fn::GetAtt": [
+        "ExecutionInfrastructureConnectorsVpc5A2E5EDA",
+        "CidrBlock"
+       ]
+      },
+      "Description": "Allow HTTPS to VPC interface endpoints (CloudWatch Logs, STS, KMS, Secrets Manager)",
+      "FromPort": 443,
+      "IpProtocol": "tcp",
+      "ToPort": 443
+     }
+    ],
+    "VpcId": {
+     "Ref": "ExecutionInfrastructureConnectorsVpc5A2E5EDA"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/InternalAdapterSecurityGroup/Resource"
+   }
+  },
+  "ExecutionInfrastructureInternalAdapterSecurityGrouptopl00a540694434669F378": {
+   "Type": "AWS::EC2::SecurityGroupEgress",
+   "Properties": {
+    "Description": "Allow HTTPS to DynamoDB via Gateway endpoint only (no internet)",
+    "DestinationPrefixListId": "pl-00a54069",
+    "FromPort": 443,
+    "GroupId": {
+     "Fn::GetAtt": [
+      "ExecutionInfrastructureInternalAdapterSecurityGroup8CBA9D06",
+      "GroupId"
+     ]
+    },
+    "IpProtocol": "tcp",
+    "ToPort": 443
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/InternalAdapterSecurityGroup/to pl-00a54069:443"
+   }
+  },
+  "ExecutionInfrastructureCrmAdapterSecurityGroupE11945D7": {
+   "Type": "AWS::EC2::SecurityGroup",
+   "Properties": {
+    "GroupDescription": "Security group for CRM adapter",
+    "SecurityGroupEgress": [
+     {
+      "CidrIp": "255.255.255.255/32",
+      "Description": "Disallow all traffic",
+      "FromPort": 252,
+      "IpProtocol": "icmp",
+      "ToPort": 86
+     }
+    ],
+    "VpcId": {
+     "Ref": "ExecutionInfrastructureConnectorsVpc5A2E5EDA"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/CrmAdapterSecurityGroup/Resource"
+   }
+  },
+  "ExecutionInfrastructureExecutionGatewayRole056850A0": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "bedrock-agentcore.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "Description": "Execution role for AgentCore Gateway"
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ExecutionGatewayRole/Resource"
+   }
+  },
+  "ExecutionInfrastructureExecutionGatewayRoleDefaultPolicyF37E2DD1": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": "lambda:InvokeFunction",
+       "Effect": "Allow",
+       "Resource": [
+        {
+         "Fn::Join": [
+          "",
+          [
+           "arn:aws:lambda:",
+           {
+            "Ref": "AWS::Region"
+           },
+           ":",
+           {
+            "Ref": "AWS::AccountId"
+           },
+           ":function:cc-native-crm-adapter-handler"
+          ]
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           "arn:aws:lambda:",
+           {
+            "Ref": "AWS::Region"
+           },
+           ":",
+           {
+            "Ref": "AWS::AccountId"
+           },
+           ":function:cc-native-internal-adapter-handler"
+          ]
+         ]
+        }
+       ],
+       "Sid": "GatewayInvokeLambda"
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "ExecutionInfrastructureExecutionGatewayRoleDefaultPolicyF37E2DD1",
+    "Roles": [
+     {
+      "Ref": "ExecutionInfrastructureExecutionGatewayRole056850A0"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ExecutionGatewayRole/DefaultPolicy/Resource"
+   }
+  },
+  "ExecutionInfrastructureExecutionGatewayF1C40F42": {
+   "Type": "AWS::BedrockAgentCore::Gateway",
+   "Properties": {
+    "AuthorizerConfiguration": {
+     "CustomJWTAuthorizer": {
+      "AllowedClients": [
+       {
+        "Ref": "referencetoCCNativeStackUserPoolWebClient6BD81726Ref"
+       }
+      ],
+      "DiscoveryUrl": {
+       "Fn::Join": [
+        "",
+        [
+         "https://cognito-idp.",
+         {
+          "Ref": "AWS::Region"
+         },
+         ".amazonaws.com/",
+         {
+          "Ref": "referencetoCCNativeStackUserPoolCA4F225ARef"
+         },
+         "/.well-known/openid-configuration"
+        ]
+       ]
+      }
+     }
+    },
+    "AuthorizerType": "CUSTOM_JWT",
+    "Description": "AgentCore Gateway for cc-native execution layer with MCP protocol and JWT inbound auth",
+    "Name": "cc-native-execution-gateway",
+    "ProtocolConfiguration": {
+     "Mcp": {
+      "SupportedVersions": [
+       "2025-03-26"
+      ]
+     }
+    },
+    "ProtocolType": "MCP",
+    "RoleArn": {
+     "Fn::GetAtt": [
+      "ExecutionInfrastructureExecutionGatewayRole056850A0",
+      "Arn"
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ExecutionGateway"
+   }
+  },
+  "ExecutionInfrastructureToolMapperHandlerServiceRole7402F0E2": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+       ]
+      ]
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ToolMapperHandler/ServiceRole/Resource"
+   }
+  },
+  "ExecutionInfrastructureToolMapperHandlerServiceRoleDefaultPolicy7914CF4D": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sqs:SendMessage",
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::GetAtt": [
+         "ExecutionInfrastructureToolMapperDlq40FC87A8",
+         "Arn"
+        ]
+       }
+      },
+      {
+       "Action": [
+        "dynamodb:BatchGetItem",
+        "dynamodb:ConditionCheckItem",
+        "dynamodb:DescribeTable",
+        "dynamodb:GetItem",
+        "dynamodb:GetRecords",
+        "dynamodb:GetShardIterator",
+        "dynamodb:Query",
+        "dynamodb:Scan"
+       ],
+       "Effect": "Allow",
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "ExecutionInfrastructureActionTypeRegistryTableADE245F0",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Ref": "referencetoCCNativeStackActionIntentTable31610521Arn"
+           },
+           "/index/*"
+          ]
+         ]
+        },
+        {
+         "Ref": "referencetoCCNativeStackActionIntentTable31610521Arn"
+        }
+       ]
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "ExecutionInfrastructureToolMapperHandlerServiceRoleDefaultPolicy7914CF4D",
+    "Roles": [
+     {
+      "Ref": "ExecutionInfrastructureToolMapperHandlerServiceRole7402F0E2"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ToolMapperHandler/ServiceRole/DefaultPolicy/Resource"
+   }
+  },
+  "ExecutionInfrastructureToolMapperHandler600E8EAC": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Code": {
+     "S3Bucket": "cdk-hnb659fds-assets-661268174397-us-west-2",
+     "S3Key": "94f1425576becf59b1b01f866e911a29a4ac9f278c56687096f73fa88711879b.zip"
+    },
+    "DeadLetterConfig": {
+     "TargetArn": {
+      "Fn::GetAtt": [
+       "ExecutionInfrastructureToolMapperDlq40FC87A8",
+       "Arn"
+      ]
+     }
+    },
+    "Environment": {
+     "Variables": {
+      "ACTION_INTENT_TABLE_NAME": {
+       "Ref": "referencetoCCNativeStackActionIntentTable31610521Ref"
+      },
+      "ACTION_TYPE_REGISTRY_TABLE_NAME": {
+       "Ref": "ExecutionInfrastructureActionTypeRegistryTableADE245F0"
+      },
+      "AGENTCORE_GATEWAY_URL": {
+       "Fn::GetAtt": [
+        "ExecutionInfrastructureExecutionGatewayF1C40F42",
+        "GatewayUrl"
+       ]
+      }
+     }
+    },
+    "FunctionName": "cc-native-tool-mapper",
+    "Handler": "index.handler",
+    "Role": {
+     "Fn::GetAtt": [
+      "ExecutionInfrastructureToolMapperHandlerServiceRole7402F0E2",
+      "Arn"
+     ]
+    },
+    "Runtime": "nodejs20.x",
+    "Timeout": 30
+   },
+   "DependsOn": [
+    "ExecutionInfrastructureToolMapperHandlerServiceRoleDefaultPolicy7914CF4D",
+    "ExecutionInfrastructureToolMapperHandlerServiceRole7402F0E2"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ToolMapperHandler/Resource",
+    "aws:asset:path": "/Users/rameshpaturu/Documents/projects/lambda/cc-native",
+    "aws:asset:is-bundled": true,
+    "aws:asset:property": "Code"
+   }
+  },
+  "ExecutionInfrastructureToolMapperHandlerEventInvokeConfig50834A97": {
+   "Type": "AWS::Lambda::EventInvokeConfig",
+   "Properties": {
+    "FunctionName": {
+     "Ref": "ExecutionInfrastructureToolMapperHandler600E8EAC"
+    },
+    "MaximumRetryAttempts": 2,
+    "Qualifier": "$LATEST"
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ToolMapperHandler/EventInvokeConfig/Resource"
+   }
+  },
+  "ExecutionInfrastructureJwtGatewayServiceCredentials706D68B9": {
+   "Type": "AWS::SecretsManager::Secret",
+   "Properties": {
+    "Description": "Cognito gateway-service user credentials for ToolInvoker JWT (execution/gateway-service).",
+    "GenerateSecretString": {},
+    "Name": "execution/gateway-service-credentials"
+   },
+   "UpdateReplacePolicy": "Delete",
+   "DeletionPolicy": "Delete",
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/JwtGatewayServiceCredentials/Resource"
+   }
+  },
+  "ExecutionInfrastructureCognitoGatewayServiceUserCustomResourceServiceRole71203F9E": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+       ]
+      ]
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/CognitoGatewayServiceUserCustomResource/ServiceRole/Resource"
+   }
+  },
+  "ExecutionInfrastructureCognitoGatewayServiceUserCustomResourceServiceRoleDefaultPolicy18EC7BE2": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": [
+        "cognito-idp:AdminCreateUser",
+        "cognito-idp:AdminGetUser",
+        "cognito-idp:AdminSetUserPassword"
+       ],
+       "Effect": "Allow",
+       "Resource": {
+        "Ref": "referencetoCCNativeStackUserPoolCA4F225AArn"
+       }
+      },
+      {
+       "Action": [
+        "secretsmanager:PutSecretValue",
+        "secretsmanager:UpdateSecret",
+        "secretsmanager:UpdateSecretVersionStage"
+       ],
+       "Effect": "Allow",
+       "Resource": {
+        "Ref": "ExecutionInfrastructureJwtGatewayServiceCredentials706D68B9"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "ExecutionInfrastructureCognitoGatewayServiceUserCustomResourceServiceRoleDefaultPolicy18EC7BE2",
+    "Roles": [
+     {
+      "Ref": "ExecutionInfrastructureCognitoGatewayServiceUserCustomResourceServiceRole71203F9E"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/CognitoGatewayServiceUserCustomResource/ServiceRole/DefaultPolicy/Resource"
+   }
+  },
+  "ExecutionInfrastructureCognitoGatewayServiceUserCustomResourceF5568D33": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Code": {
+     "S3Bucket": "cdk-hnb659fds-assets-661268174397-us-west-2",
+     "S3Key": "73ef93c209bb2aa4a25a964c80e432abec4b0a752e75da002a49f83929a347fa.zip"
+    },
+    "Handler": "index.handler",
+    "Role": {
+     "Fn::GetAtt": [
+      "ExecutionInfrastructureCognitoGatewayServiceUserCustomResourceServiceRole71203F9E",
+      "Arn"
+     ]
+    },
+    "Runtime": "nodejs20.x",
+    "Timeout": 120
+   },
+   "DependsOn": [
+    "ExecutionInfrastructureCognitoGatewayServiceUserCustomResourceServiceRoleDefaultPolicy18EC7BE2",
+    "ExecutionInfrastructureCognitoGatewayServiceUserCustomResourceServiceRole71203F9E"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/CognitoGatewayServiceUserCustomResource/Resource",
+    "aws:asset:path": "/Users/rameshpaturu/Documents/projects/lambda/cc-native",
+    "aws:asset:is-bundled": true,
+    "aws:asset:property": "Code"
+   }
+  },
+  "ExecutionInfrastructureCognitoGatewayServiceUserProviderframeworkonEventServiceRole7A4E7DCD": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+       ]
+      ]
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/CognitoGatewayServiceUserProvider/framework-onEvent/ServiceRole/Resource"
+   }
+  },
+  "ExecutionInfrastructureCognitoGatewayServiceUserProviderframeworkonEventServiceRoleDefaultPolicyE3D5678F": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": "lambda:InvokeFunction",
+       "Effect": "Allow",
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "ExecutionInfrastructureCognitoGatewayServiceUserCustomResourceF5568D33",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "ExecutionInfrastructureCognitoGatewayServiceUserCustomResourceF5568D33",
+             "Arn"
+            ]
+           },
+           ":*"
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "Action": "lambda:GetFunction",
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::GetAtt": [
+         "ExecutionInfrastructureCognitoGatewayServiceUserCustomResourceF5568D33",
+         "Arn"
+        ]
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "ExecutionInfrastructureCognitoGatewayServiceUserProviderframeworkonEventServiceRoleDefaultPolicyE3D5678F",
+    "Roles": [
+     {
+      "Ref": "ExecutionInfrastructureCognitoGatewayServiceUserProviderframeworkonEventServiceRole7A4E7DCD"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/CognitoGatewayServiceUserProvider/framework-onEvent/ServiceRole/DefaultPolicy/Resource"
+   }
+  },
+  "ExecutionInfrastructureCognitoGatewayServiceUserProviderframeworkonEvent476B1AE8": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Code": {
+     "S3Bucket": "cdk-hnb659fds-assets-661268174397-us-west-2",
+     "S3Key": "07a90cc3efdfc34da22208dcd9d211f06f5b0e01b21e778edc7c3966b1f61d57.zip"
+    },
+    "Description": "AWS CDK resource provider framework - onEvent (CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/CognitoGatewayServiceUserProvider)",
+    "Environment": {
+     "Variables": {
+      "USER_ON_EVENT_FUNCTION_ARN": {
+       "Fn::GetAtt": [
+        "ExecutionInfrastructureCognitoGatewayServiceUserCustomResourceF5568D33",
+        "Arn"
+       ]
+      }
+     }
+    },
+    "Handler": "framework.onEvent",
+    "LoggingConfig": {
+     "ApplicationLogLevel": "FATAL",
+     "LogFormat": "JSON"
+    },
+    "Role": {
+     "Fn::GetAtt": [
+      "ExecutionInfrastructureCognitoGatewayServiceUserProviderframeworkonEventServiceRole7A4E7DCD",
+      "Arn"
+     ]
+    },
+    "Runtime": "nodejs22.x",
+    "Timeout": 900
+   },
+   "DependsOn": [
+    "ExecutionInfrastructureCognitoGatewayServiceUserProviderframeworkonEventServiceRoleDefaultPolicyE3D5678F",
+    "ExecutionInfrastructureCognitoGatewayServiceUserProviderframeworkonEventServiceRole7A4E7DCD"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/CognitoGatewayServiceUserProvider/framework-onEvent/Resource",
+    "aws:asset:path": "asset.07a90cc3efdfc34da22208dcd9d211f06f5b0e01b21e778edc7c3966b1f61d57",
+    "aws:asset:is-bundled": false,
+    "aws:asset:property": "Code"
+   }
+  },
+  "ExecutionInfrastructureCognitoGatewayServiceUser20E19CC3": {
+   "Type": "AWS::CloudFormation::CustomResource",
+   "Properties": {
+    "ServiceToken": {
+     "Fn::GetAtt": [
+      "ExecutionInfrastructureCognitoGatewayServiceUserProviderframeworkonEvent476B1AE8",
+      "Arn"
+     ]
+    },
+    "UserPoolId": {
+     "Ref": "referencetoCCNativeStackUserPoolCA4F225ARef"
+    },
+    "ClientId": {
+     "Ref": "referencetoCCNativeStackUserPoolWebClient6BD81726Ref"
+    },
+    "SecretArn": {
+     "Ref": "ExecutionInfrastructureJwtGatewayServiceCredentials706D68B9"
+    },
+    "Username": "gateway-service@cc-native.local"
+   },
+   "UpdateReplacePolicy": "Delete",
+   "DeletionPolicy": "Delete",
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/CognitoGatewayServiceUser/Default"
+   }
+  },
+  "ExecutionInfrastructureToolInvokerHandlerServiceRole5F3B5974": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+       ]
+      ]
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ToolInvokerHandler/ServiceRole/Resource"
+   }
+  },
+  "ExecutionInfrastructureToolInvokerHandlerServiceRoleDefaultPolicy6B891881": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sqs:SendMessage",
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::GetAtt": [
+         "ExecutionInfrastructureToolInvokerDlq4FD9B75F",
+         "Arn"
+        ]
+       }
+      },
+      {
+       "Action": [
+        "s3:Abort*",
+        "s3:DeleteObject*",
+        "s3:PutObject",
+        "s3:PutObjectLegalHold",
+        "s3:PutObjectRetention",
+        "s3:PutObjectTagging",
+        "s3:PutObjectVersionTagging"
+       ],
+       "Effect": "Allow",
+       "Resource": [
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Ref": "referencetoCCNativeStackArtifactsBucketCE1423ECArn"
+           },
+           "/*"
+          ]
+         ]
+        },
+        {
+         "Ref": "referencetoCCNativeStackArtifactsBucketCE1423ECArn"
+        }
+       ]
+      },
+      {
+       "Action": [
+        "dynamodb:BatchGetItem",
+        "dynamodb:BatchWriteItem",
+        "dynamodb:ConditionCheckItem",
+        "dynamodb:DeleteItem",
+        "dynamodb:DescribeTable",
+        "dynamodb:GetItem",
+        "dynamodb:GetRecords",
+        "dynamodb:GetShardIterator",
+        "dynamodb:PutItem",
+        "dynamodb:Query",
+        "dynamodb:Scan",
+        "dynamodb:UpdateItem"
+       ],
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::GetAtt": [
+         "ExecutionInfrastructureResilienceTableAD30852C",
+         "Arn"
+        ]
+       }
+      },
+      {
+       "Action": "cloudwatch:PutMetricData",
+       "Effect": "Allow",
+       "Resource": "*"
+      },
+      {
+       "Action": [
+        "cognito-idp:GetUser",
+        "cognito-idp:InitiateAuth"
+       ],
+       "Effect": "Allow",
+       "Resource": {
+        "Ref": "referencetoCCNativeStackUserPoolCA4F225AArn"
+       }
+      },
+      {
+       "Action": [
+        "secretsmanager:DescribeSecret",
+        "secretsmanager:GetSecretValue"
+       ],
+       "Effect": "Allow",
+       "Resource": {
+        "Ref": "ExecutionInfrastructureJwtGatewayServiceCredentials706D68B9"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "ExecutionInfrastructureToolInvokerHandlerServiceRoleDefaultPolicy6B891881",
+    "Roles": [
+     {
+      "Ref": "ExecutionInfrastructureToolInvokerHandlerServiceRole5F3B5974"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ToolInvokerHandler/ServiceRole/DefaultPolicy/Resource"
+   }
+  },
+  "ExecutionInfrastructureToolInvokerHandlerF3E699A0": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Code": {
+     "S3Bucket": "cdk-hnb659fds-assets-661268174397-us-west-2",
+     "S3Key": "a047dad70a351e3a1e9aa449c880baac704009dd19a6ff939f5f470bd13e59a8.zip"
+    },
+    "DeadLetterConfig": {
+     "TargetArn": {
+      "Fn::GetAtt": [
+       "ExecutionInfrastructureToolInvokerDlq4FD9B75F",
+       "Arn"
+      ]
+     }
+    },
+    "Environment": {
+     "Variables": {
+      "EXECUTION_ARTIFACTS_BUCKET": {
+       "Ref": "referencetoCCNativeStackArtifactsBucketCE1423ECRef"
+      },
+      "COGNITO_USER_POOL_ID": {
+       "Ref": "referencetoCCNativeStackUserPoolCA4F225ARef"
+      },
+      "COGNITO_CLIENT_ID": {
+       "Ref": "referencetoCCNativeStackUserPoolWebClient6BD81726Ref"
+      },
+      "COGNITO_SERVICE_USER_SECRET_ARN": {
+       "Ref": "ExecutionInfrastructureJwtGatewayServiceCredentials706D68B9"
+      }
+     }
+    },
+    "FunctionName": "cc-native-tool-invoker",
+    "Handler": "index.handler",
+    "Role": {
+     "Fn::GetAtt": [
+      "ExecutionInfrastructureToolInvokerHandlerServiceRole5F3B5974",
+      "Arn"
+     ]
+    },
+    "Runtime": "nodejs20.x",
+    "Timeout": 60
+   },
+   "DependsOn": [
+    "ExecutionInfrastructureToolInvokerHandlerServiceRoleDefaultPolicy6B891881",
+    "ExecutionInfrastructureToolInvokerHandlerServiceRole5F3B5974"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ToolInvokerHandler/Resource",
+    "aws:asset:path": "/Users/rameshpaturu/Documents/projects/lambda/cc-native",
+    "aws:asset:is-bundled": true,
+    "aws:asset:property": "Code"
+   }
+  },
+  "ExecutionInfrastructureToolInvokerHandlerEventInvokeConfig1D16714B": {
+   "Type": "AWS::Lambda::EventInvokeConfig",
+   "Properties": {
+    "FunctionName": {
+     "Ref": "ExecutionInfrastructureToolInvokerHandlerF3E699A0"
+    },
+    "MaximumRetryAttempts": 2,
+    "Qualifier": "$LATEST"
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ToolInvokerHandler/EventInvokeConfig/Resource"
+   }
+  },
+  "ExecutionInfrastructureExecutionRecorderHandlerServiceRole4227CE9E": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+       ]
+      ]
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ExecutionRecorderHandler/ServiceRole/Resource"
+   }
+  },
+  "ExecutionInfrastructureExecutionRecorderHandlerServiceRoleDefaultPolicyA1972197": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sqs:SendMessage",
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::GetAtt": [
+         "ExecutionInfrastructureExecutionRecorderDlq586A9A5D",
+         "Arn"
+        ]
+       }
+      },
+      {
+       "Action": [
+        "dynamodb:BatchWriteItem",
+        "dynamodb:DeleteItem",
+        "dynamodb:DescribeTable",
+        "dynamodb:PutItem",
+        "dynamodb:UpdateItem"
+       ],
+       "Effect": "Allow",
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "ExecutionInfrastructureExecutionAttemptsTableD1619A75",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::GetAtt": [
+          "ExecutionInfrastructureExecutionOutcomesTableFA67D167",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "ExecutionInfrastructureExecutionAttemptsTableD1619A75",
+             "Arn"
+            ]
+           },
+           "/index/*"
+          ]
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "ExecutionInfrastructureExecutionOutcomesTableFA67D167",
+             "Arn"
+            ]
+           },
+           "/index/*"
+          ]
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Ref": "referencetoCCNativeStackLedgerTableFA76C270Arn"
+           },
+           "/index/*"
+          ]
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Ref": "referencetoCCNativeStackSignalsTableC39AB6D7Arn"
+           },
+           "/index/*"
+          ]
+         ]
+        },
+        {
+         "Ref": "referencetoCCNativeStackLedgerTableFA76C270Arn"
+        },
+        {
+         "Ref": "referencetoCCNativeStackSignalsTableC39AB6D7Arn"
+        }
+       ]
+      },
+      {
+       "Action": [
+        "dynamodb:BatchGetItem",
+        "dynamodb:ConditionCheckItem",
+        "dynamodb:DescribeTable",
+        "dynamodb:GetItem",
+        "dynamodb:GetRecords",
+        "dynamodb:GetShardIterator",
+        "dynamodb:Query",
+        "dynamodb:Scan"
+       ],
+       "Effect": "Allow",
+       "Resource": [
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Ref": "referencetoCCNativeStackActionIntentTable31610521Arn"
+           },
+           "/index/*"
+          ]
+         ]
+        },
+        {
+         "Ref": "referencetoCCNativeStackActionIntentTable31610521Arn"
+        }
+       ]
+      },
+      {
+       "Action": "events:PutEvents",
+       "Effect": "Allow",
+       "Resource": {
+        "Ref": "referencetoCCNativeStackCCNativeEventBus60C230DFArn"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "ExecutionInfrastructureExecutionRecorderHandlerServiceRoleDefaultPolicyA1972197",
+    "Roles": [
+     {
+      "Ref": "ExecutionInfrastructureExecutionRecorderHandlerServiceRole4227CE9E"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ExecutionRecorderHandler/ServiceRole/DefaultPolicy/Resource"
+   }
+  },
+  "ExecutionInfrastructureExecutionRecorderHandlerFA16105F": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Code": {
+     "S3Bucket": "cdk-hnb659fds-assets-661268174397-us-west-2",
+     "S3Key": "c08a257c438bd74f864c410a984694981f8f441a166870c4d7b98f0737947450.zip"
+    },
+    "DeadLetterConfig": {
+     "TargetArn": {
+      "Fn::GetAtt": [
+       "ExecutionInfrastructureExecutionRecorderDlq586A9A5D",
+       "Arn"
+      ]
+     }
+    },
+    "Environment": {
+     "Variables": {
+      "EXECUTION_OUTCOMES_TABLE_NAME": {
+       "Ref": "ExecutionInfrastructureExecutionOutcomesTableFA67D167"
+      },
+      "EXECUTION_ATTEMPTS_TABLE_NAME": {
+       "Ref": "ExecutionInfrastructureExecutionAttemptsTableD1619A75"
+      },
+      "ACTION_INTENT_TABLE_NAME": {
+       "Ref": "referencetoCCNativeStackActionIntentTable31610521Ref"
+      },
+      "LEDGER_TABLE_NAME": {
+       "Ref": "referencetoCCNativeStackLedgerTableFA76C270Ref"
+      },
+      "SIGNALS_TABLE_NAME": {
+       "Ref": "referencetoCCNativeStackSignalsTableC39AB6D7Ref"
+      },
+      "EVENT_BUS_NAME": {
+       "Ref": "referencetoCCNativeStackCCNativeEventBus60C230DFRef"
+      }
+     }
+    },
+    "FunctionName": "cc-native-execution-recorder",
+    "Handler": "index.handler",
+    "Role": {
+     "Fn::GetAtt": [
+      "ExecutionInfrastructureExecutionRecorderHandlerServiceRole4227CE9E",
+      "Arn"
+     ]
+    },
+    "Runtime": "nodejs20.x",
+    "Timeout": 30
+   },
+   "DependsOn": [
+    "ExecutionInfrastructureExecutionRecorderHandlerServiceRoleDefaultPolicyA1972197",
+    "ExecutionInfrastructureExecutionRecorderHandlerServiceRole4227CE9E"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ExecutionRecorderHandler/Resource",
+    "aws:asset:path": "/Users/rameshpaturu/Documents/projects/lambda/cc-native",
+    "aws:asset:is-bundled": true,
+    "aws:asset:property": "Code"
+   }
+  },
+  "ExecutionInfrastructureExecutionRecorderHandlerEventInvokeConfigAB1BA38F": {
+   "Type": "AWS::Lambda::EventInvokeConfig",
+   "Properties": {
+    "FunctionName": {
+     "Ref": "ExecutionInfrastructureExecutionRecorderHandlerFA16105F"
+    },
+    "MaximumRetryAttempts": 2,
+    "Qualifier": "$LATEST"
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ExecutionRecorderHandler/EventInvokeConfig/Resource"
+   }
+  },
+  "ExecutionInfrastructureExecutionFailureRecorderHandlerServiceRole1CF0BC0C": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+       ]
+      ]
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ExecutionFailureRecorderHandler/ServiceRole/Resource"
+   }
+  },
+  "ExecutionInfrastructureExecutionFailureRecorderHandlerServiceRoleDefaultPolicyAF2E6BCA": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sqs:SendMessage",
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::GetAtt": [
+         "ExecutionInfrastructureExecutionFailureRecorderDlqEE0C92AA",
+         "Arn"
+        ]
+       }
+      },
+      {
+       "Action": [
+        "dynamodb:BatchWriteItem",
+        "dynamodb:DeleteItem",
+        "dynamodb:DescribeTable",
+        "dynamodb:PutItem",
+        "dynamodb:UpdateItem"
+       ],
+       "Effect": "Allow",
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "ExecutionInfrastructureExecutionOutcomesTableFA67D167",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "ExecutionInfrastructureExecutionOutcomesTableFA67D167",
+             "Arn"
+            ]
+           },
+           "/index/*"
+          ]
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Ref": "referencetoCCNativeStackLedgerTableFA76C270Arn"
+           },
+           "/index/*"
+          ]
+         ]
+        },
+        {
+         "Ref": "referencetoCCNativeStackLedgerTableFA76C270Arn"
+        }
+       ]
+      },
+      {
+       "Action": [
+        "dynamodb:BatchGetItem",
+        "dynamodb:BatchWriteItem",
+        "dynamodb:ConditionCheckItem",
+        "dynamodb:DeleteItem",
+        "dynamodb:DescribeTable",
+        "dynamodb:GetItem",
+        "dynamodb:GetRecords",
+        "dynamodb:GetShardIterator",
+        "dynamodb:PutItem",
+        "dynamodb:Query",
+        "dynamodb:Scan",
+        "dynamodb:UpdateItem"
+       ],
+       "Effect": "Allow",
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "ExecutionInfrastructureExecutionAttemptsTableD1619A75",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "ExecutionInfrastructureExecutionAttemptsTableD1619A75",
+             "Arn"
+            ]
+           },
+           "/index/*"
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "Action": [
+        "dynamodb:BatchGetItem",
+        "dynamodb:ConditionCheckItem",
+        "dynamodb:DescribeTable",
+        "dynamodb:GetItem",
+        "dynamodb:GetRecords",
+        "dynamodb:GetShardIterator",
+        "dynamodb:Query",
+        "dynamodb:Scan"
+       ],
+       "Effect": "Allow",
+       "Resource": [
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Ref": "referencetoCCNativeStackActionIntentTable31610521Arn"
+           },
+           "/index/*"
+          ]
+         ]
+        },
+        {
+         "Ref": "referencetoCCNativeStackActionIntentTable31610521Arn"
+        }
+       ]
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "ExecutionInfrastructureExecutionFailureRecorderHandlerServiceRoleDefaultPolicyAF2E6BCA",
+    "Roles": [
+     {
+      "Ref": "ExecutionInfrastructureExecutionFailureRecorderHandlerServiceRole1CF0BC0C"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ExecutionFailureRecorderHandler/ServiceRole/DefaultPolicy/Resource"
+   }
+  },
+  "ExecutionInfrastructureExecutionFailureRecorderHandler80AB4CE7": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Code": {
+     "S3Bucket": "cdk-hnb659fds-assets-661268174397-us-west-2",
+     "S3Key": "9d1abdf89e4f45f57ae84076408bc4049c3a7b677105c29c44232943cb2762a5.zip"
+    },
+    "DeadLetterConfig": {
+     "TargetArn": {
+      "Fn::GetAtt": [
+       "ExecutionInfrastructureExecutionFailureRecorderDlqEE0C92AA",
+       "Arn"
+      ]
+     }
+    },
+    "Environment": {
+     "Variables": {
+      "EXECUTION_OUTCOMES_TABLE_NAME": {
+       "Ref": "ExecutionInfrastructureExecutionOutcomesTableFA67D167"
+      },
+      "EXECUTION_ATTEMPTS_TABLE_NAME": {
+       "Ref": "ExecutionInfrastructureExecutionAttemptsTableD1619A75"
+      },
+      "ACTION_INTENT_TABLE_NAME": {
+       "Ref": "referencetoCCNativeStackActionIntentTable31610521Ref"
+      },
+      "LEDGER_TABLE_NAME": {
+       "Ref": "referencetoCCNativeStackLedgerTableFA76C270Ref"
+      }
+     }
+    },
+    "FunctionName": "cc-native-execution-failure-recorder",
+    "Handler": "index.handler",
+    "Role": {
+     "Fn::GetAtt": [
+      "ExecutionInfrastructureExecutionFailureRecorderHandlerServiceRole1CF0BC0C",
+      "Arn"
+     ]
+    },
+    "Runtime": "nodejs20.x",
+    "Timeout": 30
+   },
+   "DependsOn": [
+    "ExecutionInfrastructureExecutionFailureRecorderHandlerServiceRoleDefaultPolicyAF2E6BCA",
+    "ExecutionInfrastructureExecutionFailureRecorderHandlerServiceRole1CF0BC0C"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ExecutionFailureRecorderHandler/Resource",
+    "aws:asset:path": "/Users/rameshpaturu/Documents/projects/lambda/cc-native",
+    "aws:asset:is-bundled": true,
+    "aws:asset:property": "Code"
+   }
+  },
+  "ExecutionInfrastructureExecutionFailureRecorderHandlerEventInvokeConfigAC80FBE9": {
+   "Type": "AWS::Lambda::EventInvokeConfig",
+   "Properties": {
+    "FunctionName": {
+     "Ref": "ExecutionInfrastructureExecutionFailureRecorderHandler80AB4CE7"
+    },
+    "MaximumRetryAttempts": 0,
+    "Qualifier": "$LATEST"
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ExecutionFailureRecorderHandler/EventInvokeConfig/Resource"
+   }
+  },
+  "ExecutionInfrastructureCompensationHandlerServiceRoleEDE35E7C": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+       ]
+      ]
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/CompensationHandler/ServiceRole/Resource"
+   }
+  },
+  "ExecutionInfrastructureCompensationHandlerServiceRoleDefaultPolicy9F0EA64F": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sqs:SendMessage",
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::GetAtt": [
+         "ExecutionInfrastructureCompensationDlq37CE18B5",
+         "Arn"
+        ]
+       }
+      },
+      {
+       "Action": [
+        "dynamodb:BatchGetItem",
+        "dynamodb:ConditionCheckItem",
+        "dynamodb:DescribeTable",
+        "dynamodb:GetItem",
+        "dynamodb:GetRecords",
+        "dynamodb:GetShardIterator",
+        "dynamodb:Query",
+        "dynamodb:Scan"
+       ],
+       "Effect": "Allow",
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "ExecutionInfrastructureActionTypeRegistryTableADE245F0",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Ref": "referencetoCCNativeStackActionIntentTable31610521Arn"
+           },
+           "/index/*"
+          ]
+         ]
+        },
+        {
+         "Ref": "referencetoCCNativeStackActionIntentTable31610521Arn"
+        }
+       ]
+      },
+      {
+       "Action": [
+        "dynamodb:BatchGetItem",
+        "dynamodb:BatchWriteItem",
+        "dynamodb:ConditionCheckItem",
+        "dynamodb:DeleteItem",
+        "dynamodb:DescribeTable",
+        "dynamodb:GetItem",
+        "dynamodb:GetRecords",
+        "dynamodb:GetShardIterator",
+        "dynamodb:PutItem",
+        "dynamodb:Query",
+        "dynamodb:Scan",
+        "dynamodb:UpdateItem"
+       ],
+       "Effect": "Allow",
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "ExecutionInfrastructureExecutionOutcomesTableFA67D167",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "ExecutionInfrastructureExecutionOutcomesTableFA67D167",
+             "Arn"
+            ]
+           },
+           "/index/*"
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "ExecutionInfrastructureCompensationHandlerServiceRoleDefaultPolicy9F0EA64F",
+    "Roles": [
+     {
+      "Ref": "ExecutionInfrastructureCompensationHandlerServiceRoleEDE35E7C"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/CompensationHandler/ServiceRole/DefaultPolicy/Resource"
+   }
+  },
+  "ExecutionInfrastructureCompensationHandler83FA5D97": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Code": {
+     "S3Bucket": "cdk-hnb659fds-assets-661268174397-us-west-2",
+     "S3Key": "2d06e046b64bc76bdbc39abe6e1820c1e28d833b7d2c68f0f099a0c1560b4de2.zip"
+    },
+    "DeadLetterConfig": {
+     "TargetArn": {
+      "Fn::GetAtt": [
+       "ExecutionInfrastructureCompensationDlq37CE18B5",
+       "Arn"
+      ]
+     }
+    },
+    "Environment": {
+     "Variables": {
+      "ACTION_INTENT_TABLE_NAME": {
+       "Ref": "referencetoCCNativeStackActionIntentTable31610521Ref"
+      },
+      "ACTION_TYPE_REGISTRY_TABLE_NAME": {
+       "Ref": "ExecutionInfrastructureActionTypeRegistryTableADE245F0"
+      },
+      "EXECUTION_OUTCOMES_TABLE_NAME": {
+       "Ref": "ExecutionInfrastructureExecutionOutcomesTableFA67D167"
+      }
+     }
+    },
+    "FunctionName": "cc-native-compensation-handler",
+    "Handler": "index.handler",
+    "Role": {
+     "Fn::GetAtt": [
+      "ExecutionInfrastructureCompensationHandlerServiceRoleEDE35E7C",
+      "Arn"
+     ]
+    },
+    "Runtime": "nodejs20.x",
+    "Timeout": 60
+   },
+   "DependsOn": [
+    "ExecutionInfrastructureCompensationHandlerServiceRoleDefaultPolicy9F0EA64F",
+    "ExecutionInfrastructureCompensationHandlerServiceRoleEDE35E7C"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/CompensationHandler/Resource",
+    "aws:asset:path": "/Users/rameshpaturu/Documents/projects/lambda/cc-native",
+    "aws:asset:is-bundled": true,
+    "aws:asset:property": "Code"
+   }
+  },
+  "ExecutionInfrastructureCompensationHandlerEventInvokeConfig3782050D": {
+   "Type": "AWS::Lambda::EventInvokeConfig",
+   "Properties": {
+    "FunctionName": {
+     "Ref": "ExecutionInfrastructureCompensationHandler83FA5D97"
+    },
+    "MaximumRetryAttempts": 2,
+    "Qualifier": "$LATEST"
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/CompensationHandler/EventInvokeConfig/Resource"
+   }
+  },
+  "ExecutionInfrastructureExecutionStateMachineRole5D0E6667": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "states.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ExecutionStateMachine/Role/Resource"
+   }
+  },
+  "ExecutionInfrastructureExecutionStateMachineRoleDefaultPolicy20DBAF48": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": "lambda:InvokeFunction",
+       "Effect": "Allow",
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "ExecutionInfrastructureCompensationHandler83FA5D97",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::GetAtt": [
+          "ExecutionInfrastructureExecutionFailureRecorderHandler80AB4CE7",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::GetAtt": [
+          "ExecutionInfrastructureExecutionRecorderHandlerFA16105F",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::GetAtt": [
+          "ExecutionInfrastructureExecutionStarterHandlerEB3549AD",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::GetAtt": [
+          "ExecutionInfrastructureExecutionValidatorHandlerEBD0AC42",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::GetAtt": [
+          "ExecutionInfrastructureToolInvokerHandlerF3E699A0",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::GetAtt": [
+          "ExecutionInfrastructureToolMapperHandler600E8EAC",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "ExecutionInfrastructureCompensationHandler83FA5D97",
+             "Arn"
+            ]
+           },
+           ":*"
+          ]
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "ExecutionInfrastructureExecutionFailureRecorderHandler80AB4CE7",
+             "Arn"
+            ]
+           },
+           ":*"
+          ]
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "ExecutionInfrastructureExecutionRecorderHandlerFA16105F",
+             "Arn"
+            ]
+           },
+           ":*"
+          ]
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "ExecutionInfrastructureExecutionStarterHandlerEB3549AD",
+             "Arn"
+            ]
+           },
+           ":*"
+          ]
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "ExecutionInfrastructureExecutionValidatorHandlerEBD0AC42",
+             "Arn"
+            ]
+           },
+           ":*"
+          ]
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "ExecutionInfrastructureToolInvokerHandlerF3E699A0",
+             "Arn"
+            ]
+           },
+           ":*"
+          ]
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "ExecutionInfrastructureToolMapperHandler600E8EAC",
+             "Arn"
+            ]
+           },
+           ":*"
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "ExecutionInfrastructureExecutionStateMachineRoleDefaultPolicy20DBAF48",
+    "Roles": [
+     {
+      "Ref": "ExecutionInfrastructureExecutionStateMachineRole5D0E6667"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ExecutionStateMachine/Role/DefaultPolicy/Resource"
+   }
+  },
+  "ExecutionInfrastructureExecutionStateMachineC7C00A9C": {
+   "Type": "AWS::StepFunctions::StateMachine",
+   "Properties": {
+    "DefinitionString": {
+     "Fn::Join": [
+      "",
+      [
+       "{\"StartAt\":\"StartExecution\",\"States\":{\"StartExecution\":{\"Next\":\"ValidatePreflight\",\"Retry\":[{\"ErrorEquals\":[\"Lambda.ClientExecutionTimeoutException\",\"Lambda.ServiceException\",\"Lambda.AWSLambdaException\",\"Lambda.SdkClientException\"],\"IntervalSeconds\":2,\"MaxAttempts\":6,\"BackoffRate\":2}],\"Catch\":[{\"ErrorEquals\":[\"States.ALL\"],\"ResultPath\":\"$.error\",\"Next\":\"RecordFailure\"}],\"Type\":\"Task\",\"Resource\":\"",
+       {
+        "Fn::GetAtt": [
+         "ExecutionInfrastructureExecutionStarterHandlerEB3549AD",
+         "Arn"
+        ]
+       },
+       "\"},\"ValidatePreflight\":{\"Next\":\"MapActionToTool\",\"Retry\":[{\"ErrorEquals\":[\"Lambda.ClientExecutionTimeoutException\",\"Lambda.ServiceException\",\"Lambda.AWSLambdaException\",\"Lambda.SdkClientException\"],\"IntervalSeconds\":2,\"MaxAttempts\":6,\"BackoffRate\":2}],\"Catch\":[{\"ErrorEquals\":[\"States.ALL\"],\"ResultPath\":\"$.error\",\"Next\":\"RecordFailure\"}],\"Type\":\"Task\",\"ResultPath\":\"$.validation_result\",\"Resource\":\"",
+       {
+        "Fn::GetAtt": [
+         "ExecutionInfrastructureExecutionValidatorHandlerEBD0AC42",
+         "Arn"
+        ]
+       },
+       "\"},\"MapActionToTool\":{\"Next\":\"InvokeTool\",\"Retry\":[{\"ErrorEquals\":[\"Lambda.ClientExecutionTimeoutException\",\"Lambda.ServiceException\",\"Lambda.AWSLambdaException\",\"Lambda.SdkClientException\"],\"IntervalSeconds\":2,\"MaxAttempts\":6,\"BackoffRate\":2}],\"Catch\":[{\"ErrorEquals\":[\"States.ALL\"],\"ResultPath\":\"$.error\",\"Next\":\"RecordFailure\"}],\"Type\":\"Task\",\"Resource\":\"",
+       {
+        "Fn::GetAtt": [
+         "ExecutionInfrastructureToolMapperHandler600E8EAC",
+         "Arn"
+        ]
+       },
+       "\"},\"InvokeTool\":{\"Next\":\"CheckCompensation\",\"Retry\":[{\"ErrorEquals\":[\"Lambda.ClientExecutionTimeoutException\",\"Lambda.ServiceException\",\"Lambda.AWSLambdaException\",\"Lambda.SdkClientException\"],\"IntervalSeconds\":2,\"MaxAttempts\":6,\"BackoffRate\":2},{\"ErrorEquals\":[\"TransientError\"],\"IntervalSeconds\":2,\"MaxAttempts\":3,\"BackoffRate\":2}],\"Catch\":[{\"ErrorEquals\":[\"States.ALL\"],\"ResultPath\":\"$.error\",\"Next\":\"RecordFailure\"}],\"Type\":\"Task\",\"ResultPath\":\"$.tool_invocation_response\",\"Resource\":\"",
+       {
+        "Fn::GetAtt": [
+         "ExecutionInfrastructureToolInvokerHandlerF3E699A0",
+         "Arn"
+        ]
+       },
+       "\"},\"CheckCompensation\":{\"Type\":\"Choice\",\"Choices\":[{\"And\":[{\"Variable\":\"$.tool_invocation_response.success\",\"BooleanEquals\":false},{\"Variable\":\"$.tool_invocation_response.external_object_refs[0]\",\"IsPresent\":true},{\"Variable\":\"$.compensation_strategy\",\"StringEquals\":\"AUTOMATIC\"}],\"Next\":\"CompensateAction\"}],\"Default\":\"RecordOutcome\"},\"RecordOutcome\":{\"End\":true,\"Retry\":[{\"ErrorEquals\":[\"Lambda.ClientExecutionTimeoutException\",\"Lambda.ServiceException\",\"Lambda.AWSLambdaException\",\"Lambda.SdkClientException\"],\"IntervalSeconds\":2,\"MaxAttempts\":6,\"BackoffRate\":2}],\"Type\":\"Task\",\"Resource\":\"",
+       {
+        "Fn::GetAtt": [
+         "ExecutionInfrastructureExecutionRecorderHandlerFA16105F",
+         "Arn"
+        ]
+       },
+       "\"},\"CompensateAction\":{\"Next\":\"RecordOutcome\",\"Retry\":[{\"ErrorEquals\":[\"Lambda.ClientExecutionTimeoutException\",\"Lambda.ServiceException\",\"Lambda.AWSLambdaException\",\"Lambda.SdkClientException\"],\"IntervalSeconds\":2,\"MaxAttempts\":6,\"BackoffRate\":2}],\"Type\":\"Task\",\"Resource\":\"",
+       {
+        "Fn::GetAtt": [
+         "ExecutionInfrastructureCompensationHandler83FA5D97",
+         "Arn"
+        ]
+       },
+       "\"},\"RecordFailure\":{\"End\":true,\"Retry\":[{\"ErrorEquals\":[\"Lambda.ClientExecutionTimeoutException\",\"Lambda.ServiceException\",\"Lambda.AWSLambdaException\",\"Lambda.SdkClientException\"],\"IntervalSeconds\":2,\"MaxAttempts\":6,\"BackoffRate\":2}],\"Type\":\"Task\",\"Resource\":\"",
+       {
+        "Fn::GetAtt": [
+         "ExecutionInfrastructureExecutionFailureRecorderHandler80AB4CE7",
+         "Arn"
+        ]
+       },
+       "\"}},\"TimeoutSeconds\":3600}"
+      ]
+     ]
+    },
+    "RoleArn": {
+     "Fn::GetAtt": [
+      "ExecutionInfrastructureExecutionStateMachineRole5D0E6667",
+      "Arn"
+     ]
+    },
+    "StateMachineName": "cc-native-execution-orchestrator"
+   },
+   "DependsOn": [
+    "ExecutionInfrastructureExecutionStateMachineRoleDefaultPolicy20DBAF48",
+    "ExecutionInfrastructureExecutionStateMachineRole5D0E6667"
+   ],
+   "UpdateReplacePolicy": "Delete",
+   "DeletionPolicy": "Delete",
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ExecutionStateMachine/Resource"
+   }
+  },
+  "ExecutionInfrastructureExecutionStateMachineEventsRoleDB80792B": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "events.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ExecutionStateMachine/EventsRole/Resource"
+   }
+  },
+  "ExecutionInfrastructureExecutionStateMachineEventsRoleDefaultPolicy6C5FF472": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": "states:StartExecution",
+       "Effect": "Allow",
+       "Resource": {
+        "Ref": "ExecutionInfrastructureExecutionStateMachineC7C00A9C"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "ExecutionInfrastructureExecutionStateMachineEventsRoleDefaultPolicy6C5FF472",
+    "Roles": [
+     {
+      "Ref": "ExecutionInfrastructureExecutionStateMachineEventsRoleDB80792B"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ExecutionStateMachine/EventsRole/DefaultPolicy/Resource"
+   }
+  },
+  "ExecutionInfrastructureExecutionTriggerRule13F48D13": {
+   "Type": "AWS::Events::Rule",
+   "Properties": {
+    "EventBusName": {
+     "Ref": "referencetoCCNativeStackCCNativeEventBus60C230DFRef"
+    },
+    "EventPattern": {
+     "source": [
+      "cc-native"
+     ],
+     "detail-type": [
+      "ACTION_APPROVED"
+     ]
+    },
+    "State": "ENABLED",
+    "Targets": [
+     {
+      "Arn": {
+       "Ref": "ExecutionInfrastructureExecutionStateMachineC7C00A9C"
+      },
+      "Id": "Target0",
+      "InputTransformer": {
+       "InputPathsMap": {
+        "detail-data-action_intent_id": "$.detail.data.action_intent_id",
+        "detail-data-tenant_id": "$.detail.data.tenant_id",
+        "detail-data-account_id": "$.detail.data.account_id",
+        "detail-data-approval_source": "$.detail.data.approval_source",
+        "detail-data-auto_executed": "$.detail.data.auto_executed"
+       },
+       "InputTemplate": "{\"action_intent_id\":<detail-data-action_intent_id>,\"tenant_id\":<detail-data-tenant_id>,\"account_id\":<detail-data-account_id>,\"approval_source\":<detail-data-approval_source>,\"auto_executed\":<detail-data-auto_executed>}"
+      },
+      "RoleArn": {
+       "Fn::GetAtt": [
+        "ExecutionInfrastructureExecutionStateMachineEventsRoleDB80792B",
+        "Arn"
+       ]
+      }
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ExecutionTriggerRule/Resource"
+   }
+  },
+  "ExecutionInfrastructureInternalAdapterHandlerServiceRole4D6A3AD7": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+       ]
+      ]
+     },
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+       ]
+      ]
+     }
+    ]
+   },
+   "DependsOn": [
+    "ExecutionInfrastructureConnectorsVpcConnectorPrivateSubnet1DefaultRouteE2E3D744",
+    "ExecutionInfrastructureConnectorsVpcConnectorPrivateSubnet1RouteTableAssociationE3E6F3A5",
+    "ExecutionInfrastructureConnectorsVpcConnectorPrivateSubnet2DefaultRoute53412F7C",
+    "ExecutionInfrastructureConnectorsVpcConnectorPrivateSubnet2RouteTableAssociation95645782"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/InternalAdapterHandler/ServiceRole/Resource"
+   }
+  },
+  "ExecutionInfrastructureInternalAdapterHandlerServiceRoleDefaultPolicyF8E7CD2C": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": [
+        "dynamodb:BatchWriteItem",
+        "dynamodb:DeleteItem",
+        "dynamodb:DescribeTable",
+        "dynamodb:PutItem",
+        "dynamodb:UpdateItem"
+       ],
+       "Effect": "Allow",
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "ExecutionInfrastructureInternalNotesTable79920A10",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::GetAtt": [
+          "ExecutionInfrastructureInternalTasksTable40EEE850",
+          "Arn"
+         ]
+        }
+       ]
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "ExecutionInfrastructureInternalAdapterHandlerServiceRoleDefaultPolicyF8E7CD2C",
+    "Roles": [
+     {
+      "Ref": "ExecutionInfrastructureInternalAdapterHandlerServiceRole4D6A3AD7"
+     }
+    ]
+   },
+   "DependsOn": [
+    "ExecutionInfrastructureConnectorsVpcConnectorPrivateSubnet1DefaultRouteE2E3D744",
+    "ExecutionInfrastructureConnectorsVpcConnectorPrivateSubnet1RouteTableAssociationE3E6F3A5",
+    "ExecutionInfrastructureConnectorsVpcConnectorPrivateSubnet2DefaultRoute53412F7C",
+    "ExecutionInfrastructureConnectorsVpcConnectorPrivateSubnet2RouteTableAssociation95645782"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/InternalAdapterHandler/ServiceRole/DefaultPolicy/Resource"
+   }
+  },
+  "ExecutionInfrastructureInternalAdapterHandler201A3427": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Code": {
+     "S3Bucket": "cdk-hnb659fds-assets-661268174397-us-west-2",
+     "S3Key": "a74a9b52e6bf128c46c364ea369ee735f47caa46b09490709574dd42b095d38e.zip"
+    },
+    "Environment": {
+     "Variables": {
+      "INTERNAL_NOTES_TABLE_NAME": {
+       "Ref": "ExecutionInfrastructureInternalNotesTable79920A10"
+      },
+      "INTERNAL_TASKS_TABLE_NAME": {
+       "Ref": "ExecutionInfrastructureInternalTasksTable40EEE850"
+      }
+     }
+    },
+    "FunctionName": "cc-native-internal-adapter-handler",
+    "Handler": "index.handler",
+    "Role": {
+     "Fn::GetAtt": [
+      "ExecutionInfrastructureInternalAdapterHandlerServiceRole4D6A3AD7",
+      "Arn"
+     ]
+    },
+    "Runtime": "nodejs20.x",
+    "Timeout": 60,
+    "VpcConfig": {
+     "SecurityGroupIds": [
+      {
+       "Fn::GetAtt": [
+        "ExecutionInfrastructureInternalAdapterSecurityGroup8CBA9D06",
+        "GroupId"
+       ]
+      }
+     ],
+     "SubnetIds": [
+      {
+       "Ref": "ExecutionInfrastructureConnectorsVpcConnectorPrivateSubnet1SubnetD5396AA6"
+      },
+      {
+       "Ref": "ExecutionInfrastructureConnectorsVpcConnectorPrivateSubnet2SubnetD7FF5293"
+      }
+     ]
+    }
+   },
+   "DependsOn": [
+    "ExecutionInfrastructureConnectorsVpcConnectorPrivateSubnet1DefaultRouteE2E3D744",
+    "ExecutionInfrastructureConnectorsVpcConnectorPrivateSubnet1RouteTableAssociationE3E6F3A5",
+    "ExecutionInfrastructureConnectorsVpcConnectorPrivateSubnet2DefaultRoute53412F7C",
+    "ExecutionInfrastructureConnectorsVpcConnectorPrivateSubnet2RouteTableAssociation95645782",
+    "ExecutionInfrastructureInternalAdapterHandlerServiceRoleDefaultPolicyF8E7CD2C",
+    "ExecutionInfrastructureInternalAdapterHandlerServiceRole4D6A3AD7"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/InternalAdapterHandler/Resource",
+    "aws:asset:path": "/Users/rameshpaturu/Documents/projects/lambda/cc-native",
+    "aws:asset:is-bundled": true,
+    "aws:asset:property": "Code"
+   }
+  },
+  "ExecutionInfrastructureInternalAdapterHandlerAllowGatewayInvokeinternalcreatenote4D3F65AC": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "ExecutionInfrastructureInternalAdapterHandler201A3427",
+      "Arn"
+     ]
+    },
+    "Principal": "bedrock-agentcore.amazonaws.com",
+    "SourceArn": {
+     "Fn::GetAtt": [
+      "ExecutionInfrastructureExecutionGatewayF1C40F42",
+      "GatewayArn"
+     ]
+    }
+   },
+   "DependsOn": [
+    "ExecutionInfrastructureConnectorsVpcConnectorPrivateSubnet1DefaultRouteE2E3D744",
+    "ExecutionInfrastructureConnectorsVpcConnectorPrivateSubnet1RouteTableAssociationE3E6F3A5",
+    "ExecutionInfrastructureConnectorsVpcConnectorPrivateSubnet2DefaultRoute53412F7C",
+    "ExecutionInfrastructureConnectorsVpcConnectorPrivateSubnet2RouteTableAssociation95645782"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/InternalAdapterHandler/AllowGatewayInvoke-internal-create_note"
+   }
+  },
+  "ExecutionInfrastructureInternalAdapterHandlerAllowGatewayInvokeinternalcreatetask40C0EC4E": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "ExecutionInfrastructureInternalAdapterHandler201A3427",
+      "Arn"
+     ]
+    },
+    "Principal": "bedrock-agentcore.amazonaws.com",
+    "SourceArn": {
+     "Fn::GetAtt": [
+      "ExecutionInfrastructureExecutionGatewayF1C40F42",
+      "GatewayArn"
+     ]
+    }
+   },
+   "DependsOn": [
+    "ExecutionInfrastructureConnectorsVpcConnectorPrivateSubnet1DefaultRouteE2E3D744",
+    "ExecutionInfrastructureConnectorsVpcConnectorPrivateSubnet1RouteTableAssociationE3E6F3A5",
+    "ExecutionInfrastructureConnectorsVpcConnectorPrivateSubnet2DefaultRoute53412F7C",
+    "ExecutionInfrastructureConnectorsVpcConnectorPrivateSubnet2RouteTableAssociation95645782"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/InternalAdapterHandler/AllowGatewayInvoke-internal-create_task"
+   }
+  },
+  "ExecutionInfrastructureCrmAdapterHandlerServiceRole0CCEFF1A": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+       ]
+      ]
+     },
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+       ]
+      ]
+     }
+    ]
+   },
+   "DependsOn": [
+    "ExecutionInfrastructureConnectorsVpcConnectorPrivateSubnet1DefaultRouteE2E3D744",
+    "ExecutionInfrastructureConnectorsVpcConnectorPrivateSubnet1RouteTableAssociationE3E6F3A5",
+    "ExecutionInfrastructureConnectorsVpcConnectorPrivateSubnet2DefaultRoute53412F7C",
+    "ExecutionInfrastructureConnectorsVpcConnectorPrivateSubnet2RouteTableAssociation95645782"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/CrmAdapterHandler/ServiceRole/Resource"
+   }
+  },
+  "ExecutionInfrastructureCrmAdapterHandlerServiceRoleDefaultPolicyDD30BD87": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": [
+        "dynamodb:BatchGetItem",
+        "dynamodb:BatchWriteItem",
+        "dynamodb:ConditionCheckItem",
+        "dynamodb:DeleteItem",
+        "dynamodb:DescribeTable",
+        "dynamodb:GetItem",
+        "dynamodb:GetRecords",
+        "dynamodb:GetShardIterator",
+        "dynamodb:PutItem",
+        "dynamodb:Query",
+        "dynamodb:Scan",
+        "dynamodb:UpdateItem"
+       ],
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::GetAtt": [
+         "ExecutionInfrastructureExternalWriteDedupeTable44853629",
+         "Arn"
+        ]
+       }
+      },
+      {
+       "Action": [
+        "dynamodb:BatchGetItem",
+        "dynamodb:ConditionCheckItem",
+        "dynamodb:DescribeTable",
+        "dynamodb:GetItem",
+        "dynamodb:GetRecords",
+        "dynamodb:GetShardIterator",
+        "dynamodb:Query",
+        "dynamodb:Scan"
+       ],
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::GetAtt": [
+         "ExecutionInfrastructureConnectorConfigTable7E3D9124",
+         "Arn"
+        ]
+       }
+      },
+      {
+       "Action": "secretsmanager:GetSecretValue",
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::Join": [
+         "",
+         [
+          "arn:aws:secretsmanager:",
+          {
+           "Ref": "AWS::Region"
+          },
+          ":",
+          {
+           "Ref": "AWS::AccountId"
+          },
+          ":secret:tenant/*/account/*/connector/*"
+         ]
+        ]
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "ExecutionInfrastructureCrmAdapterHandlerServiceRoleDefaultPolicyDD30BD87",
+    "Roles": [
+     {
+      "Ref": "ExecutionInfrastructureCrmAdapterHandlerServiceRole0CCEFF1A"
+     }
+    ]
+   },
+   "DependsOn": [
+    "ExecutionInfrastructureConnectorsVpcConnectorPrivateSubnet1DefaultRouteE2E3D744",
+    "ExecutionInfrastructureConnectorsVpcConnectorPrivateSubnet1RouteTableAssociationE3E6F3A5",
+    "ExecutionInfrastructureConnectorsVpcConnectorPrivateSubnet2DefaultRoute53412F7C",
+    "ExecutionInfrastructureConnectorsVpcConnectorPrivateSubnet2RouteTableAssociation95645782"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/CrmAdapterHandler/ServiceRole/DefaultPolicy/Resource"
+   }
+  },
+  "ExecutionInfrastructureCrmAdapterHandler5F3551C4": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Code": {
+     "S3Bucket": "cdk-hnb659fds-assets-661268174397-us-west-2",
+     "S3Key": "61f24e33018684213558afd9fc819d832ec775c4d9da478c40f49926625afc1f.zip"
+    },
+    "Environment": {
+     "Variables": {
+      "EXTERNAL_WRITE_DEDUPE_TABLE_NAME": {
+       "Ref": "ExecutionInfrastructureExternalWriteDedupeTable44853629"
+      },
+      "CONNECTOR_CONFIG_TABLE_NAME": {
+       "Ref": "ExecutionInfrastructureConnectorConfigTable7E3D9124"
+      }
+     }
+    },
+    "FunctionName": "cc-native-crm-adapter-handler",
+    "Handler": "index.handler",
+    "Role": {
+     "Fn::GetAtt": [
+      "ExecutionInfrastructureCrmAdapterHandlerServiceRole0CCEFF1A",
+      "Arn"
+     ]
+    },
+    "Runtime": "nodejs20.x",
+    "Timeout": 60,
+    "VpcConfig": {
+     "SecurityGroupIds": [
+      {
+       "Fn::GetAtt": [
+        "ExecutionInfrastructureCrmAdapterSecurityGroupE11945D7",
+        "GroupId"
+       ]
+      }
+     ],
+     "SubnetIds": [
+      {
+       "Ref": "ExecutionInfrastructureConnectorsVpcConnectorPrivateSubnet1SubnetD5396AA6"
+      },
+      {
+       "Ref": "ExecutionInfrastructureConnectorsVpcConnectorPrivateSubnet2SubnetD7FF5293"
+      }
+     ]
+    }
+   },
+   "DependsOn": [
+    "ExecutionInfrastructureConnectorsVpcConnectorPrivateSubnet1DefaultRouteE2E3D744",
+    "ExecutionInfrastructureConnectorsVpcConnectorPrivateSubnet1RouteTableAssociationE3E6F3A5",
+    "ExecutionInfrastructureConnectorsVpcConnectorPrivateSubnet2DefaultRoute53412F7C",
+    "ExecutionInfrastructureConnectorsVpcConnectorPrivateSubnet2RouteTableAssociation95645782",
+    "ExecutionInfrastructureCrmAdapterHandlerServiceRoleDefaultPolicyDD30BD87",
+    "ExecutionInfrastructureCrmAdapterHandlerServiceRole0CCEFF1A"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/CrmAdapterHandler/Resource",
+    "aws:asset:path": "/Users/rameshpaturu/Documents/projects/lambda/cc-native",
+    "aws:asset:is-bundled": true,
+    "aws:asset:property": "Code"
+   }
+  },
+  "ExecutionInfrastructureCrmAdapterHandlerAllowGatewayInvokecrmcreatetaskC33A9536": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "ExecutionInfrastructureCrmAdapterHandler5F3551C4",
+      "Arn"
+     ]
+    },
+    "Principal": "bedrock-agentcore.amazonaws.com",
+    "SourceArn": {
+     "Fn::GetAtt": [
+      "ExecutionInfrastructureExecutionGatewayF1C40F42",
+      "GatewayArn"
+     ]
+    }
+   },
+   "DependsOn": [
+    "ExecutionInfrastructureConnectorsVpcConnectorPrivateSubnet1DefaultRouteE2E3D744",
+    "ExecutionInfrastructureConnectorsVpcConnectorPrivateSubnet1RouteTableAssociationE3E6F3A5",
+    "ExecutionInfrastructureConnectorsVpcConnectorPrivateSubnet2DefaultRoute53412F7C",
+    "ExecutionInfrastructureConnectorsVpcConnectorPrivateSubnet2RouteTableAssociation95645782"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/CrmAdapterHandler/AllowGatewayInvoke-crm-create_task"
+   }
+  },
+  "ExecutionInfrastructureGatewayTargetinternalcreatenoteD4806E2E": {
+   "Type": "AWS::BedrockAgentCore::GatewayTarget",
+   "Properties": {
+    "CredentialProviderConfigurations": [
+     {
+      "CredentialProviderType": "GATEWAY_IAM_ROLE"
+     }
+    ],
+    "Description": "Gateway target for internal.create_note",
+    "GatewayIdentifier": {
+     "Fn::GetAtt": [
+      "ExecutionInfrastructureExecutionGatewayF1C40F42",
+      "GatewayIdentifier"
+     ]
+    },
+    "Name": "internal-create-note",
+    "TargetConfiguration": {
+     "Mcp": {
+      "Lambda": {
+       "LambdaArn": {
+        "Fn::GetAtt": [
+         "ExecutionInfrastructureInternalAdapterHandler201A3427",
+         "Arn"
+        ]
+       },
+       "ToolSchema": {
+        "InlinePayload": [
+         {
+          "Description": "Create an internal note in the system",
+          "InputSchema": {
+           "Properties": {
+            "content": {
+             "Description": "Note content",
+             "Type": "string"
+            },
+            "tenant_id": {
+             "Type": "string"
+            },
+            "account_id": {
+             "Type": "string"
+            }
+           },
+           "Required": [
+            "content",
+            "tenant_id",
+            "account_id"
+           ],
+           "Type": "object"
+          },
+          "Name": "internal.create_note"
+         }
+        ]
+       }
+      }
+     }
+    }
+   },
+   "DependsOn": [
+    "ExecutionInfrastructureExecutionGatewayF1C40F42"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/GatewayTarget-internal-create-note"
+   }
+  },
+  "ExecutionInfrastructureGatewayTargetinternalcreatetask06948D3D": {
+   "Type": "AWS::BedrockAgentCore::GatewayTarget",
+   "Properties": {
+    "CredentialProviderConfigurations": [
+     {
+      "CredentialProviderType": "GATEWAY_IAM_ROLE"
+     }
+    ],
+    "Description": "Gateway target for internal.create_task",
+    "GatewayIdentifier": {
+     "Fn::GetAtt": [
+      "ExecutionInfrastructureExecutionGatewayF1C40F42",
+      "GatewayIdentifier"
+     ]
+    },
+    "Name": "internal-create-task",
+    "TargetConfiguration": {
+     "Mcp": {
+      "Lambda": {
+       "LambdaArn": {
+        "Fn::GetAtt": [
+         "ExecutionInfrastructureInternalAdapterHandler201A3427",
+         "Arn"
+        ]
+       },
+       "ToolSchema": {
+        "InlinePayload": [
+         {
+          "Description": "Create an internal task in the system",
+          "InputSchema": {
+           "Properties": {
+            "title": {
+             "Description": "Task title",
+             "Type": "string"
+            },
+            "description": {
+             "Description": "Task description",
+             "Type": "string"
+            },
+            "tenant_id": {
+             "Type": "string"
+            },
+            "account_id": {
+             "Type": "string"
+            }
+           },
+           "Required": [
+            "title",
+            "tenant_id",
+            "account_id"
+           ],
+           "Type": "object"
+          },
+          "Name": "internal.create_task"
+         }
+        ]
+       }
+      }
+     }
+    }
+   },
+   "DependsOn": [
+    "ExecutionInfrastructureExecutionGatewayF1C40F42"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/GatewayTarget-internal-create-task"
+   }
+  },
+  "ExecutionInfrastructureGatewayTargetcrmcreatetask0B5A268B": {
+   "Type": "AWS::BedrockAgentCore::GatewayTarget",
+   "Properties": {
+    "CredentialProviderConfigurations": [
+     {
+      "CredentialProviderType": "GATEWAY_IAM_ROLE"
+     }
+    ],
+    "Description": "Gateway target for crm.create_task",
+    "GatewayIdentifier": {
+     "Fn::GetAtt": [
+      "ExecutionInfrastructureExecutionGatewayF1C40F42",
+      "GatewayIdentifier"
+     ]
+    },
+    "Name": "crm-create-task",
+    "TargetConfiguration": {
+     "Mcp": {
+      "Lambda": {
+       "LambdaArn": {
+        "Fn::GetAtt": [
+         "ExecutionInfrastructureCrmAdapterHandler5F3551C4",
+         "Arn"
+        ]
+       },
+       "ToolSchema": {
+        "InlinePayload": [
+         {
+          "Description": "Create a task in CRM system",
+          "InputSchema": {
+           "Properties": {
+            "title": {
+             "Description": "Task title",
+             "Type": "string"
+            },
+            "description": {
+             "Description": "Task description",
+             "Type": "string"
+            },
+            "priority": {
+             "Description": "Task priority",
+             "Type": "string"
+            },
+            "tenant_id": {
+             "Type": "string"
+            },
+            "account_id": {
+             "Type": "string"
+            },
+            "idempotency_key": {
+             "Type": "string"
+            },
+            "action_intent_id": {
+             "Type": "string"
+            }
+           },
+           "Required": [
+            "title",
+            "tenant_id",
+            "account_id",
+            "idempotency_key",
+            "action_intent_id"
+           ],
+           "Type": "object"
+          },
+          "Name": "crm.create_task"
+         }
+        ]
+       }
+      }
+     }
+    }
+   },
+   "DependsOn": [
+    "ExecutionInfrastructureExecutionGatewayF1C40F42"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/GatewayTarget-crm-create-task"
+   }
+  },
+  "ExecutionInfrastructureExecutionStatusAPIHandlerServiceRole49311BE3": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+       ]
+      ]
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ExecutionStatusAPIHandler/ServiceRole/Resource"
+   }
+  },
+  "ExecutionInfrastructureExecutionStatusAPIHandlerServiceRoleDefaultPolicyE47CA3B2": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": [
+        "dynamodb:BatchGetItem",
+        "dynamodb:ConditionCheckItem",
+        "dynamodb:DescribeTable",
+        "dynamodb:GetItem",
+        "dynamodb:GetRecords",
+        "dynamodb:GetShardIterator",
+        "dynamodb:Query",
+        "dynamodb:Scan"
+       ],
+       "Effect": "Allow",
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "ExecutionInfrastructureExecutionAttemptsTableD1619A75",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::GetAtt": [
+          "ExecutionInfrastructureExecutionOutcomesTableFA67D167",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "ExecutionInfrastructureExecutionAttemptsTableD1619A75",
+             "Arn"
+            ]
+           },
+           "/index/*"
+          ]
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "ExecutionInfrastructureExecutionOutcomesTableFA67D167",
+             "Arn"
+            ]
+           },
+           "/index/*"
+          ]
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Ref": "referencetoCCNativeStackActionIntentTable31610521Arn"
+           },
+           "/index/*"
+          ]
+         ]
+        },
+        {
+         "Ref": "referencetoCCNativeStackActionIntentTable31610521Arn"
+        }
+       ]
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "ExecutionInfrastructureExecutionStatusAPIHandlerServiceRoleDefaultPolicyE47CA3B2",
+    "Roles": [
+     {
+      "Ref": "ExecutionInfrastructureExecutionStatusAPIHandlerServiceRole49311BE3"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ExecutionStatusAPIHandler/ServiceRole/DefaultPolicy/Resource"
+   }
+  },
+  "ExecutionInfrastructureExecutionStatusAPIHandler756F77F5": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Code": {
+     "S3Bucket": "cdk-hnb659fds-assets-661268174397-us-west-2",
+     "S3Key": "60d9bddfa0d856ec9fce8b35c0b1eb241f538e675fea32beefd6ff7f33a346c5.zip"
+    },
+    "Environment": {
+     "Variables": {
+      "EXECUTION_OUTCOMES_TABLE_NAME": {
+       "Ref": "ExecutionInfrastructureExecutionOutcomesTableFA67D167"
+      },
+      "EXECUTION_ATTEMPTS_TABLE_NAME": {
+       "Ref": "ExecutionInfrastructureExecutionAttemptsTableD1619A75"
+      },
+      "ACTION_INTENT_TABLE_NAME": {
+       "Ref": "referencetoCCNativeStackActionIntentTable31610521Ref"
+      }
+     }
+    },
+    "FunctionName": "cc-native-execution-status-api",
+    "Handler": "index.handler",
+    "Role": {
+     "Fn::GetAtt": [
+      "ExecutionInfrastructureExecutionStatusAPIHandlerServiceRole49311BE3",
+      "Arn"
+     ]
+    },
+    "Runtime": "nodejs20.x",
+    "Timeout": 30
+   },
+   "DependsOn": [
+    "ExecutionInfrastructureExecutionStatusAPIHandlerServiceRoleDefaultPolicyE47CA3B2",
+    "ExecutionInfrastructureExecutionStatusAPIHandlerServiceRole49311BE3"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ExecutionStatusAPIHandler/Resource",
+    "aws:asset:path": "/Users/rameshpaturu/Documents/projects/lambda/cc-native",
+    "aws:asset:is-bundled": true,
+    "aws:asset:property": "Code"
+   }
+  },
+  "ExecutionInfrastructureExecutionFailureAlarm9D44B8A2": {
+   "Type": "AWS::CloudWatch::Alarm",
+   "Properties": {
+    "AlarmDescription": "Alert when execution failures exceed threshold",
+    "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+    "Dimensions": [
+     {
+      "Name": "StateMachineArn",
+      "Value": {
+       "Ref": "ExecutionInfrastructureExecutionStateMachineC7C00A9C"
+      }
+     }
+    ],
+    "EvaluationPeriods": 1,
+    "MetricName": "ExecutionsFailed",
+    "Namespace": "AWS/States",
+    "Period": 300,
+    "Statistic": "Sum",
+    "Threshold": 5
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ExecutionFailureAlarm/Resource"
+   }
+  },
+  "ExecutionInfrastructureExecutionDurationAlarm48604006": {
+   "Type": "AWS::CloudWatch::Alarm",
+   "Properties": {
+    "AlarmDescription": "Alert when execution duration exceeds threshold",
+    "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+    "Dimensions": [
+     {
+      "Name": "StateMachineArn",
+      "Value": {
+       "Ref": "ExecutionInfrastructureExecutionStateMachineC7C00A9C"
+      }
+     }
+    ],
+    "EvaluationPeriods": 1,
+    "MetricName": "ExecutionTime",
+    "Namespace": "AWS/States",
+    "Period": 300,
+    "Statistic": "Average",
+    "Threshold": 300000
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ExecutionDurationAlarm/Resource"
+   }
+  },
+  "ExecutionInfrastructureExecutionThrottleAlarmDFCBF653": {
+   "Type": "AWS::CloudWatch::Alarm",
+   "Properties": {
+    "AlarmDescription": "Alert when execution throttles exceed threshold",
+    "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+    "Dimensions": [
+     {
+      "Name": "StateMachineArn",
+      "Value": {
+       "Ref": "ExecutionInfrastructureExecutionStateMachineC7C00A9C"
+      }
+     }
+    ],
+    "EvaluationPeriods": 1,
+    "MetricName": "ExecutionThrottled",
+    "Namespace": "AWS/States",
+    "Period": 300,
+    "Statistic": "Sum",
+    "Threshold": 10
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ExecutionThrottleAlarm/Resource"
+   }
+  },
+  "ExecutionInfrastructureToolInvokerErrors0022B1B6": {
+   "Type": "AWS::CloudWatch::Alarm",
+   "Properties": {
+    "AlarmDescription": {
+     "Fn::Join": [
+      "",
+      [
+       "Alert when ",
+       {
+        "Ref": "ExecutionInfrastructureToolInvokerHandlerF3E699A0"
+       },
+       " reports errors"
+      ]
+     ]
+    },
+    "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+    "Dimensions": [
+     {
+      "Name": "FunctionName",
+      "Value": {
+       "Ref": "ExecutionInfrastructureToolInvokerHandlerF3E699A0"
+      }
+     }
+    ],
+    "EvaluationPeriods": 1,
+    "MetricName": "Errors",
+    "Namespace": "AWS/Lambda",
+    "Period": 300,
+    "Statistic": "Sum",
+    "Threshold": 1
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ToolInvokerErrors/Resource"
+   }
+  },
+  "ExecutionInfrastructureExecutionRecorderErrors78D24000": {
+   "Type": "AWS::CloudWatch::Alarm",
+   "Properties": {
+    "AlarmDescription": {
+     "Fn::Join": [
+      "",
+      [
+       "Alert when ",
+       {
+        "Ref": "ExecutionInfrastructureExecutionRecorderHandlerFA16105F"
+       },
+       " reports errors"
+      ]
+     ]
+    },
+    "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+    "Dimensions": [
+     {
+      "Name": "FunctionName",
+      "Value": {
+       "Ref": "ExecutionInfrastructureExecutionRecorderHandlerFA16105F"
+      }
+     }
+    ],
+    "EvaluationPeriods": 1,
+    "MetricName": "Errors",
+    "Namespace": "AWS/Lambda",
+    "Period": 300,
+    "Statistic": "Sum",
+    "Threshold": 1
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ExecutionRecorderErrors/Resource"
+   }
+  },
+  "ExecutionInfrastructureExecutionFailureRecorderErrors04B7AF08": {
+   "Type": "AWS::CloudWatch::Alarm",
+   "Properties": {
+    "AlarmDescription": {
+     "Fn::Join": [
+      "",
+      [
+       "Alert when ",
+       {
+        "Ref": "ExecutionInfrastructureExecutionFailureRecorderHandler80AB4CE7"
+       },
+       " reports errors"
+      ]
+     ]
+    },
+    "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+    "Dimensions": [
+     {
+      "Name": "FunctionName",
+      "Value": {
+       "Ref": "ExecutionInfrastructureExecutionFailureRecorderHandler80AB4CE7"
+      }
+     }
+    ],
+    "EvaluationPeriods": 1,
+    "MetricName": "Errors",
+    "Namespace": "AWS/Lambda",
+    "Period": 300,
+    "Statistic": "Sum",
+    "Threshold": 1
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/ExecutionInfrastructure/ExecutionFailureRecorderErrors/Resource"
+   }
+  },
+  "CustomVpcRestrictDefaultSGCustomResourceProviderRole26592FE0": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Version": "2012-10-17",
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ]
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Sub": "arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+     }
+    ],
+    "Policies": [
+     {
+      "PolicyName": "Inline",
+      "PolicyDocument": {
+       "Version": "2012-10-17",
+       "Statement": [
+        {
+         "Effect": "Allow",
+         "Action": [
+          "ec2:AuthorizeSecurityGroupIngress",
+          "ec2:AuthorizeSecurityGroupEgress",
+          "ec2:RevokeSecurityGroupIngress",
+          "ec2:RevokeSecurityGroupEgress"
+         ],
+         "Resource": [
+          {
+           "Fn::Join": [
+            "",
+            [
+             "arn:aws:ec2:us-west-2:661268174397:security-group/",
+             {
+              "Fn::GetAtt": [
+               "ExecutionInfrastructureConnectorsVpc5A2E5EDA",
+               "DefaultSecurityGroup"
+              ]
+             }
+            ]
+           ]
+          }
+         ]
+        }
+       ]
+      }
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/Custom::VpcRestrictDefaultSGCustomResourceProvider/Role"
+   }
+  },
+  "CustomVpcRestrictDefaultSGCustomResourceProviderHandlerDC833E5E": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Code": {
+     "S3Bucket": "cdk-hnb659fds-assets-661268174397-us-west-2",
+     "S3Key": "7fa1e366ee8a9ded01fc355f704cff92bfd179574e6f9cfee800a3541df1b200.zip"
+    },
+    "Timeout": 900,
+    "MemorySize": 128,
+    "Handler": "__entrypoint__.handler",
+    "Role": {
+     "Fn::GetAtt": [
+      "CustomVpcRestrictDefaultSGCustomResourceProviderRole26592FE0",
+      "Arn"
+     ]
+    },
+    "Runtime": "nodejs22.x",
+    "Description": "Lambda function for removing all inbound/outbound rules from the VPC default security group"
+   },
+   "DependsOn": [
+    "CustomVpcRestrictDefaultSGCustomResourceProviderRole26592FE0"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/Custom::VpcRestrictDefaultSGCustomResourceProvider/Handler",
+    "aws:asset:path": "asset.7fa1e366ee8a9ded01fc355f704cff92bfd179574e6f9cfee800a3541df1b200",
+    "aws:asset:property": "Code"
+   }
+  },
+  "CDKMetadata": {
+   "Type": "AWS::CDK::Metadata",
+   "Properties": {
+    "Analytics": "v2:deflate64:H4sIAAAAAAAA/31TwY7aMBD9lr0bdxekSj2yiF0hUZSSFVc0cYZgktjUMwYhK/9e2QlZtpV6mjdvnt/YmclUTmff5fMTXGmiynrS6EKGDRJjmTOoWsCV9qG8GWhtWcjwAUWDYnEwCXSCfpMMvzz6RCbQiQbaooS9sSWeSG5SePNGsbZGaGhl2NreJcXMNlrdYtqjTtBsD0TIJOcxCJrJV69q5FcgHOxlWBzM6Lq8oOGVudgaF9YcdBXt/iVHfWyGrtVE2ppOoJrKsDuryO+yhch80WiV+8IgR+4Tba1nHL9Cz39ycyKrNNxbpEK6ySqLYQP8DoxXuInM6QswfhqvDKMzOAr6mwzZnBnUsUXD4q2x17VN77vDQbQ7q6Upz1YbHk6PaTI/gMJHTY7KO823d2f9Ob3mv8SyckjUicZWJMPaVqPsjjtRYOmsqqFCw8o6TEN6eNEAP8BVyJ0gVA6ZWjBQoZMhT/nQ2SUF4/kwDI32DFSTXKf593P9KpBhcbRaocgZGH+COmrTz+kh7wTGvSAZtn7YQh9XWTXWl1dgdZRh3oBrYymBrhNbJOudQpEWMmeotKnEwhPbdqxFqztWqbR3Q04yc/aiS3R/HbrTcbM7EX8ZeaJvl+mzfPkhX55OpPXEecO6Rbnt4x+54qcVtAMAAA=="
+   },
+   "Metadata": {
+    "aws:cdk:path": "CCNativeStack/ExecutionInfrastructureNestedStack/CDKMetadata/Default"
+   }
+  }
+ },
+ "Outputs": {
+  "CCNativeStackExecutionInfrastructureNestedStackExecutionInfrastructureExecutionStatusAPIHandlerD6EA4E3CArn": {
+   "Value": {
+    "Fn::GetAtt": [
+     "ExecutionInfrastructureExecutionStatusAPIHandler756F77F5",
+     "Arn"
+    ]
+   }
+  },
+  "CCNativeStackExecutionInfrastructureNestedStackExecutionInfrastructureExecutionOutcomesTableD8F81003Arn": {
+   "Value": {
+    "Fn::GetAtt": [
+     "ExecutionInfrastructureExecutionOutcomesTableFA67D167",
+     "Arn"
+    ]
+   }
+  },
+  "CCNativeStackExecutionInfrastructureNestedStackExecutionInfrastructureExecutionOutcomesTableD8F81003Ref": {
+   "Value": {
+    "Ref": "ExecutionInfrastructureExecutionOutcomesTableFA67D167"
+   }
+  },
+  "CCNativeStackExecutionInfrastructureNestedStackExecutionInfrastructureActionTypeRegistryTableF54D0F46Ref": {
+   "Value": {
+    "Ref": "ExecutionInfrastructureActionTypeRegistryTableADE245F0"
+   }
+  },
+  "CCNativeStackExecutionInfrastructureNestedStackExecutionInfrastructureExecutionAttemptsTableF3C0C258Ref": {
+   "Value": {
+    "Ref": "ExecutionInfrastructureExecutionAttemptsTableD1619A75"
+   }
+  },
+  "CCNativeStackExecutionInfrastructureNestedStackExecutionInfrastructureExternalWriteDedupeTable43FF3055Ref": {
+   "Value": {
+    "Ref": "ExecutionInfrastructureExternalWriteDedupeTable44853629"
+   }
+  },
+  "CCNativeStackExecutionInfrastructureNestedStackExecutionInfrastructureConnectorConfigTableAB947209Ref": {
+   "Value": {
+    "Ref": "ExecutionInfrastructureConnectorConfigTable7E3D9124"
+   }
+  },
+  "CCNativeStackExecutionInfrastructureNestedStackExecutionInfrastructureInternalNotesTable810F7240Ref": {
+   "Value": {
+    "Ref": "ExecutionInfrastructureInternalNotesTable79920A10"
+   }
+  },
+  "CCNativeStackExecutionInfrastructureNestedStackExecutionInfrastructureInternalTasksTableC558E248Ref": {
+   "Value": {
+    "Ref": "ExecutionInfrastructureInternalTasksTable40EEE850"
+   }
+  }
+ },
+ "Parameters": {
+  "referencetoCCNativeStackActionIntentTable31610521Arn": {
+   "Type": "String"
+  },
+  "referencetoCCNativeStackLedgerTableFA76C270Arn": {
+   "Type": "String"
+  },
+  "referencetoCCNativeStackActionIntentTable31610521Ref": {
+   "Type": "String"
+  },
+  "referencetoCCNativeStackLedgerTableFA76C270Ref": {
+   "Type": "String"
+  },
+  "referencetoCCNativeStackTenantsTable4B06C921Arn": {
+   "Type": "String"
+  },
+  "referencetoCCNativeStackTenantsTable4B06C921Ref": {
+   "Type": "String"
+  },
+  "referencetoCCNativeStackUserPoolWebClient6BD81726Ref": {
+   "Type": "String"
+  },
+  "referencetoCCNativeStackUserPoolCA4F225ARef": {
+   "Type": "String"
+  },
+  "referencetoCCNativeStackUserPoolCA4F225AArn": {
+   "Type": "String"
+  },
+  "referencetoCCNativeStackArtifactsBucketCE1423ECArn": {
+   "Type": "String"
+  },
+  "referencetoCCNativeStackArtifactsBucketCE1423ECRef": {
+   "Type": "String"
+  },
+  "referencetoCCNativeStackSignalsTableC39AB6D7Arn": {
+   "Type": "String"
+  },
+  "referencetoCCNativeStackCCNativeEventBus60C230DFArn": {
+   "Type": "String"
+  },
+  "referencetoCCNativeStackSignalsTableC39AB6D7Ref": {
+   "Type": "String"
+  },
+  "referencetoCCNativeStackCCNativeEventBus60C230DFRef": {
+   "Type": "String"
+  }
+ }
+}
