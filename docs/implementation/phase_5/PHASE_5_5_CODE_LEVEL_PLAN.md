@@ -1,6 +1,6 @@
 # Phase 5.5 — Learning & Evaluation: Code-Level Plan
 
-**Status:** 🟢 **IMPLEMENTED** (types, normalization, registry, calibration, shadow gate, unit tests)  
+**Status:** 🟢 **COMPLETE** (implementation done; types, normalization, registry, calibration, shadow gate, unit tests; completion audit in §9)  
 **Created:** 2026-01-28  
 **Last Updated:** 2026-01-28 (review: registry, shadow gate, normalization completeness, provenance/rollback, tenant scoping)  
 **Parent:** [PHASE_5_CODE_LEVEL_PLAN.md](PHASE_5_CODE_LEVEL_PLAN.md)
@@ -229,9 +229,39 @@ Unit tests for OutcomeNormalizationService (taxonomy mapping), RankingCalibratio
 
 ---
 
+## 9. Completion audit & verification checks
+
+### What “5.5 is done” means (concrete)
+
+| # | Item | Status |
+|---|------|--------|
+| 1 | **OutcomeTaxonomy** is real and applied end-to-end — taxonomy labels on normalized outcomes; no conflated “success/failure” | ✅ Implemented |
+| 2 | **Normalization pipeline** — OutcomeNormalizationService + normalization completeness contract (reconciliation and/or NORMALIZATION_MISSING ledger) so gaps are detectable | ✅ Service + contract in plan; reconciliation job/alerting see §9 below |
+| 3 | **Ranking calibration** produces versioned artifacts with provenance (range, volume, features_version, job id, baseline comparison, eval summary, optional structured metrics) | ✅ RankingWeightsV1 + RankingCalibrationService |
+| 4 | **Registry-based selection** — production uses ACTIVE only; calibration/shadow writes CANDIDATE; rollback = registry pointer flip (fast, reversible) | ✅ RankingWeightsRegistryV1 + RankingWeightsRegistryService |
+| 5 | **Shadow Mode gating** — explicit metric, window, sample size, threshold, promotion rule | ✅ ShadowModeService + ShadowModeGateParamsV1 |
+| 6 | **Tenant scoping** — GLOBAL defaults + tenant overrides; resolution order tenant ACTIVE → GLOBAL ACTIVE | ✅ resolveActiveVersion(tenantId) |
+| 7 | **Confidence calibration** — does not affect policy gates; UI and optional ranking tie-breakers only | ✅ Documented in §6 |
+
+### Two “don’t get burned later” checks
+
+**1) Registry flips are concurrency-safe**
+
+- **Promotion:** `RankingWeightsRegistryService.promoteCandidateToActive` uses **conditional update** `ConditionExpression: 'candidate_version = :cand'` so the update only succeeds if candidate_version is still the expected value; ledger entry (RANKING_WEIGHTS_PROMOTED) is written **after** the UpdateCommand succeeds. ✅ Implemented.
+- **Rollback:** `rollback` uses `ConditionExpression: 'active_version = :prev'` so the update only succeeds if active_version is still the expected previous value; ledger entry (RANKING_WEIGHTS_ROLLED_BACK) is written after success. ✅ Implemented.
+
+**2) Normalization reconciliation runs on a clock and alerts**
+
+- **Contract:** Plan §2 defines normalization completeness (reconciliation job or NORMALIZATION_MISSING ledger; gap % threshold; no silent large gap).
+- **Implementation status:** OutcomeNormalizationService and the contract are in place. A **scheduled reconciliation job** (schedule, thresholding, observable gap % per tenant, alert when gap exceeds threshold) is **not yet implemented** — add in Phase 5.6 (Control Center / ops) or as a follow-up. Until then: ensure reconciliation job schedule exists, thresholding is wired, and gap % per tenant is observable so “silent learning pipeline outage” is eliminated when the job is added.
+
+### What’s next
+
+With **5.1–5.5 done**: controlled autonomy (modes/policy/budget), always-on perception, safe auto-execution, safe learning loop (ranking only). **Phase 5.6 — Control Center APIs:** Expose registry state (ACTIVE/CANDIDATE), evaluation summaries, normalization gap reports, and rollback so operators can observe and control learning without touching data stores directly.
+
+---
+
 ## References
 
 - Parent: [PHASE_5_CODE_LEVEL_PLAN.md](PHASE_5_CODE_LEVEL_PLAN.md)
 - Implementation Plan: [PHASE_5_IMPLEMENTATION_PLAN.md](PHASE_5_IMPLEMENTATION_PLAN.md) EPIC 5.5, Stories 5.5.1–5.5.3
-
-**Next (Phase 5.6 — Control Center APIs):** Expose registry state (ACTIVE/CANDIDATE), evaluation summaries, normalization gap reports, and rollback operations so operators can observe and control learning without touching data stores directly.
