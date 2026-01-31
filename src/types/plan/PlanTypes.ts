@@ -48,3 +48,45 @@ export interface RevenuePlanV1 {
   expired_at?: string;
   completion_reason?: 'objective_met' | 'all_steps_done';
 }
+
+/**
+ * Phase 6.4 — Lightweight plan for GET /plans list response (no steps).
+ * Handler maps RevenuePlanV1 → PlanSummary when building list.
+ */
+export interface PlanSummary {
+  plan_id: string;
+  plan_type: string;
+  account_id: string;
+  tenant_id: string;
+  objective: string;
+  plan_status: PlanStatus;
+  expires_at: string;
+  updated_at: string;
+}
+
+export function toPlanSummary(plan: RevenuePlanV1): PlanSummary {
+  return {
+    plan_id: plan.plan_id,
+    plan_type: plan.plan_type,
+    account_id: plan.account_id,
+    tenant_id: plan.tenant_id,
+    objective: plan.objective,
+    plan_status: plan.plan_status,
+    expires_at: plan.expires_at,
+    updated_at: plan.updated_at,
+  };
+}
+
+const VALID_PLAN_STATUSES: PlanStatus[] = [
+  'DRAFT',
+  'APPROVED',
+  'ACTIVE',
+  'PAUSED',
+  'COMPLETED',
+  'ABORTED',
+  'EXPIRED',
+];
+
+export function isValidPlanStatus(value: string): value is PlanStatus {
+  return (VALID_PLAN_STATUSES as string[]).includes(value);
+}

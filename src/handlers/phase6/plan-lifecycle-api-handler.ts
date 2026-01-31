@@ -1,8 +1,9 @@
 /**
- * Phase 6.1 — Plan lifecycle API: approve, pause, resume, abort.
- * POST /plans/:planId/approve | /pause | /resume | /abort
- * Auth: plan-approver (JWT authorizer; tenant_id + account_id from claims/query).
- * See PHASE_6_1_CODE_LEVEL_PLAN.md §6.
+ * Phase 6.1 + 6.4 — Plan lifecycle API: approve, pause, resume, abort; GET list, get plan, get ledger.
+ * POST /plans/propose, /plans/:planId/approve | /pause | /resume | /abort
+ * GET /plans, GET /plans/:planId, GET /plans/:planId/ledger
+ * Auth: JWT authorizer; tenant_id + account_id from claims/query.
+ * See PHASE_6_1_CODE_LEVEL_PLAN.md §6; PHASE_6_4_CODE_LEVEL_PLAN.md.
  */
 
 import {
@@ -17,6 +18,12 @@ import { PlanPolicyGateService } from '../../services/plan/PlanPolicyGateService
 import { PlanLifecycleService } from '../../services/plan/PlanLifecycleService';
 import { PlanProposalGeneratorService } from '../../services/plan/PlanProposalGeneratorService';
 import { getPlanTypeConfig } from '../../config/planTypeConfig';
+import {
+  PlanSummary,
+  toPlanSummary,
+  isValidPlanStatus,
+  type PlanStatus,
+} from '../../types/plan/PlanTypes';
 
 const logger = new Logger('PlanLifecycleAPI');
 
@@ -73,17 +80,19 @@ function cors(res: APIGatewayProxyResult): APIGatewayProxyResult {
       'Content-Type': 'application/json',
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Headers': 'Content-Type,Authorization,X-Tenant-Id',
-      'Access-Control-Allow-Methods': 'POST,OPTIONS',
+      'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
       ...res.headers,
     },
   };
 }
 
-function auth(event: APIGatewayProxyEvent): { tenantId: string; accountId: string } | null {
+function auth(event: APIGatewayProxyEvent): { tenantId: string; accountId: string } | { tenantId: string; accountId: '' } | null {
   const claims = event.requestContext?.authorizer?.claims as Record<string, string> | undefined;
   const tenantId = claims?.['custom:tenant_id'] ?? claims?.['tenant_id'];
-  const accountId = event.queryStringParameters?.account_id ?? (JSON.parse(event.body || '{}')?.account_id);
-  if (tenantId && accountId) return { tenantId, accountId };
+  const accountId = event.queryStringParameters?.account_id ?? (event.body ? JSON.parse(event.body)?.account_id : undefined);
+  if (!tenantId) return null;
+  if (accountId) return { tenantId, accountId };
+  if (event.httpMethod === 'GET') return { tenantId, accountId: '' };
   return null;
 }
 
@@ -271,6 +280,92 @@ async function handleAbort(
   return cors({ statusCode: 200, body: JSON.stringify({ success: true, plan_id: planId }) });
 }
 
+const DEFAULT_LIST_LIMIT = 50;
+const DEFAULT_LEDGER_LIMIT = 50;
+const DEFAULT_LIST_STATUSES: PlanStatus[] = ['ACTIVE', 'PAUSED'];
+
+function parseStatusParam(event: APIGatewayProxyEvent): string[] | { error: string } {
+  const multi = event.multiValueQueryStringParameters?.status;
+  if (multi?.length) {
+    const invalid = multi.find((s) => !isValidPlanStatus(s));
+    if (invalid) return { error: `Invalid status: ${invalid}` };
+    return multi as PlanStatus[];
+  }
+  const single = event.queryStringParameters?.status;
+  if (single === undefined || single === null) return DEFAULT_LIST_STATUSES;
+  if (typeof single !== 'string' || single.trim() === '') return DEFAULT_LIST_STATUSES;
+  const parts = single.split(',').map((s) => s.trim()).filter(Boolean);
+  if (parts.length === 0) return DEFAULT_LIST_STATUSES;
+  const invalid = parts.find((s) => !isValidPlanStatus(s));
+  if (invalid) return { error: `Invalid status: ${invalid}` };
+  return parts as PlanStatus[];
+}
+
+async function handleListPlans(
+  _event: APIGatewayProxyEvent,
+  services: ReturnType<typeof buildServices>,
+  tenantId: string,
+  accountId: string
+): Promise<APIGatewayProxyResult> {
+  const statusResult = parseStatusParam(_event);
+  if (Array.isArray(statusResult) === false) {
+    return cors({
+      statusCode: 400,
+      body: JSON.stringify({ error: statusResult.error }),
+    });
+  }
+  const statuses = statusResult as PlanStatus[];
+  const limitParam = _event.queryStringParameters?.limit;
+  const limit = limitParam != null ? Math.min(Number(limitParam) || DEFAULT_LIST_LIMIT, 100) : DEFAULT_LIST_LIMIT;
+  const { repo } = services;
+  const perStatusLimit = Math.max(limit, 100);
+  const all: Array<{ plan_id: string; updated_at: string; summary: PlanSummary }> = [];
+  const seen = new Set<string>();
+  for (const status of statuses) {
+    const plans = await repo.listPlansByTenantAndStatus(tenantId, status, perStatusLimit);
+    for (const p of plans) {
+      if (p.account_id !== accountId) continue;
+      if (seen.has(p.plan_id)) continue;
+      seen.add(p.plan_id);
+      all.push({
+        plan_id: p.plan_id,
+        updated_at: p.updated_at,
+        summary: toPlanSummary(p),
+      });
+    }
+  }
+  all.sort((a, b) => (b.updated_at > a.updated_at ? 1 : b.updated_at < a.updated_at ? -1 : 0));
+  const plans: PlanSummary[] = all.slice(0, limit).map((x) => x.summary);
+  return cors({ statusCode: 200, body: JSON.stringify({ plans }) });
+}
+
+async function handleGetPlan(
+  _event: APIGatewayProxyEvent,
+  services: ReturnType<typeof buildServices>,
+  tenantId: string,
+  accountId: string,
+  planId: string
+): Promise<APIGatewayProxyResult> {
+  const plan = await services.repo.getPlan(tenantId, accountId, planId);
+  if (!plan) return cors({ statusCode: 404, body: JSON.stringify({ error: 'Plan not found' }) });
+  return cors({ statusCode: 200, body: JSON.stringify({ plan }) });
+}
+
+async function handleGetPlanLedger(
+  event: APIGatewayProxyEvent,
+  services: ReturnType<typeof buildServices>,
+  tenantId: string,
+  accountId: string,
+  planId: string
+): Promise<APIGatewayProxyResult> {
+  const plan = await services.repo.getPlan(tenantId, accountId, planId);
+  if (!plan) return cors({ statusCode: 404, body: JSON.stringify({ error: 'Plan not found' }) });
+  const limitParam = event.queryStringParameters?.limit;
+  const limit = limitParam != null ? Number(limitParam) || DEFAULT_LEDGER_LIMIT : DEFAULT_LEDGER_LIMIT;
+  const entries = await services.ledger.getByPlanId(planId, limit);
+  return cors({ statusCode: 200, body: JSON.stringify({ entries }) });
+}
+
 export const handler: Handler<APIGatewayProxyEvent, APIGatewayProxyResult> = async (
   event: APIGatewayProxyEvent
 ): Promise<APIGatewayProxyResult> => {
@@ -286,10 +381,25 @@ export const handler: Handler<APIGatewayProxyEvent, APIGatewayProxyResult> = asy
     return cors({ statusCode: 401, body: JSON.stringify({ error: 'Unauthorized' }) });
   }
   const { tenantId, accountId } = authResult;
+  if (event.httpMethod === 'GET' && !accountId) {
+    return cors({ statusCode: 400, body: JSON.stringify({ error: 'Missing account_id for list/get' }) });
+  }
   const path = event.resource || event.path || '';
   const planId = event.pathParameters?.planId;
 
   try {
+    if (event.httpMethod === 'GET') {
+      if (!planId && (path === '/plans' || path === '/plans/' || path.endsWith('/plans'))) {
+        return await handleListPlans(event, services, tenantId, accountId);
+      }
+      if (planId && path.endsWith('/ledger')) {
+        return await handleGetPlanLedger(event, services, tenantId, accountId, planId);
+      }
+      if (planId) {
+        return await handleGetPlan(event, services, tenantId, accountId, planId);
+      }
+      return cors({ statusCode: 400, body: JSON.stringify({ error: 'Missing account_id or invalid path' }) });
+    }
     if (path.endsWith('/propose') && event.httpMethod === 'POST') {
       return await handlePropose(event, services, tenantId, accountId);
     }

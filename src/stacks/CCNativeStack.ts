@@ -705,10 +705,31 @@ export class CCNativeStack extends cdk.Stack {
       signalsTable: this.signalsTable,
     });
 
-    // Phase 6.1 + 6.3: Plan lifecycle (RevenuePlans, PlanLedger, plan-lifecycle-api); orchestrator discovers tenants from Tenants table
+    // Phase 6.4: Plans API Gateway (GET /plans, GET /plans/{planId}, GET /plans/{planId}/ledger + POST propose/approve/pause/resume/abort)
+    const plansApi = new apigateway.RestApi(this, 'PlansApi', {
+      restApiName: 'cc-native-plans-api',
+      description: 'Plans API (list, get, ledger, propose, approve, pause, resume, abort)',
+      defaultCorsPreflightOptions: {
+        allowOrigins: apigateway.Cors.ALL_ORIGINS,
+        allowMethods: ['GET', 'POST', 'OPTIONS'],
+        allowHeaders: ['Content-Type', 'Authorization', 'X-Tenant-Id'],
+      },
+    });
+    const plansAuthorizer = new apigateway.CognitoUserPoolsAuthorizer(
+      this,
+      'PlansApiCognitoAuthorizer',
+      {
+        cognitoUserPools: [this.userPool],
+        identitySource: 'method.request.header.Authorization',
+      }
+    );
+
+    // Phase 6.1 + 6.3 + 6.4: Plan lifecycle (RevenuePlans, PlanLedger, plan-lifecycle-api); orchestrator; Plans API wiring
     const planInfrastructure = new PlanInfrastructure(this, 'PlanInfrastructure', {
       actionIntentTable: this.actionIntentTable,
       tenantsTable: this.tenantsTable,
+      apiGateway: plansApi,
+      plansAuthorizer,
     });
 
     // Stack Outputs

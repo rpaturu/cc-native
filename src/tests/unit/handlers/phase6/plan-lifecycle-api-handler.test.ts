@@ -8,6 +8,10 @@ process.env.AWS_REGION = 'us-east-1';
 
 const mockGetPlan = jest.fn();
 const mockPutPlan = jest.fn();
+const mockRefs: {
+  listPlansByTenantAndStatus: jest.Mock;
+  ledgerGetByPlanId: jest.Mock;
+} = { listPlansByTenantAndStatus: jest.fn(), ledgerGetByPlanId: jest.fn() };
 const mockExistsActivePlanForAccountAndType = jest.fn();
 const mockValidateForApproval = jest.fn();
 const mockEvaluateCanActivate = jest.fn();
@@ -25,12 +29,14 @@ jest.mock('../../../../services/plan/PlanRepositoryService', () => ({
   PlanRepositoryService: jest.fn().mockImplementation(() => ({
     getPlan: mockGetPlan,
     putPlan: mockPutPlan,
+    listPlansByTenantAndStatus: mockRefs.listPlansByTenantAndStatus,
     existsActivePlanForAccountAndType: mockExistsActivePlanForAccountAndType,
   })),
 }));
 jest.mock('../../../../services/plan/PlanLedgerService', () => ({
   PlanLedgerService: jest.fn().mockImplementation(() => ({
     append: mockLedgerAppend,
+    getByPlanId: mockRefs.ledgerGetByPlanId,
   })),
 }));
 jest.mock('../../../../services/plan/PlanProposalGeneratorService', () => ({
@@ -98,7 +104,9 @@ describe('plan-lifecycle-api-handler', () => {
     jest.clearAllMocks();
     mockGetPlan.mockResolvedValue(null);
     mockPutPlan.mockResolvedValue(undefined);
+    mockRefs.listPlansByTenantAndStatus.mockResolvedValue([]);
     mockLedgerAppend.mockResolvedValue({});
+    mockRefs.ledgerGetByPlanId.mockResolvedValue([]);
     mockValidateForApproval.mockResolvedValue({ valid: true, reasons: [] });
     mockEvaluateCanActivate.mockResolvedValue({ can_activate: true, reasons: [] });
     mockExistsActivePlanForAccountAndType.mockResolvedValue({ exists: false });
@@ -350,6 +358,194 @@ describe('plan-lifecycle-api-handler', () => {
     });
   });
 
+  describe('GET /plans (6.4 list)', () => {
+    const getEvent = (overrides: Partial<APIGatewayProxyEvent> = {}) =>
+      event({
+        httpMethod: 'GET',
+        path: '/plans',
+        resource: '/plans',
+        pathParameters: null,
+        queryStringParameters: { account_id: 'acc-1' },
+        body: null,
+        ...overrides,
+      });
+
+    it('200: default ACTIVE+PAUSED; returns plans as PlanSummary[] (no steps)', async () => {
+      const p1 = plan({ plan_id: 'p1', plan_status: 'ACTIVE', account_id: 'acc-1', updated_at: '2026-01-01T12:00:00Z' });
+      const p2 = plan({ plan_id: 'p2', plan_status: 'PAUSED', account_id: 'acc-1', updated_at: '2026-01-01T11:00:00Z' });
+      mockRefs.listPlansByTenantAndStatus
+        .mockResolvedValueOnce([p1])
+        .mockResolvedValueOnce([p2]);
+      const res = await invokeHandler(getEvent());
+      expect(res.statusCode).toBe(200);
+      const body = JSON.parse(res.body || '{}');
+      expect(body.plans).toHaveLength(2);
+      expect(body.plans[0]).toMatchObject({
+        plan_id: 'p1',
+        plan_type: 'RENEWAL_DEFENSE',
+        account_id: 'acc-1',
+        tenant_id: 't1',
+        objective: 'Renew',
+        plan_status: 'ACTIVE',
+        expires_at: expect.any(String),
+        updated_at: '2026-01-01T12:00:00Z',
+      });
+      expect(body.plans[0].steps).toBeUndefined();
+      expect(body.plans[1].plan_id).toBe('p2');
+      expect(mockRefs.listPlansByTenantAndStatus).toHaveBeenCalledWith('t1', 'ACTIVE', expect.any(Number));
+      expect(mockRefs.listPlansByTenantAndStatus).toHaveBeenCalledWith('t1', 'PAUSED', expect.any(Number));
+    });
+
+    it('200: empty result when repo returns []', async () => {
+      mockRefs.listPlansByTenantAndStatus.mockResolvedValue([]);
+      const res = await invokeHandler(getEvent());
+      expect(res.statusCode).toBe(200);
+      expect(JSON.parse(res.body || '{}').plans).toEqual([]);
+    });
+
+    it('200: status=ACTIVE,PAUSED (CSV) parses and repo called for each', async () => {
+      mockRefs.listPlansByTenantAndStatus.mockResolvedValue([]);
+      const res = await invokeHandler(getEvent({
+        queryStringParameters: { account_id: 'acc-1', status: 'ACTIVE,PAUSED' },
+      }));
+      expect(res.statusCode).toBe(200);
+      expect(mockRefs.listPlansByTenantAndStatus).toHaveBeenCalledWith('t1', 'ACTIVE', expect.any(Number));
+      expect(mockRefs.listPlansByTenantAndStatus).toHaveBeenCalledWith('t1', 'PAUSED', expect.any(Number));
+    });
+
+    it('200: status[]=ACTIVE&status[]=PAUSED (multiValue) parses and repo called', async () => {
+      mockRefs.listPlansByTenantAndStatus.mockResolvedValue([]);
+      const res = await invokeHandler(getEvent({
+        queryStringParameters: { account_id: 'acc-1' },
+        multiValueQueryStringParameters: { account_id: ['acc-1'], status: ['ACTIVE', 'PAUSED'] },
+      }));
+      expect(res.statusCode).toBe(200);
+      expect(mockRefs.listPlansByTenantAndStatus).toHaveBeenCalledWith('t1', 'ACTIVE', expect.any(Number));
+      expect(mockRefs.listPlansByTenantAndStatus).toHaveBeenCalledWith('t1', 'PAUSED', expect.any(Number));
+    });
+
+    it('400: missing account_id for GET list', async () => {
+      const res = await invokeHandler(getEvent({
+        queryStringParameters: null,
+        requestContext: { authorizer: { claims: { 'custom:tenant_id': 't1' } } } as unknown as APIGatewayProxyEvent['requestContext'],
+      }));
+      expect(res.statusCode).toBe(400);
+      expect(JSON.parse(res.body || '{}').error).toContain('account_id');
+    });
+
+    it('400: invalid status (ACTIVE,BADVALUE)', async () => {
+      const res = await invokeHandler(getEvent({
+        queryStringParameters: { account_id: 'acc-1', status: 'ACTIVE,BADVALUE' },
+      }));
+      expect(res.statusCode).toBe(400);
+      expect(JSON.parse(res.body || '{}').error).toContain('Invalid status');
+      expect(mockRefs.listPlansByTenantAndStatus).not.toHaveBeenCalled();
+    });
+
+    it('400: invalid status via multiValue status[] (BADVALUE)', async () => {
+      const res = await invokeHandler(getEvent({
+        queryStringParameters: { account_id: 'acc-1' },
+        multiValueQueryStringParameters: { account_id: ['acc-1'], status: ['ACTIVE', 'BADVALUE'] },
+      }));
+      expect(res.statusCode).toBe(400);
+      expect(JSON.parse(res.body || '{}').error).toContain('Invalid status');
+      expect(mockRefs.listPlansByTenantAndStatus).not.toHaveBeenCalled();
+    });
+
+    it('200: empty status string → default ACTIVE+PAUSED', async () => {
+      mockRefs.listPlansByTenantAndStatus.mockResolvedValue([]);
+      const res = await invokeHandler(getEvent({
+        queryStringParameters: { account_id: 'acc-1', status: '   ' },
+      }));
+      expect(res.statusCode).toBe(200);
+      expect(JSON.parse(res.body || '{}').plans).toEqual([]);
+      expect(mockRefs.listPlansByTenantAndStatus).toHaveBeenCalledWith('t1', 'ACTIVE', expect.any(Number));
+      expect(mockRefs.listPlansByTenantAndStatus).toHaveBeenCalledWith('t1', 'PAUSED', expect.any(Number));
+    });
+
+    it('CORS: GET in Allow-Methods', async () => {
+      mockRefs.listPlansByTenantAndStatus.mockResolvedValue([]);
+      const res = await invokeHandler(getEvent());
+      expect(res.headers?.['Access-Control-Allow-Methods']).toContain('GET');
+    });
+
+    it('CORS: Allow-Headers includes Authorization and Content-Type', async () => {
+      mockRefs.listPlansByTenantAndStatus.mockResolvedValue([]);
+      const res = await invokeHandler(getEvent());
+      const allowHeaders = res.headers?.['Access-Control-Allow-Headers'] ?? '';
+      expect(allowHeaders).toContain('Authorization');
+      expect(allowHeaders).toContain('Content-Type');
+    });
+  });
+
+  describe('GET /plans/:planId (6.4 get plan)', () => {
+    const getEvent = (overrides: Partial<APIGatewayProxyEvent> = {}) =>
+      event({
+        httpMethod: 'GET',
+        path: '/plans/plan-1',
+        resource: '/plans/{planId}',
+        pathParameters: { planId: 'plan-1' },
+        queryStringParameters: { account_id: 'acc-1' },
+        body: null,
+        ...overrides,
+      });
+
+    it('200: plan exists; returns full RevenuePlanV1 (includes steps)', async () => {
+      const p = plan({ plan_id: 'plan-1', steps: [{ step_id: 's1', action_type: 'EMAIL', status: 'PENDING', sequence: 1 }] });
+      mockGetPlan.mockResolvedValue(p);
+      const res = await invokeHandler(getEvent());
+      expect(res.statusCode).toBe(200);
+      const body = JSON.parse(res.body || '{}');
+      expect(body.plan).toBeDefined();
+      expect(body.plan.plan_id).toBe('plan-1');
+      expect(body.plan.steps).toHaveLength(1);
+      expect(mockGetPlan).toHaveBeenCalledWith('t1', 'acc-1', 'plan-1');
+    });
+
+    it('404: plan not found', async () => {
+      mockGetPlan.mockResolvedValue(null);
+      const res = await invokeHandler(getEvent());
+      expect(res.statusCode).toBe(404);
+      expect(JSON.parse(res.body || '{}').error).toBe('Plan not found');
+    });
+  });
+
+  describe('GET /plans/:planId/ledger (6.4)', () => {
+    const getEvent = (overrides: Partial<APIGatewayProxyEvent> = {}) =>
+      event({
+        httpMethod: 'GET',
+        path: '/plans/plan-1/ledger',
+        resource: '/plans/{planId}/ledger',
+        pathParameters: { planId: 'plan-1' },
+        queryStringParameters: { account_id: 'acc-1' },
+        body: null,
+        ...overrides,
+      });
+
+    it('200: plan exists; returns entries (ownership check first)', async () => {
+      const p = plan({ plan_id: 'plan-1' });
+      mockGetPlan.mockResolvedValue(p);
+      mockRefs.ledgerGetByPlanId.mockResolvedValue([
+        { plan_id: 'plan-1', event_type: 'PLAN_CREATED', timestamp: '2026-01-01T10:00:00Z', data: {} },
+      ]);
+      const res = await invokeHandler(getEvent());
+      expect(res.statusCode).toBe(200);
+      const body = JSON.parse(res.body || '{}');
+      expect(body.entries).toHaveLength(1);
+      expect(body.entries[0].event_type).toBe('PLAN_CREATED');
+      expect(mockGetPlan).toHaveBeenCalledWith('t1', 'acc-1', 'plan-1');
+      expect(mockRefs.ledgerGetByPlanId).toHaveBeenCalledWith('plan-1', expect.any(Number));
+    });
+
+    it('404: plan not found (ledger not called)', async () => {
+      mockGetPlan.mockResolvedValue(null);
+      const res = await invokeHandler(getEvent());
+      expect(res.statusCode).toBe(404);
+      expect(JSON.parse(res.body || '{}').error).toBe('Plan not found');
+      expect(mockRefs.ledgerGetByPlanId).not.toHaveBeenCalled();
+    });
+  });
+
   describe('auth and routing', () => {
     it('401: Unauthorized when no tenant_id/account_id', async () => {
       const res = await invokeHandler(event({
@@ -373,6 +569,36 @@ describe('plan-lifecycle-api-handler', () => {
         httpMethod: 'POST',
       }));
       expect(res.statusCode).toBe(404);
+    });
+
+    it('400: GET invalid path (no planId, path not /plans)', async () => {
+      const res = await invokeHandler(event({
+        httpMethod: 'GET',
+        path: '/other',
+        resource: '/other',
+        pathParameters: null,
+        queryStringParameters: { account_id: 'acc-1' },
+        body: null,
+      }));
+      expect(res.statusCode).toBe(400);
+      expect(JSON.parse(res.body || '{}').error).toContain('invalid path');
+    });
+
+    it('401: POST with tenant_id in claims but no account_id in query or body', async () => {
+      const res = await invokeHandler(event({
+        httpMethod: 'POST',
+        path: '/plans/plan-1/approve',
+        resource: '/plans/{planId}/approve',
+        pathParameters: { planId: 'plan-1' },
+        queryStringParameters: null,
+        body: null,
+        requestContext: {
+          authorizer: { claims: { 'custom:tenant_id': 't1' } },
+        } as unknown as APIGatewayProxyEvent['requestContext'],
+      }));
+      expect(res.statusCode).toBe(401);
+      expect(JSON.parse(res.body || '{}').error).toBe('Unauthorized');
+      expect(mockGetPlan).not.toHaveBeenCalled();
     });
 
     it('500: Service throws; no stack in body', async () => {

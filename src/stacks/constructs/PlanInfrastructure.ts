@@ -1,12 +1,14 @@
 /**
- * Plan Infrastructure - Phase 6.1, 6.3
+ * Plan Infrastructure - Phase 6.1, 6.3, 6.4
  *
  * Phase 6.1: RevenuePlans table, PlanLedger table (append-only), plan-lifecycle-api Lambda.
  * Phase 6.3: PlanStepExecution table, plan-orchestrator Lambda, EventBridge schedule.
- * See PHASE_6_1_CODE_LEVEL_PLAN.md §4, §7; PHASE_6_3_CODE_LEVEL_PLAN.md §7, §8.
+ * Phase 6.4: API Gateway wiring for GET /plans, GET /plans/{planId}, GET /plans/{planId}/ledger and POST routes (same Lambda, same authorizer).
+ * See PHASE_6_1_CODE_LEVEL_PLAN.md §4, §7; PHASE_6_3_CODE_LEVEL_PLAN.md §7, §8; PHASE_6_4_CODE_LEVEL_PLAN.md §4.
  */
 
 import * as cdk from 'aws-cdk-lib';
+import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as events from 'aws-cdk-lib/aws-events';
 import * as targets from 'aws-cdk-lib/aws-events-targets';
@@ -26,6 +28,10 @@ export interface PlanInfrastructureProps {
   readonly actionIntentTable?: dynamodb.Table;
   /** Phase 6.3: Tenants table for orchestrator to discover tenant IDs at runtime (env TENANTS_TABLE_NAME). Required when actionIntentTable is set. */
   readonly tenantsTable?: dynamodb.Table;
+  /** Phase 6.4: When set with plansAuthorizer, wires GET/POST plan routes to plan-lifecycle Lambda. */
+  readonly apiGateway?: apigateway.RestApi;
+  /** Phase 6.4: Same authorizer for all plan routes (required when apiGateway is set). */
+  readonly plansAuthorizer?: apigateway.IAuthorizer;
   readonly timeoutSeconds?: number;
   readonly memorySize?: number;
 }
@@ -115,6 +121,11 @@ export class PlanInfrastructure extends Construct {
     this.revenuePlansTable.grantReadWriteData(this.planLifecycleApiHandler);
     this.planLedgerTable.grantReadWriteData(this.planLifecycleApiHandler);
 
+    if (!props.apiGateway || !props.plansAuthorizer) {
+      throw new Error('PlanInfrastructure (dev): apiGateway and plansAuthorizer are required. Fail-fast, no fallback.');
+    }
+    this.createPlansApiGateway(props.apiGateway, props.plansAuthorizer);
+
     if (props.actionIntentTable && props.tenantsTable) {
       const planStepExecutionTableName =
         props.planStepExecutionTableName ?? DEFAULT_PLAN_STEP_EXECUTION;
@@ -181,5 +192,28 @@ export class PlanInfrastructure extends Construct {
         new targets.LambdaFunction(this.planOrchestratorHandler)
       );
     }
+  }
+
+  private createPlansApiGateway(
+    api: apigateway.RestApi,
+    authorizer: apigateway.IAuthorizer
+  ): void {
+    const integration = new apigateway.LambdaIntegration(
+      this.planLifecycleApiHandler
+    );
+    const methodOpts = { authorizer };
+
+    const plansResource = api.root.addResource('plans');
+    plansResource.addMethod('GET', integration, methodOpts);
+    const proposeResource = plansResource.addResource('propose');
+    proposeResource.addMethod('POST', integration, methodOpts);
+
+    const planIdResource = plansResource.addResource('{planId}');
+    planIdResource.addMethod('GET', integration, methodOpts);
+    planIdResource.addResource('ledger').addMethod('GET', integration, methodOpts);
+    planIdResource.addResource('approve').addMethod('POST', integration, methodOpts);
+    planIdResource.addResource('pause').addMethod('POST', integration, methodOpts);
+    planIdResource.addResource('resume').addMethod('POST', integration, methodOpts);
+    planIdResource.addResource('abort').addMethod('POST', integration, methodOpts);
   }
 }

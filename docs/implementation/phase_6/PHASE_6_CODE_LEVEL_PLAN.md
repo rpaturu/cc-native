@@ -43,7 +43,7 @@ For detailed code-level plans, see:
 | **6.1** | `PHASE_6_1_CODE_LEVEL_PLAN.md` | RevenuePlan schema, lifecycle state machine, Plan Policy Gate, ownership/authority |
 | **6.2** | `PHASE_6_2_CODE_LEVEL_PLAN.md` | Single plan type (RENEWAL_DEFENSE), allowed steps, Plan Proposal Generator (DRAFT) |
 | **6.3** | `PHASE_6_3_CODE_LEVEL_PLAN.md` | Plan Orchestrator, scheduling/triggers, Plan State Evaluator, termination semantics |
-| **6.4** | `PHASE_6_4_CODE_LEVEL_PLAN.md` | Plans API (list, get, approve, pause, abort); Active Plans UI (cc-dealmind) |
+| **6.4** | `PHASE_6_4_CODE_LEVEL_PLAN.md` | Plans API (GET + CDK) — ✅ Complete; Active Plans UI (cc-dealmind) deferred |
 | **6.5** | `PHASE_6_5_CODE_LEVEL_PLAN.md` | Conflict-resolution invariant (reject on violation); optional extended rules |
 
 **Implementation order:** 6.1 → 6.2 → 6.3 → 6.4 → 6.5. Do not introduce multiple plan types at once.
@@ -88,8 +88,8 @@ Active Plans **UI** (list plans, drill into plan, pause/resume/abort) is in **cc
 11. Scheduling and triggers: **baseline = scheduled poll** (e.g. EventBridge rule every X minutes) + strict idempotency/locking. Locking may be implemented via DynamoDB conditional writes or equivalent. Event-driven (e.g. step-completed) optional later. Single effective execution per step key.
 
 ### Phase 6.4 — UI: Active Plans
-12. Plans API: list (tenant/account, filter by status), get (plan_id), approve, pause, resume, abort; all mutations policy-checked and ledger-written
-13. Active Plans surface in cc-dealmind: list ACTIVE/PAUSED, drill into plan, Pause/Resume/Abort
+12. **✅ Done (cc-native).** Plans API: list (tenant/account, filter by status), get (plan_id), get ledger; approve, pause, resume, abort (existing); all wired in CDK. Mutations policy-checked and ledger-written.
+13. Active Plans surface in cc-dealmind: list ACTIVE/PAUSED, drill into plan, Pause/Resume/Abort — *deferred*.
 
 ### Phase 6.5 — Cross-Plan Conflict Resolution
 14. Enforce conflict invariant in Plan Policy Gate and orchestrator: reject with reason when second ACTIVE plan same account + plan_type; log for audit
