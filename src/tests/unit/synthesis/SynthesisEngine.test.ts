@@ -211,5 +211,76 @@ describe('SynthesisEngine', () => {
       expect(result.rule_id).toBe('rule-a');
       expect(result.posture).toBe(PostureState.AT_RISK);
     });
+
+    it('includes risk_factors and evidence_signal_ids when rule has risk_factors and evidence_signals', async () => {
+      const ruleWithRisk: Ruleset = {
+        ...minimalRuleset,
+        rules: [
+          {
+            rule_id: 'test-with-risk',
+            priority: 1,
+            lifecycle_state: 'PROSPECT',
+            conditions: { conditions: {} },
+            outputs: {
+              posture: 'WATCH',
+              momentum: 'FLAT',
+              evidence_signals: ['ACCOUNT_ACTIVATION_DETECTED'],
+              output_ttl_days: 7,
+              risk_factors: [
+                {
+                  type: 'RENEWAL_RISK',
+                  severity: 'high',
+                  description: 'Test risk',
+                  evidence_signals: [],
+                },
+              ],
+            },
+          } as SynthesisRule,
+        ],
+      };
+      const { RulesetLoader } = require('../../../services/synthesis/RulesetLoader');
+      RulesetLoader.loadRuleset.mockReturnValueOnce(ruleWithRisk);
+
+      const eventTime = new Date().toISOString();
+      const result = await engine.synthesize('acc-1', 't1', eventTime);
+
+      expect(result.rule_id).toBe('test-with-risk');
+      expect(result.posture).toBe(PostureState.WATCH);
+      expect(result.risk_factors).toHaveLength(1);
+      expect(result.risk_factors![0].type).toBe('RENEWAL_RISK');
+      expect(result.risk_factors![0].severity).toBe('high');
+      expect(result.evidence_signal_ids).toBeDefined();
+    });
+
+    it('uses accountState from lifecycle when available (null fallback)', async () => {
+      mockLifecycleStateService.getAccountState.mockResolvedValue(null);
+      mockSignalService.getSignalsForAccount.mockResolvedValue([makeSignal()]);
+      const fallbackRuleset: Ruleset = {
+        ...minimalRuleset,
+        rules: [
+          {
+            rule_id: 'prospect-fallback',
+            priority: 1,
+            lifecycle_state: null,
+            conditions: { conditions: {} },
+            outputs: {
+              posture: 'OK',
+              momentum: 'FLAT',
+              evidence_signals: [],
+              output_ttl_days: 7,
+            },
+          } as SynthesisRule,
+        ],
+      };
+      const { RulesetLoader } = require('../../../services/synthesis/RulesetLoader');
+      RulesetLoader.loadRuleset.mockReturnValueOnce(fallbackRuleset);
+
+      const eventTime = new Date().toISOString();
+      const result = await engine.synthesize('acc-1', 't1', eventTime);
+
+      expect(result.account_id).toBe('acc-1');
+      expect(result.tenantId).toBe('t1');
+      expect(result.rule_id).toBe('prospect-fallback');
+    });
   });
 });

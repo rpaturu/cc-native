@@ -15,13 +15,13 @@
 
 | Metric     | Coverage   | Count        |
 |-----------|------------|--------------|
-| Statements| **81.99%** | 5482 / 6686  |
-| Branches  | **66.67%** | 2134 / 3202  |
-| Functions | **83.07%**  | 653 / 786    |
-| Lines     | **82.12%** | 5344 / 6505  |
+| Statements| **83.42%** | 5582 / 6686  |
+| Branches  | **68.42%** | 2191 / 3202  |
+| Functions | **84.23%**  | 662 / 786    |
+| Lines     | **83.5%**  | 5438 / 6505  |
 
-**Unit tests:** 119 suites · 1264 tests (`npm test` / `--testPathIgnorePatterns=integration`)  
-**Integration tests:** 16 suites · 66 tests (post-deploy: `npx jest --testPathPattern=tests/integration`; includes Phase 6.3 plan-orchestrator, Phase 6.4 plans-api). **Phase 6.4 (Plans API GET + CDK): complete.**
+**Unit tests:** 120 suites · 1285 tests (`npm test` / `--testPathIgnorePatterns=integration`)  
+**Integration tests:** 16 suites · 66 tests (post-deploy: `npx jest --testPathPattern=tests/integration`; includes Phase 6.3 plan-orchestrator, Phase 6.4 plans-api, Phase 6.5 conflict-resolution). **Phase 6.4 (Plans API GET + CDK): complete.** Phase 6.5 (conflict-resolution): mandatory when env present.
 
 ---
 
@@ -29,8 +29,8 @@
 
 ### High coverage (≈90%+ statements)
 
-- **Phase 6 (plan):** handlers 97.92%, plan services 94.38%, types/plan 100%.  
-  Single notable gap: `PlanStepToActionIntentAdapter.ts` **33.33%** (adapter not directly unit-tested).
+- **Phase 6 (plan):** handlers 97.06%, plan services 97.53%, types/plan 100%.  
+  `PlanStepToActionIntentAdapter.ts` **100%** (unit tests added).
 - **Autonomy:** services/autonomy **100%** statements.
 - **Connector:** services/connector **100%** statements.
 - **Learning:** services/learning **100%** statements.
@@ -55,8 +55,8 @@
 
 ### Low coverage (&lt;70% statements)
 
-- **World-model:** **70.14%** (EvidenceService 53.98%, SchemaRegistryService 60.49%, SnapshotService **94.44%** (improved), WorldStateService 73.43%).
-- **Synthesis:** **74.23%** (SynthesisEngine **66.66%**, ConditionEvaluator 72.5%, RulesetLoader 81.08%, AccountPostureStateService 87.87%).
+- **World-model:** **87.61%** EvidenceService (improved), SchemaRegistryService 60.49%, SnapshotService 94.44%, WorldStateService 73.43%.
+- **Synthesis:** **81.48%** SynthesisEngine (improved), ConditionEvaluator 72.5%, RulesetLoader 81.08%, AccountPostureStateService 87.87%.
 - **Phase 4 tool-invoker-handler:** **71.9%** statements, 57.14% branches (improved; resilience path, MCP parse/retry, 403/timeout covered).
 
 ### Zero coverage
@@ -87,15 +87,15 @@
 
 | File | Stmts | Branch | Uncovered focus |
 |------|-------|--------|------------------|
-| **PlanStepToActionIntentAdapter.ts** | **33.33** | **0** | 33–35 (buildProposal), 54–56 (createIntentFromPlanStep) |
-| PlanRepositoryService.ts | 87.01 | 72.72 | 180–185 (updateStepStatus path) |
+| PlanStepToActionIntentAdapter.ts | **100** | **100** | — |
+| PlanRepositoryService.ts | **97.53** | 81.81 | 89–93, 182, 240–243 |
 | IdentityService.ts | 68.98 | 40 | Many branches: 83–88, 124–129, 140, 171–179, 188–193, 204, 219–224, 229–268, 318–323, 373–378, 414–415, 418–419, 422–423, 426–427, 434–435, 484, 509–510, 513–514, 517–518, 547–552 |
 | TenantService.ts | 89.47 | 66.66 | 114–116, 120–122 |
 | DecisionContextAssembler.ts | 81.81 | 63.63 | 119, 131–132, 187, 190 |
 | DecisionSynthesisService.ts | 88.88 | 68.75 | 152–161, 223 |
 | LedgerService.ts | 85.71 | 67.64 | 123–124, 151–155, 173–183 |
-| SynthesisEngine.ts | **64.81** | **40** | 151–154, 264–269, 289–295, 324–332, 367–375, 410–434, 486–536 |
-| EvidenceService.ts | **53.98** | **21.33** | 136–298, 323–325, 332–333, 337–338, 342–345, 379 |
+| SynthesisEngine.ts | **81.48** | 64.44 | 152, 367–375, 410–434, 507–536 |
+| EvidenceService.ts | **87.61** | 57.33 | 209–216, 246–256, 284–288, 332–333, 337–338, 342–345 |
 | SchemaRegistryService.ts | 60.49 | 26.66 | 53–60, 84, 102, 112–120, 153–157, 177–258 |
 | SnapshotService.ts | **94.44** | 69.04 | 252–253, 257–259 |
 | WorldStateService.ts | 73.43 | 49.01 | 152, 196–198, 210–229, 244, 251–259, 326–331, 350–351, 359–360, 364–365, 384 |
@@ -167,4 +167,4 @@
 
 ---
 
-*Last full run: unit — npm test -- --coverage --testPathIgnorePatterns=integration (119 suites, 1264 tests); integration — npx jest --testPathPattern=tests/integration (16 suites, 66 tests). Re-run and refresh this document when targeting coverage improvements.*
+*Last full run: unit — npm test -- --coverage --testPathIgnorePatterns=integration (120 suites, 1285 tests); integration — npx jest --testPathPattern=tests/integration (16 suites, 66 tests). Re-run and refresh this document when targeting coverage improvements.*

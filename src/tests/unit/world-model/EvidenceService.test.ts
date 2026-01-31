@@ -89,6 +89,68 @@ describe('EvidenceService', () => {
       expect(result).toBeNull();
       expect(mockDynamoDBDocumentClient.send).not.toHaveBeenCalled();
     });
+
+    it('should return evidence when entityId provided and query finds matching item and S3 returns body', async () => {
+      const indexItem = {
+        evidenceId: 'ev1',
+        entityId: 'ent-1',
+        s3Key: 'evidence/ACCOUNT/ent-1/ev1.json',
+        s3VersionId: 'v1',
+        tenantId: 't1',
+      };
+      mockDynamoDBDocumentClient.send.mockResolvedValue({ Items: [indexItem] });
+      mockS3Client.send.mockResolvedValue({
+        Body: {
+          transformToString: jest.fn().mockResolvedValue(JSON.stringify({
+            evidenceId: 'ev1',
+            entityId: 'ent-1',
+            entityType: 'ACCOUNT',
+            evidenceType: 'CRM',
+            timestamp: '2026-01-01T00:00:00Z',
+            payload: {},
+            provenance: { trustClass: 'PRIMARY', sourceSystem: 'crm', collectedAt: '2026-01-01T00:00:00Z' },
+            metadata: { tenantId: 't1', traceId: 'trace-1' },
+          })),
+        },
+      });
+
+      const result = await service.get('ev1', 't1', 'ent-1');
+
+      expect(result).not.toBeNull();
+      expect(result!.evidenceId).toBe('ev1');
+      expect(result!.entityId).toBe('ent-1');
+      expect(mockDynamoDBDocumentClient.send).toHaveBeenCalledTimes(1);
+      expect(mockS3Client.send).toHaveBeenCalledTimes(1);
+    });
+
+    it('should throw when S3 GetObject fails during get', async () => {
+      const indexItem = {
+        evidenceId: 'ev1',
+        entityId: 'ent-1',
+        s3Key: 'evidence/ACCOUNT/ent-1/ev1.json',
+        s3VersionId: 'v1',
+        tenantId: 't1',
+      };
+      mockDynamoDBDocumentClient.send.mockResolvedValue({ Items: [indexItem] });
+      mockS3Client.send.mockRejectedValue(new Error('S3 get failed'));
+
+      await expect(service.get('ev1', 't1', 'ent-1')).rejects.toThrow('S3 get failed');
+    });
+
+    it('should return null when query returns items but none match evidenceId', async () => {
+      const otherItem = {
+        evidenceId: 'ev-other',
+        entityId: 'ent-1',
+        s3Key: 'evidence/ACCOUNT/ent-1/ev-other.json',
+        tenantId: 't1',
+      };
+      mockDynamoDBDocumentClient.send.mockResolvedValue({ Items: [otherItem] });
+
+      const result = await service.get('ev1', 't1', 'ent-1');
+
+      expect(result).toBeNull();
+      expect(mockS3Client.send).not.toHaveBeenCalled();
+    });
   });
 
   describe('query', () => {
@@ -127,6 +189,44 @@ describe('EvidenceService', () => {
       expect(result).toHaveLength(1);
       expect(result[0].evidenceId).toBe('ev1');
       expect(result[0].entityId).toBe('ent-1');
+    });
+
+    it('should use entityType path (GSI) when entityType provided', async () => {
+      mockDynamoDBDocumentClient.send.mockResolvedValue({ Items: [] });
+
+      const result = await service.query({ tenantId: 't1', entityType: 'ACCOUNT' });
+
+      expect(result).toEqual([]);
+      expect(mockDynamoDBDocumentClient.send).toHaveBeenCalledTimes(1);
+    });
+
+    it('should skip failed S3 get and return other evidence records', async () => {
+      const items = [
+        { s3Key: 'evidence/ACCOUNT/ent-1/ev1.json', s3VersionId: 'v1' },
+        { s3Key: 'evidence/ACCOUNT/ent-1/ev2.json', s3VersionId: 'v2' },
+      ];
+      mockDynamoDBDocumentClient.send.mockResolvedValue({ Items: items });
+      const ev2Body = JSON.stringify({
+        evidenceId: 'ev2',
+        entityId: 'ent-1',
+        entityType: 'ACCOUNT',
+        evidenceType: 'CRM',
+        timestamp: '2026-01-01T00:00:00Z',
+        payload: {},
+        provenance: { trustClass: 'PRIMARY', sourceSystem: 'crm', collectedAt: '2026-01-01T00:00:00Z' },
+        metadata: { tenantId: 't1', traceId: 'trace-1' },
+      });
+      mockS3Client.send
+        .mockRejectedValueOnce(new Error('S3 get failed'))
+        .mockResolvedValueOnce({
+          Body: { transformToString: jest.fn().mockResolvedValue(ev2Body) },
+        });
+
+      const result = await service.query({ tenantId: 't1', entityId: 'ent-1' });
+
+      expect(result).toHaveLength(1);
+      expect(result[0].evidenceId).toBe('ev2');
+      expect(mockS3Client.send).toHaveBeenCalledTimes(2);
     });
   });
 });

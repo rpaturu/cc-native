@@ -208,6 +208,80 @@ describe('PlanRepositoryService', () => {
     });
   });
 
+  describe('updateStepStatus', () => {
+    it('updates step status when plan exists and step_id found', async () => {
+      const p = plan({
+        steps: [
+          { step_id: 'step-1', action_type: 'crm.create_task', status: 'PENDING', constraints: {} },
+          { step_id: 'step-2', action_type: 'crm.create_task', status: 'PENDING', constraints: {} },
+        ],
+      });
+      const withKeys = {
+        ...p,
+        pk: 'TENANT#t1#ACCOUNT#acc-1',
+        sk: 'PLAN#plan-1',
+        gsi1pk: 'x',
+        gsi1sk: 'y',
+        gsi2pk: 'z',
+        gsi2sk: 'w',
+      };
+      mockDynamoDBDocumentClient.send
+        .mockResolvedValueOnce({ Item: withKeys })
+        .mockResolvedValueOnce({});
+      await service.updateStepStatus('t1', 'acc-1', 'plan-1', 'step-1', 'DONE');
+      expect(mockDynamoDBDocumentClient.send).toHaveBeenCalledTimes(2);
+      const updateCall = (mockDynamoDBDocumentClient.send as jest.Mock).mock.calls[1][0];
+      expect(updateCall.input?.TableName).toBe('RevenuePlans');
+      expect(updateCall.input?.Key?.pk).toBe('TENANT#t1#ACCOUNT#acc-1');
+      expect(updateCall.input?.Key?.sk).toBe('PLAN#plan-1');
+      expect(updateCall.input?.UpdateExpression).toContain('steps[');
+      expect(updateCall.input?.ExpressionAttributeValues?.[':status']).toBe('DONE');
+    });
+
+    it('throws when plan not found', async () => {
+      mockDynamoDBDocumentClient.send.mockResolvedValueOnce({});
+      await expect(
+        service.updateStepStatus('t1', 'acc-1', 'plan-1', 'step-1', 'DONE')
+      ).rejects.toThrow(/Plan not found|plan-1/);
+      expect(mockDynamoDBDocumentClient.send).toHaveBeenCalledTimes(1);
+    });
+
+    it('throws when step_id not in plan steps', async () => {
+      const p = plan({ steps: [{ step_id: 'other', action_type: 'crm.create_task', status: 'PENDING', constraints: {} }] });
+      const withKeys = {
+        ...p,
+        pk: 'TENANT#t1#ACCOUNT#acc-1',
+        sk: 'PLAN#plan-1',
+        gsi1pk: 'x',
+        gsi1sk: 'y',
+        gsi2pk: 'z',
+        gsi2sk: 'w',
+      };
+      mockDynamoDBDocumentClient.send.mockResolvedValueOnce({ Item: withKeys });
+      await expect(
+        service.updateStepStatus('t1', 'acc-1', 'plan-1', 'step-1', 'DONE')
+      ).rejects.toThrow(/Step not found|step-1/);
+      expect(mockDynamoDBDocumentClient.send).toHaveBeenCalledTimes(1);
+    });
+
+    it('throws when plan has empty steps', async () => {
+      const p = plan({ steps: [] });
+      const withKeys = {
+        ...p,
+        pk: 'TENANT#t1#ACCOUNT#acc-1',
+        sk: 'PLAN#plan-1',
+        gsi1pk: 'x',
+        gsi1sk: 'y',
+        gsi2pk: 'z',
+        gsi2sk: 'w',
+      };
+      mockDynamoDBDocumentClient.send.mockResolvedValueOnce({ Item: withKeys });
+      await expect(
+        service.updateStepStatus('t1', 'acc-1', 'plan-1', 'step-1', 'DONE')
+      ).rejects.toThrow(/Step not found|step-1/);
+    });
+  });
+
   describe('existsActivePlanForAccountAndType', () => {
     it('returns { exists: true, planId } when an ACTIVE plan exists for that account and plan_type', async () => {
       const p = plan({ plan_status: 'ACTIVE', plan_type: 'RENEWAL_DEFENSE' });
