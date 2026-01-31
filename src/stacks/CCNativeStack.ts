@@ -23,6 +23,7 @@ import { createExecutionInfrastructureConfig } from './constructs/ExecutionInfra
 import { AutonomyInfrastructure } from './constructs/AutonomyInfrastructure';
 import { DecisionSchedulingInfrastructure } from './constructs/DecisionSchedulingInfrastructure';
 import { PerceptionSchedulerInfrastructure } from './constructs/PerceptionSchedulerInfrastructure';
+import { PlanInfrastructure } from './constructs/PlanInfrastructure';
 
 export interface CCNativeStackProps extends cdk.StackProps {
   // Add any custom props here
@@ -703,6 +704,9 @@ export class CCNativeStack extends cdk.Stack {
       accountPostureStateTable: graphIntelligenceHandlers.accountPostureStateTable,
       signalsTable: this.signalsTable,
     });
+
+    // Phase 6.1: Plan lifecycle (RevenuePlans, PlanLedger, plan-lifecycle-api)
+    const planInfrastructure = new PlanInfrastructure(this, 'PlanInfrastructure', {});
 
     // Stack Outputs
     // World Model S3 Buckets

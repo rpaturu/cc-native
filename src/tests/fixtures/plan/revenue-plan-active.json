@@ -1,0 +1,21 @@
+{
+  "plan_id": "plan-fixture-active-1",
+  "plan_type": "RENEWAL_DEFENSE",
+  "account_id": "acc-1",
+  "tenant_id": "t1",
+  "objective": "Renew enterprise agreement",
+  "plan_status": "ACTIVE",
+  "steps": [
+    {
+      "step_id": "s1",
+      "action_type": "REQUEST_MEETING",
+      "status": "PENDING",
+      "sequence": 1
+    }
+  ],
+  "expires_at": "2026-12-31T23:59:59.000Z",
+  "created_at": "2026-01-30T10:00:00.000Z",
+  "updated_at": "2026-01-30T12:00:00.000Z",
+  "approved_at": "2026-01-30T11:00:00.000Z",
+  "approved_by": "user-approver-1"
+}
