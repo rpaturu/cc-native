@@ -239,6 +239,22 @@ Unit tests for HeatScoringService, PerceptionPullBudgetService (atomic consume),
 
 ---
 
+## Operational checks (don't skip)
+
+### 1. Budget state reset / date_key consistency
+
+- **date_key semantics:** All budget state uses **UTC** date keys: `new Date().toISOString().slice(0, 10)` → `YYYY-MM-DD`. Used in PerceptionPullBudgetService, AutonomyBudgetService, and autonomy-admin-api default.
+- **Rollover:** No explicit “reset” job for perception pull budget. Rollover is **implicit**: each calendar day (UTC) uses a new DDB key (`BUDGET_STATE#<date_key>`), so previous days’ state is left as-is. No tenant timezone; design is UTC-only.
+- **Consistency:** Scheduler (orchestrator → budget service), budget service consume, and admin/UI `getStateForDate(tenantId, dateKey)` all use the same UTC date_key. Metrics or dashboards that key by date should use the same UTC `YYYY-MM-DD` for alignment.
+
+### 2. Global connector limit under burst
+
+- **Per-tenant and per-connector caps** are enforced atomically in DDB via PerceptionPullBudgetService (conditional update / TransactWrite). Effective across all Lambdas that share the same table.
+- **Global connector limit** (e.g. “max N pulls/min for connector X across all tenants”): the design exposes a **hook** only. `PerceptionPullOrchestrator` accepts an optional `rateLimitCheck(tenantId, connectorId)`; the handler does **not** pass it, so the default is a no-op (`() => Promise.resolve(true)`). There is no shared global limiter (no DDB/Redis token bucket, no SQS/SFN concurrency cap) in the current implementation.
+- **Implication:** Under burst, many Lambdas can pass `rateLimitCheck` and only be bounded by per-tenant/per-connector budget. If upstream APIs require a global cap per connector, implement and inject a `rateLimitCheck` that uses a shared store (e.g. DDB counter or token bucket, or SQS concurrency) and wire it in the perception-pull-orchestrator-handler.
+
+---
+
 ## References
 
 - Parent: [PHASE_5_CODE_LEVEL_PLAN.md](PHASE_5_CODE_LEVEL_PLAN.md)
