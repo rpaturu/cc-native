@@ -19,6 +19,7 @@ describe('planTypeConfig', () => {
       ]);
       expect(config?.objective_template).toBe('Secure renewal before day -30');
       expect(config?.expires_at_days_from_creation).toBe(30);
+      expect(config?.max_retries_per_step).toBe(3);
     });
 
     it('returns null for unknown plan type', () => {

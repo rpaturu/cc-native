@@ -20,4 +20,6 @@ export interface PlanTypeConfig {
   default_sequence?: string[];
   objective_template?: string;
   expires_at_days_from_creation?: number;
+  /** Phase 6.3: max attempts per step before pause; default 3. */
+  max_retries_per_step?: number;
 }

@@ -705,8 +705,11 @@ export class CCNativeStack extends cdk.Stack {
       signalsTable: this.signalsTable,
     });
 
-    // Phase 6.1: Plan lifecycle (RevenuePlans, PlanLedger, plan-lifecycle-api)
-    const planInfrastructure = new PlanInfrastructure(this, 'PlanInfrastructure', {});
+    // Phase 6.1 + 6.3: Plan lifecycle (RevenuePlans, PlanLedger, plan-lifecycle-api); orchestrator discovers tenants from Tenants table
+    const planInfrastructure = new PlanInfrastructure(this, 'PlanInfrastructure', {
+      actionIntentTable: this.actionIntentTable,
+      tenantsTable: this.tenantsTable,
+    });
 
     // Stack Outputs
     // World Model S3 Buckets
@@ -1026,6 +1029,22 @@ export class CCNativeStack extends cdk.Stack {
       value: perceptionSchedulerInfrastructure.pullIdempotencyStoreTable.tableName,
       description: 'DynamoDB table for pull job idempotency (Phase 5.3)',
     });
+
+    // Phase 6: Plan Infrastructure (lifecycle, ledger, step execution)
+    new cdk.CfnOutput(this, 'RevenuePlansTableName', {
+      value: planInfrastructure.revenuePlansTable.tableName,
+      description: 'DynamoDB table for revenue plans (Phase 6.1)',
+    });
+    new cdk.CfnOutput(this, 'PlanLedgerTableName', {
+      value: planInfrastructure.planLedgerTable.tableName,
+      description: 'DynamoDB table for plan ledger (Phase 6.1)',
+    });
+    if (planInfrastructure.planStepExecutionTable) {
+      new cdk.CfnOutput(this, 'PlanStepExecutionTableName', {
+        value: planInfrastructure.planStepExecutionTable.tableName,
+        description: 'DynamoDB table for plan step execution state (Phase 6.3)',
+      });
+    }
   }
 
   /**

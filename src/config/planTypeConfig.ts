@@ -13,6 +13,7 @@ import {
 export const RENEWAL_DEFENSE_CONFIG: PlanTypeConfig = {
   plan_type: 'RENEWAL_DEFENSE',
   allowed_step_action_types: [...RENEWAL_DEFENSE_STEP_ACTION_TYPES],
+  max_retries_per_step: 3,
   default_sequence: [
     'REQUEST_RENEWAL_MEETING',
     'PREP_RENEWAL_BRIEF',

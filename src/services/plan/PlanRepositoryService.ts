@@ -11,7 +11,7 @@ import {
   QueryCommand,
 } from '@aws-sdk/lib-dynamodb';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { RevenuePlanV1, PlanStatus } from '../../types/plan/PlanTypes';
+import { RevenuePlanV1, PlanStatus, PlanStepStatus } from '../../types/plan/PlanTypes';
 import { Logger } from '../core/Logger';
 import { getAWSClientConfig } from '../../utils/aws-client-config';
 
@@ -163,6 +163,43 @@ export class PlanRepositoryService {
         UpdateExpression: updateExpr.join(', '),
         ExpressionAttributeNames: { '#updated_at': 'updated_at' },
         ExpressionAttributeValues: exprValues,
+      })
+    );
+  }
+
+  /**
+   * Phase 6.3 — Update a single step's status (DONE | FAILED | SKIPPED). Used by orchestrator when outcome is known.
+   */
+  async updateStepStatus(
+    tenantId: string,
+    accountId: string,
+    planId: string,
+    stepId: string,
+    newStatus: PlanStepStatus
+  ): Promise<void> {
+    const plan = await this.getPlan(tenantId, accountId, planId);
+    if (!plan) throw new Error(`Plan not found: ${planId}`);
+    const idx = plan.steps?.findIndex((s) => s.step_id === stepId) ?? -1;
+    if (idx < 0) throw new Error(`Step not found: ${stepId} in plan ${planId}`);
+    const updated_at = new Date().toISOString();
+    await this.dynamoClient.send(
+      new UpdateCommand({
+        TableName: this.tableName,
+        Key: { pk: planPk(tenantId, accountId), sk: planSk(planId) },
+        UpdateExpression:
+          'set steps[' +
+          idx +
+          '].#status = :status, #updated_at = :updated_at, gsi1sk = :gsi1sk, gsi2sk = :gsi2sk',
+        ExpressionAttributeNames: {
+          '#status': 'status',
+          '#updated_at': 'updated_at',
+        },
+        ExpressionAttributeValues: {
+          ':status': newStatus,
+          ':updated_at': updated_at,
+          ':gsi1sk': updated_at,
+          ':gsi2sk': gsi2Sk(accountId, updated_at),
+        },
       })
     );
   }
