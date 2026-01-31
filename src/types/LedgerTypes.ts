@@ -31,6 +31,9 @@ export enum LedgerEventType {
   ACTION_FAILED = 'ACTION_FAILED',
   EXECUTION_CANCELLED = 'EXECUTION_CANCELLED', // Kill switch / manual cancel
   EXECUTION_EXPIRED = 'EXECUTION_EXPIRED', // Intent expired before execution
+  // Phase 5.5: Learning registry audit
+  RANKING_WEIGHTS_PROMOTED = 'RANKING_WEIGHTS_PROMOTED',
+  RANKING_WEIGHTS_ROLLED_BACK = 'RANKING_WEIGHTS_ROLLED_BACK',
   // Note: IDEMPOTENCY_COLLISION_DETECTED will be added in Phase 4.2 when IdempotencyService
   // gets LedgerService injection. For Phase 4.1, collisions are logged as critical errors.
 }
