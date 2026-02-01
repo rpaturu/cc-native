@@ -17,7 +17,12 @@ export type PlanLedgerEventType =
   | 'STEP_STARTED'
   | 'STEP_COMPLETED'
   | 'STEP_SKIPPED'
-  | 'STEP_FAILED';
+  | 'STEP_FAILED'
+  | 'VALIDATOR_RUN'
+  | 'VALIDATOR_RUN_SUMMARY'
+  | 'BUDGET_RESERVE'
+  | 'BUDGET_BLOCK'
+  | 'BUDGET_WARN';
 
 export interface PlanLedgerEntry {
   entry_id: string;

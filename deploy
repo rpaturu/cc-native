@@ -28,6 +28,7 @@ SKIP_INTEGRATION_TESTS=false
 SKIP_E2E=false
 SKIP_PHASE5_E2E=false
 SKIP_PHASE6_E2E=false
+SKIP_PHASE7_E2E=false
 while [[ "$#" -gt 0 ]]; do case $1 in
   --profile) CDK_PROFILE="$2"; shift;;
   --region) AWS_REGION="$2"; shift;;
@@ -37,8 +38,9 @@ while [[ "$#" -gt 0 ]]; do case $1 in
   --skip-e2e) SKIP_E2E=true;;
   --skip-phase5-e2e) SKIP_PHASE5_E2E=true;;
   --skip-phase6-e2e) SKIP_PHASE6_E2E=true;;
-  --skip-tests) SKIP_UNIT_TESTS=true; SKIP_INTEGRATION_TESTS=true; SKIP_E2E=true; SKIP_PHASE5_E2E=true; SKIP_PHASE6_E2E=true;;
-  --no-test) SKIP_UNIT_TESTS=true; SKIP_INTEGRATION_TESTS=true; SKIP_E2E=true; SKIP_PHASE5_E2E=true; SKIP_PHASE6_E2E=true;;
+  --skip-phase7-e2e) SKIP_PHASE7_E2E=true;;
+  --skip-tests) SKIP_UNIT_TESTS=true; SKIP_INTEGRATION_TESTS=true; SKIP_E2E=true; SKIP_PHASE5_E2E=true; SKIP_PHASE6_E2E=true; SKIP_PHASE7_E2E=true;;
+  --no-test) SKIP_UNIT_TESTS=true; SKIP_INTEGRATION_TESTS=true; SKIP_E2E=true; SKIP_PHASE5_E2E=true; SKIP_PHASE6_E2E=true; SKIP_PHASE7_E2E=true;;
 esac; shift; done
 
 # Check if region is set
@@ -48,13 +50,15 @@ if [ -z "$AWS_REGION" ]; then
   
   if [ -z "$AWS_REGION" ]; then
     echo "Error: AWS region is required"
-    echo "Usage: ./deploy [--profile <aws_profile>] [--region <aws_region>] [--env <environment>] [--skip-unit-tests] [--skip-integration-tests] [--skip-e2e] [--skip-phase5-e2e] [--skip-tests] [--no-test]"
+    echo "Usage: ./deploy [--profile <aws_profile>] [--region <aws_region>] [--env <environment>] [--skip-unit-tests] [--skip-integration-tests] [--skip-e2e] [--skip-phase5-e2e] [--skip-phase6-e2e] [--skip-phase7-e2e] [--skip-tests] [--no-test]"
     echo "Example: ./deploy --profile dev --region us-west-2 --env development"
     echo "         ./deploy --skip-unit-tests  # Skip unit tests before deployment"
     echo "         ./deploy --skip-integration-tests  # Skip integration tests after deployment"
     echo "         ./deploy --skip-e2e  # Skip Phase 4 E2E test after deployment"
     echo "         ./deploy --skip-phase5-e2e  # Skip Phase 5 E2E suite after deployment"
-    echo "         ./deploy --skip-tests  # Skip all tests (unit, integration, E2E, Phase 5 E2E)"
+    echo "         ./deploy --skip-phase6-e2e  # Skip Phase 6 E2E suite after deployment"
+    echo "         ./deploy --skip-phase7-e2e  # Skip Phase 7 E2E suite after deployment"
+    echo "         ./deploy --skip-tests  # Skip all tests (unit, integration, E2E, Phase 5/6/7 E2E)"
     echo "You may also configure your region by running 'aws configure'"
     exit 1
   fi
@@ -346,6 +350,8 @@ ACTION_TYPE_REGISTRY_TABLE_NAME=$ACTION_TYPE_REGISTRY_TABLE_OUTPUT
 ACTION_INTENT_TABLE_NAME=$ACTION_INTENT_TABLE_OUTPUT
 EXECUTION_ATTEMPTS_TABLE_NAME=$EXECUTION_ATTEMPTS_TABLE_OUTPUT
 EXECUTION_OUTCOMES_TABLE_NAME=$EXECUTION_OUTCOMES_TABLE_OUTPUT
+# Phase 7 E2E outcomes capture (same table as Execution Outcomes)
+OUTCOMES_TABLE_NAME=$EXECUTION_OUTCOMES_TABLE_OUTPUT
 EXTERNAL_WRITE_DEDUPE_TABLE_NAME=$EXTERNAL_WRITE_DEDUPE_TABLE_OUTPUT
 CONNECTOR_CONFIG_TABLE_NAME=$CONNECTOR_CONFIG_TABLE_OUTPUT
 INTERNAL_NOTES_TABLE_NAME=$INTERNAL_NOTES_TABLE_OUTPUT
@@ -481,6 +487,23 @@ else
   echo "⏭️  Skipping Phase 6 E2E suite"
 fi
 
+# Run Phase 7 E2E suite (Plan Ledger: resume -> ledger entries)
+if [ "$SKIP_PHASE7_E2E" = false ]; then
+  echo ""
+  echo "🧪 Running Phase 7 E2E suite (Plan Ledger)..."
+  chmod +x scripts/phase_7/run-phase7-e2e.sh scripts/phase_7/test-phase7-plan-ledger.sh scripts/phase_7/seed-phase7-ledger-e2e.sh 2>/dev/null || true
+  if ./scripts/phase_7/run-phase7-e2e.sh; then
+    echo "✅ Phase 7 E2E suite passed"
+  else
+    echo "❌ Phase 7 E2E suite failed - check .env (REVENUE_PLANS_TABLE_NAME, PLAN_LIFECYCLE_API_FUNCTION_NAME, PLAN_LEDGER_TABLE_NAME)"
+    echo "   Use --skip-phase7-e2e to complete deploy without running Phase 7 E2E"
+    exit 1
+  fi
+else
+  echo ""
+  echo "⏭️  Skipping Phase 7 E2E suite"
+fi
+
 echo ""
 echo "🎉 Autonomous Revenue Decision Loop deployment complete!"
 echo ""
@@ -521,5 +544,5 @@ echo ""
 echo "📌 Next steps:"
 echo "   1. Review .env for API URLs, table names, and keys"
 echo "   2. Use Decision API, Execution Status API, or Control Center as needed"
-echo "   3. Re-run tests only when needed: npm run test:integration, ./scripts/phase_4/test-phase4-execution.sh, ./scripts/phase_5/run-phase5-e2e.sh, or ./scripts/phase_6/run-phase6-e2e.sh"
+echo "   3. Re-run tests only when needed: npm run test:integration, ./scripts/phase_4/test-phase4-execution.sh, ./scripts/phase_5/run-phase5-e2e.sh, ./scripts/phase_6/run-phase6-e2e.sh, or ./scripts/phase_7/run-phase7-e2e.sh"
 echo ""

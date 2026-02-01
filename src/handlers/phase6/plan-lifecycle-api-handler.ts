@@ -17,6 +17,7 @@ import { PlanLedgerService } from '../../services/plan/PlanLedgerService';
 import { PlanPolicyGateService } from '../../services/plan/PlanPolicyGateService';
 import { PlanLifecycleService } from '../../services/plan/PlanLifecycleService';
 import { PlanProposalGeneratorService } from '../../services/plan/PlanProposalGeneratorService';
+import { ValidatorGatewayService } from '../../services/governance/ValidatorGatewayService';
 import { getPlanTypeConfig } from '../../config/planTypeConfig';
 import {
   PlanSummary,
@@ -43,6 +44,7 @@ function buildServices(): {
   gate: PlanPolicyGateService;
   lifecycle: PlanLifecycleService;
   proposalGenerator: PlanProposalGeneratorService;
+  validatorGateway: ValidatorGatewayService;
 } {
   const repo = new PlanRepositoryService(logger, {
     tableName: requireEnv('REVENUE_PLANS_TABLE_NAME'),
@@ -59,7 +61,8 @@ function buildServices(): {
     logger,
   });
   const proposalGenerator = new PlanProposalGeneratorService({ logger });
-  return { repo, ledger, gate, lifecycle, proposalGenerator };
+  const validatorGateway = new ValidatorGatewayService({ planLedger: ledger, logger });
+  return { repo, ledger, gate, lifecycle, proposalGenerator, validatorGateway };
 }
 
 let cached: ReturnType<typeof buildServices> | null = null;
@@ -274,6 +277,31 @@ async function handleResume(
       body: JSON.stringify({ error: 'Conflict', reasons: result.reasons }),
     });
   }
+
+  const { validatorGateway } = services;
+  const validationRunId = `resume-${planId}-${Date.now()}`;
+  const validatorResult = await validatorGateway.run({
+    choke_point: 'BEFORE_PLAN_APPROVAL',
+    evaluation_time_utc_ms: Date.now(),
+    validation_run_id: validationRunId,
+    target_id: planId,
+    tenant_id: tenantId,
+    account_id: accountId,
+    plan_id: planId,
+    plan,
+  });
+  if (validatorResult.aggregate === 'BLOCK') {
+    const blocking = validatorResult.results.filter((r) => r.result === 'BLOCK');
+    return cors({
+      statusCode: 403,
+      body: JSON.stringify({
+        error: 'ValidatorBlock',
+        message: 'Resume blocked by validator',
+        validators: blocking.map((r) => ({ validator: r.validator, reason: r.reason })),
+      }),
+    });
+  }
+
   await lifecycle.transition(plan, 'ACTIVE');
   return cors({ statusCode: 200, body: JSON.stringify({ success: true, plan_id: planId }) });
 }

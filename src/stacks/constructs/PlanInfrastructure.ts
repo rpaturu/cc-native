@@ -22,6 +22,7 @@ export interface PlanInfrastructureProps {
   readonly planLifecycleApiFunctionName?: string;
   readonly planStepExecutionTableName?: string;
   readonly planOrchestratorFunctionName?: string;
+  readonly phase7GovernanceE2EFunctionName?: string;
   readonly orchestratorMaxPlansPerRun?: number;
   readonly orchestratorScheduleMinutes?: number;
   /** Phase 6.3: When set, creates plan-orchestrator Lambda (needs action intent table for Phase 3/4). */
@@ -44,10 +45,14 @@ const DEFAULT_PLAN_ORCHESTRATOR_API = 'cc-native-plan-orchestrator';
 const DEFAULT_ORCHESTRATOR_MAX_PLANS = 10;
 const DEFAULT_ORCHESTRATOR_SCHEDULE_MINUTES = 15;
 
+const DEFAULT_PHASE7_GOVERNANCE_E2E = 'cc-native-phase7-governance-e2e';
+
 export class PlanInfrastructure extends Construct {
   public readonly revenuePlansTable: dynamodb.Table;
   public readonly planLedgerTable: dynamodb.Table;
   public readonly planLifecycleApiHandler: lambda.Function;
+  /** Phase 7 E2E: Lambda for budget reserve E2E (writes BUDGET_RESERVE to Plan Ledger). */
+  public readonly phase7GovernanceE2EHandler: lambda.Function;
   /** Phase 6.3: Step execution state (attempt, idempotency). */
   public readonly planStepExecutionTable?: dynamodb.Table;
   /** Phase 6.3: Orchestrator Lambda (when actionIntentTable provided). */
@@ -120,6 +125,25 @@ export class PlanInfrastructure extends Construct {
 
     this.revenuePlansTable.grantReadWriteData(this.planLifecycleApiHandler);
     this.planLedgerTable.grantReadWriteData(this.planLifecycleApiHandler);
+
+    const phase7GovernanceE2EFunctionName =
+      props.phase7GovernanceE2EFunctionName ?? DEFAULT_PHASE7_GOVERNANCE_E2E;
+    this.phase7GovernanceE2EHandler = new lambdaNodejs.NodejsFunction(
+      this,
+      'Phase7GovernanceE2EHandler',
+      {
+        functionName: phase7GovernanceE2EFunctionName,
+        entry: 'src/handlers/phase7/governance-e2e-handler.ts',
+        handler: 'handler',
+        runtime: lambda.Runtime.NODEJS_20_X,
+        timeout,
+        memorySize,
+        environment: {
+          PLAN_LEDGER_TABLE_NAME: this.planLedgerTable.tableName,
+        },
+      }
+    );
+    this.planLedgerTable.grantReadWriteData(this.phase7GovernanceE2EHandler);
 
     if (!props.apiGateway || !props.plansAuthorizer) {
       throw new Error('PlanInfrastructure (dev): apiGateway and plansAuthorizer are required. Fail-fast, no fallback.');
