@@ -2,11 +2,12 @@
 
 *Autonomous Revenue Orchestration — coordination across time, accounts, and goals*
 
-**Status:** 🟡 **PLANNED**  
+**Status:** 🟢 **COMPLETE**  
 **Created:** 2026-01-30  
 **Last Updated:** 2026-01-30  
 **Parent:** [PHASE_6_OUTLINE.md](PHASE_6_OUTLINE.md) | [PHASE_6_IMPLEMENTATION_PLAN.md](PHASE_6_IMPLEMENTATION_PLAN.md)  
-**Prerequisites:** Phase 0–5 complete. End-to-end spine: **Perception → Decide → Approve → Execute → Outcome → Ledger → Learning**.
+**Prerequisites:** Phase 0–5 complete. End-to-end spine: **Perception → Decide → Approve → Execute → Outcome → Ledger → Learning**.  
+**Progress:** Sub-phases 6.1–6.5 implemented per code-level and test plans; Active Plans UI (cc-dealmind) deferred.
 
 **Note:** Test plans (e.g. `testing/PHASE_6_x_TEST_PLAN.md`) to be created per sub-phase. This plan is the code-level reference; sub-phase docs provide detailed file paths, type shapes, and handler contracts.
 

@@ -16,8 +16,8 @@ Phase 6 E2E runs **post-deploy** scripts that seed data into DynamoDB, invoke th
 
 **Scope (current):**
 - **Conflict resolution:** Seed two plans (one ACTIVE, one PAUSED) for the same (tenant_id, account_id, plan_type); invoke POST `/plans/:planId/resume` for the PAUSED plan; assert **409 Conflict**, `body.error === 'Conflict'`, and CONFLICT_ACTIVE_PLAN in reasons; **assert Plan B remained PAUSED** (re-read from DynamoDB); **if PLAN_LEDGER_TABLE_NAME is set**, assert Plan Ledger contains `PLAN_ACTIVATION_REJECTED` (caller `resume`, `conflicting_plan_ids` contains Plan A); cleanup both plans.
-
-**Future (optional):** Plans API happy path (GET /plans, GET /plans/:id, resume when no conflict → 200), plan orchestrator cycle E2E.
+- **Plans API happy path:** Seed one PAUSED plan; GET /plans (list), GET /plans/:planId, POST resume → 200; assert plan becomes ACTIVE; cleanup.
+- **Orchestrator cycle:** Seed one tenant and one APPROVED plan; invoke plan-orchestrator Lambda (scheduled event); assert plan becomes ACTIVE; cleanup tenant and plan.
 
 ---
 
@@ -27,7 +27,11 @@ Phase 6 E2E runs **post-deploy** scripts that seed data into DynamoDB, invoke th
 |------|--------|--------|
 | **seed-phase6-conflict-e2e.sh** | ✅ Implemented | Puts two plans into RevenuePlans (ACTIVE + PAUSED, same tenant/account/plan_type). Outputs PLAN_ACTIVE_ID, PLAN_PAUSED_ID, TENANT_ID, ACCOUNT_ID, PK. |
 | **test-phase6-conflict-resolution.sh** | ✅ Implemented | Seed → invoke Plan Lifecycle Lambda (POST resume) → assert 409, body.error Conflict, CONFLICT_ACTIVE_PLAN → assert Plan B still PAUSED (DynamoDB read) → if PLAN_LEDGER_TABLE_NAME set, assert PLAN_ACTIVATION_REJECTED (caller resume, conflicting_plan_ids) → cleanup. Fail-fast if AWS_REGION or REVENUE_PLANS_TABLE_NAME missing. |
-| **run-phase6-e2e.sh** | ✅ Implemented | Runs Phase 6 E2E suite (currently conflict-resolution only). |
+| **seed-phase6-plans-happy-e2e.sh** | ✅ Implemented | Puts one PAUSED plan into RevenuePlans. Outputs PLAN_ID, TENANT_ID, ACCOUNT_ID, PK. |
+| **test-phase6-plans-api-happy.sh** | ✅ Implemented | Seed → GET /plans, GET /plans/:id, POST resume → 200 → assert plan ACTIVE (DynamoDB) → cleanup. |
+| **seed-phase6-orchestrator-e2e.sh** | ✅ Implemented | Puts one tenant into Tenants and one APPROVED plan into RevenuePlans. Outputs PLAN_ID, TENANT_ID, ACCOUNT_ID, PK. |
+| **test-phase6-orchestrator-cycle.sh** | ✅ Implemented | Seed → invoke plan-orchestrator Lambda (scheduled event) → assert plan ACTIVE (DynamoDB) → cleanup tenant and plan. |
+| **run-phase6-e2e.sh** | ✅ Implemented | Runs Phase 6 E2E suite: conflict resolution, Plans API happy path, orchestrator cycle. |
 | **Run in deploy** | ✅ Yes | `./deploy` runs Phase 6 E2E after Phase 5 E2E unless `--skip-phase6-e2e`. |
 
 ---
@@ -41,9 +45,11 @@ Phase 6 E2E runs **post-deploy** scripts that seed data into DynamoDB, invoke th
 ./scripts/phase_6/run-phase6-e2e.sh
 ```
 
-**Run conflict-resolution scenario only:**
+**Run a single scenario:**
 ```bash
 ./scripts/phase_6/test-phase6-conflict-resolution.sh
+./scripts/phase_6/test-phase6-plans-api-happy.sh
+./scripts/phase_6/test-phase6-orchestrator-cycle.sh
 ```
 
 **Run as part of deploy (default):**
@@ -110,15 +116,29 @@ Phase 6 E2E runs **post-deploy** scripts that seed data into DynamoDB, invoke th
 | `REVENUE_PLANS_TABLE` | No | — | Backward-compat alternative to REVENUE_PLANS_TABLE_NAME. |
 | `PLAN_LEDGER_TABLE_NAME` | No | — | When set (CDK output), E2E asserts PLAN_ACTIVATION_REJECTED ledger event; when unset, ledger assertion skipped. |
 | `PLAN_LIFECYCLE_API_FUNCTION_NAME` | No | `cc-native-plan-lifecycle-api` | Plan Lifecycle API Lambda name. |
+| `TENANTS_TABLE_NAME` | No | — | For orchestrator E2E; from deploy .env. |
+| `TENANTS_TABLE` | No | `cc-native-tenants` | Backward-compat. |
+| `PLAN_ORCHESTRATOR_FUNCTION_NAME` | No | `cc-native-plan-orchestrator` | Plan orchestrator Lambda name (orchestrator E2E). |
 | `TENANT_ID` | No | `e2e-p6-tenant` | Seed tenant_id. |
 | `ACCOUNT_ID` | No | `e2e-p6-account` | Seed account_id. |
 
 ---
 
-## Optional / Future Scenarios
+## E2E Flow — Plans API Happy Path
 
-- **Plans API happy path:** GET /plans (list), GET /plans/:planId (get), POST resume when no other ACTIVE plan → 200 and plan status ACTIVE. Requires API Gateway URL or Lambda invoke with GET/list payloads.
-- **Plan orchestrator E2E:** Run orchestrator Lambda for a tenant; seed one APPROVED plan; assert it becomes ACTIVE (or skip if conflict); verify ledger/step started. Depends on orchestrator schedule or direct invoke.
+1. **Seed** — One PAUSED plan via `seed-phase6-plans-happy-e2e.sh`.
+2. **Invoke** — GET /plans (list), GET /plans/:planId, POST /plans/:planId/resume (Plan Lifecycle Lambda).
+3. **Verify** — statusCode 200 for list, get, resume; plan_status ACTIVE after resume (DynamoDB read).
+4. **Cleanup** — Delete plan from RevenuePlans.
+
+## E2E Flow — Orchestrator Cycle
+
+1. **Seed** — One tenant in Tenants, one APPROVED plan in RevenuePlans via `seed-phase6-orchestrator-e2e.sh`.
+2. **Invoke** — plan-orchestrator Lambda with scheduled-event payload (EventBridge-shaped).
+3. **Verify** — Plan plan_status ACTIVE (DynamoDB read).
+4. **Cleanup** — Delete plan from RevenuePlans, delete tenant from Tenants.
+
+See [../PHASE_6_IMPLEMENTATION_PLAN.md](../PHASE_6_IMPLEMENTATION_PLAN.md) §7 (Phase 6 complete — definition and optional hardening).
 
 ---
 
@@ -127,5 +147,5 @@ Phase 6 E2E runs **post-deploy** scripts that seed data into DynamoDB, invoke th
 - **Phase 6.5 code plan:** [PHASE_6_5_CODE_LEVEL_PLAN.md](../PHASE_6_5_CODE_LEVEL_PLAN.md)
 - **Phase 6.5 unit + integration test plan:** [PHASE_6_5_TEST_PLAN.md](PHASE_6_5_TEST_PLAN.md)
 - **Phase 4.5 E2E test plan (pattern):** [../../phase_4/testing/PHASE_4_5_E2E_TEST_PLAN.md](../../phase_4/testing/PHASE_4_5_E2E_TEST_PLAN.md)
-- **Scripts:** `scripts/phase_6/run-phase6-e2e.sh`, `scripts/phase_6/test-phase6-conflict-resolution.sh`, `scripts/phase_6/seed-phase6-conflict-e2e.sh`
+- **Scripts:** `scripts/phase_6/run-phase6-e2e.sh`, `scripts/phase_6/test-phase6-conflict-resolution.sh`, `scripts/phase_6/seed-phase6-conflict-e2e.sh`, `scripts/phase_6/test-phase6-plans-api-happy.sh`, `scripts/phase_6/seed-phase6-plans-happy-e2e.sh`, `scripts/phase_6/test-phase6-orchestrator-cycle.sh`, `scripts/phase_6/seed-phase6-orchestrator-e2e.sh`
 - **Scripts README:** `scripts/phase_6/README.md`

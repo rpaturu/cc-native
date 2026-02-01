@@ -467,12 +467,12 @@ fi
 # Run Phase 6 E2E suite (conflict resolution: seed plans, resume -> 409, cleanup)
 if [ "$SKIP_PHASE6_E2E" = false ]; then
   echo ""
-  echo "🧪 Running Phase 6 E2E suite (conflict resolution)..."
-  chmod +x scripts/phase_6/run-phase6-e2e.sh scripts/phase_6/test-phase6-conflict-resolution.sh scripts/phase_6/seed-phase6-conflict-e2e.sh 2>/dev/null || true
+  echo "🧪 Running Phase 6 E2E suite (conflict resolution, Plans API happy path, orchestrator cycle)..."
+  chmod +x scripts/phase_6/run-phase6-e2e.sh scripts/phase_6/test-phase6-conflict-resolution.sh scripts/phase_6/seed-phase6-conflict-e2e.sh scripts/phase_6/test-phase6-plans-api-happy.sh scripts/phase_6/seed-phase6-plans-happy-e2e.sh scripts/phase_6/test-phase6-orchestrator-cycle.sh scripts/phase_6/seed-phase6-orchestrator-e2e.sh 2>/dev/null || true
   if ./scripts/phase_6/run-phase6-e2e.sh; then
     echo "✅ Phase 6 E2E suite passed"
   else
-    echo "❌ Phase 6 E2E suite failed - check .env (REVENUE_PLANS_TABLE_NAME, PLAN_LIFECYCLE_API_FUNCTION_NAME or cc-native-plan-lifecycle-api)"
+    echo "❌ Phase 6 E2E suite failed - check .env (REVENUE_PLANS_TABLE_NAME, PLAN_LIFECYCLE_API_FUNCTION_NAME, TENANTS_TABLE_NAME, PLAN_ORCHESTRATOR_FUNCTION_NAME)"
     echo "   Use --skip-phase6-e2e to complete deploy without running Phase 6 E2E"
     exit 1
   fi

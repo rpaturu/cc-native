@@ -4,11 +4,11 @@
 
 **This document is the canonical Phase 6 implementation contract.** All implementation and sub-phase docs (code-level plan, test plans) must align with it; Architecture Invariants (§1.1) are non-negotiable.
 
-**Status:** 🟡 **PLANNED**  
+**Status:** 🟢 **COMPLETE**  
 **Created:** 2026-01-29  
 **Last Updated:** 2026-01-30  
 **Parent:** [PHASE_6_OUTLINE.md](PHASE_6_OUTLINE.md)  
-**Progress:** Outline and implementation plan drafted; code-level plans and test plans to follow.
+**Progress:** Phase 6 (cc-native) complete: 6.1–6.5.1 implemented, Plans API (6.4), conflict resolution (6.5), E2E suite. Deferred: Active Plans UI (cc-dealmind), 6.5.2 extended conflict rules (optional).
 
 **Prerequisites:**  
 Phase 0–5 completed and certified:
@@ -377,6 +377,20 @@ Possible future phases:
 - Plan templates and reuse.
 
 These are **intentionally deferred**.
+
+---
+
+## 7) Phase 6 complete — canonical definition and optional hardening
+
+**Phase 6 core scope is complete.** 6.1–6.5 are implemented; unit and integration tests and at least one post-deploy E2E (conflict resolution) are in place. Per the canonical contract, **Phase 6 is done.**
+
+**Optional / hardening work** (not required to call Phase 6 "done"):
+
+- **More Phase 6 E2E scenarios:** Plans API happy path (GET /plans, GET /plans/:id, resume when no conflict → 200); orchestrator cycle E2E (seed APPROVED, invoke orchestrator, assert ACTIVE and ledger). See [PHASE_6_E2E_TEST_PLAN.md](testing/PHASE_6_E2E_TEST_PLAN.md) § Optional / Future Scenarios. Adding these gives stronger regression protection.
+- **Doc hygiene:** Phase 6 parent and sub-phase docs are marked COMPLETE; no PLANNED/STALE variants left to archive.
+- **Operational polish:** Dashboards/alarms for orchestrator runs (errors, throttles, retries, max-plans-per-run saturation); ledger storage monitoring (growth / TTL if added); runbooks for "plan stuck" / "activation rejected."
+
+For stronger regression protection, the only meaningful remaining work is adding the two optional E2Es (Plans API happy path + orchestrator cycle).
 
 ---
 
