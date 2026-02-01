@@ -2,6 +2,32 @@
 
 ## AgentCore-Native Autonomous Revenue Decision Loop
 
+---
+
+### Implementation Reality (Updated)
+
+The original implementation approach anticipated that "Phase 6" would focus on trust, quality, and cost controls.
+
+During execution, the system required a **governed orchestration layer** before those controls could be meaningfully enforced.
+
+As a result:
+
+* Phase 6 was redefined to deliver **Plan-based Autonomous Orchestration**
+* Trust, quality, and cost controls are now deferred to **Phase 7**, where they can be enforced uniformly across plans, tools, and execution
+
+---
+
+### Phase Mapping (Original Concept → Actual Implementation)
+
+| Original Concept        | Actual Implementation |
+|-------------------------|------------------------|
+| Phase 1: Assist          | Phase 1–3 (Signals, Tools, Decisions) |
+| Phase 2: Partial Auto    | Phase 4–5 (Deterministic Execution) |
+| Phase 3: Trust Layer    | Phase 7 (Validators, Budgets, Audit) |
+| Phase 6 (Original)      | Phase 6 (Plan Orchestration) |
+
+---
+
 ## Phase 0 — Foundations (platform skeleton)
 
 **Goal:** establish tenant identity, event spine, storage, and audit so everything later is governed and traceable.
@@ -247,7 +273,24 @@
 
 ---
 
-## Phase 6 — Trust, Quality, and Cost Controls (enterprise hardening)
+## Phase 6 — Autonomous Plan Orchestration
+
+**Status:** COMPLETE
+
+**Delivered:**
+
+* Governed plan artifact (RevenuePlans, plan lifecycle API)
+* Deterministic orchestrator (APPROVED → ACTIVE, step dispatch)
+* Conflict invariants (one active plan per account/type; 409 + ledger)
+* UI visibility & explainability (plan list, detail, resume/pause)
+* Audit-grade ledger (Plan Ledger, PLAN_ACTIVATION_REJECTED, etc.)
+* E2E certification (conflict resolution, Plans API happy path, orchestrator cycle)
+
+---
+
+## Phase 7 — Trust, Quality, and Cost Controls (enterprise hardening)
+
+**Next:** Trust, quality, and cost controls — enforced uniformly across plans, tools, and execution.
 
 **Goal:** scale autonomy safely across tenants.
 
