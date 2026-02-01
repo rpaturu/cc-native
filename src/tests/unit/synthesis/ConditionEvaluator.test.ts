@@ -337,5 +337,72 @@ describe('ConditionEvaluator', () => {
       const result = ConditionEvaluator.evaluateWhereClause(signal, whereClause, new Date().toISOString());
       expect(result).toBe(false);
     });
+
+    it('should evaluate less_than predicate', () => {
+      const signal = createSignal('sig-1', SignalType.USAGE_TREND_CHANGE, SignalStatus.ACTIVE, 'account-1', 'tenant-1', { count: 5 });
+      const whereClause = [{ property: 'context.count', operator: 'less_than' as const, value: 10 }];
+      expect(ConditionEvaluator.evaluateWhereClause(signal, whereClause, new Date().toISOString())).toBe(true);
+      const whereClauseFail = [{ property: 'context.count', operator: 'less_than' as const, value: 3 }];
+      expect(ConditionEvaluator.evaluateWhereClause(signal, whereClauseFail, new Date().toISOString())).toBe(false);
+    });
+
+    it('should evaluate less_than_or_equal predicate', () => {
+      const signal = createSignal('sig-1', SignalType.USAGE_TREND_CHANGE, SignalStatus.ACTIVE, 'account-1', 'tenant-1', { count: 5 });
+      const whereClause = [{ property: 'context.count', operator: 'less_than_or_equal' as const, value: 5 }];
+      expect(ConditionEvaluator.evaluateWhereClause(signal, whereClause, new Date().toISOString())).toBe(true);
+    });
+
+    it('should evaluate within_last_days for createdAt', () => {
+      const signal = createSignal('sig-1', SignalType.RENEWAL_WINDOW_ENTERED, SignalStatus.ACTIVE);
+      signal.createdAt = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString();
+      const whereClause = [{ property: 'createdAt', operator: 'within_last_days' as const, value: 10 }];
+      expect(ConditionEvaluator.evaluateWhereClause(signal, whereClause, new Date().toISOString())).toBe(true);
+    });
+
+    it('should return false for within_last_days when property is not createdAt', () => {
+      const signal = createSignal('sig-1', SignalType.USAGE_TREND_CHANGE, SignalStatus.ACTIVE, 'account-1', 'tenant-1', { x: 1 });
+      const whereClause = [{ property: 'context.x', operator: 'within_last_days' as const, value: 10 }];
+      expect(ConditionEvaluator.evaluateWhereClause(signal, whereClause, new Date().toISOString())).toBe(false);
+    });
+
+    it('should evaluate in predicate', () => {
+      const signal = createSignal('sig-1', SignalType.USAGE_TREND_CHANGE, SignalStatus.ACTIVE, 'account-1', 'tenant-1', { role: 'admin' });
+      const whereClause = [{ property: 'context.role', operator: 'in' as const, value: ['admin', 'user'] }];
+      expect(ConditionEvaluator.evaluateWhereClause(signal, whereClause, new Date().toISOString())).toBe(true);
+      const whereClauseFail = [{ property: 'context.role', operator: 'in' as const, value: ['user'] }];
+      expect(ConditionEvaluator.evaluateWhereClause(signal, whereClauseFail, new Date().toISOString())).toBe(false);
+    });
+
+    it('should evaluate exists and not_exists predicates', () => {
+      const signalWith = createSignal('sig-1', SignalType.USAGE_TREND_CHANGE, SignalStatus.ACTIVE, 'account-1', 'tenant-1', { key: 'value' });
+      const signalWithout = createSignal('sig-2', SignalType.USAGE_TREND_CHANGE, SignalStatus.ACTIVE, 'account-1', 'tenant-1', {});
+      expect(ConditionEvaluator.evaluateWhereClause(signalWith, [{ property: 'context.key', operator: 'exists' as const, value: null }], new Date().toISOString())).toBe(true);
+      expect(ConditionEvaluator.evaluateWhereClause(signalWithout, [{ property: 'context.key', operator: 'exists' as const, value: null }], new Date().toISOString())).toBe(false);
+      expect(ConditionEvaluator.evaluateWhereClause(signalWithout, [{ property: 'context.key', operator: 'not_exists' as const, value: null }], new Date().toISOString())).toBe(true);
+      expect(ConditionEvaluator.evaluateWhereClause(signalWith, [{ property: 'context.key', operator: 'not_exists' as const, value: null }], new Date().toISOString())).toBe(false);
+    });
+
+    it('should return false for unknown predicate operator', () => {
+      const signal = createSignal('sig-1', SignalType.USAGE_TREND_CHANGE, SignalStatus.ACTIVE);
+      const whereClause = [{ property: 'context.x', operator: 'unknown_op' as any, value: 1 }];
+      expect(ConditionEvaluator.evaluateWhereClause(signal, whereClause, new Date().toISOString())).toBe(false);
+    });
+
+    it('should resolve metadata property in where clause', () => {
+      const signal = createSignal('sig-1', SignalType.USAGE_TREND_CHANGE, SignalStatus.ACTIVE);
+      const whereClause = [{ property: 'metadata.confidence', operator: 'equals' as const, value: 0.8 }];
+      expect(ConditionEvaluator.evaluateWhereClause(signal, whereClause, new Date().toISOString())).toBe(true);
+    });
+  });
+
+  describe('evaluateComputedPredicate', () => {
+    it('should return false for unknown computed predicate name', () => {
+      const result = ConditionEvaluator.evaluateConditions(
+        { computed_predicates: [{ name: 'unknown_predicate' as any, params: {} }] },
+        [],
+        new Date().toISOString()
+      );
+      expect(result).toBe(false);
+    });
   });
 });

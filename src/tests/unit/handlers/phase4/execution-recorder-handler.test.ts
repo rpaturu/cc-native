@@ -122,4 +122,48 @@ describe('ExecutionRecorderHandler (handler-invoking)', () => {
 
     await expect(handler(validEvent as any, {} as any, jest.fn())).rejects.toThrow(/Failed to record execution outcome/);
   });
+
+  it('should append REPLAY_COMPLETED when is_replay and success', async () => {
+    const eventReplay = {
+      ...validEvent,
+      is_replay: true,
+      replay_reason: 'audit-retry',
+      requested_by: 'admin@test.com',
+    };
+    await handler(eventReplay as any, {} as any, jest.fn());
+
+    expect(mockAppend).toHaveBeenCalledTimes(2);
+    const replayCall = mockAppend.mock.calls.find(
+      (c: any[]) => c[0]?.eventType === 'REPLAY_COMPLETED'
+    );
+    expect(replayCall).toBeDefined();
+    expect(replayCall[0].data).toMatchObject({
+      action_intent_id: 'ai1',
+      status: 'SUCCEEDED',
+      replay_reason: 'audit-retry',
+      requested_by: 'admin@test.com',
+    });
+  });
+
+  it('should append REPLAY_FAILED when is_replay and tool_invocation_response.success is false', async () => {
+    const eventReplay = {
+      ...validEvent,
+      tool_invocation_response: { success: false, tool_run_ref: 'run1' },
+      is_replay: true,
+      replay_reason: 'audit-retry',
+      requested_by: 'admin@test.com',
+    };
+    await handler(eventReplay as any, {} as any, jest.fn());
+
+    const replayCall = mockAppend.mock.calls.find(
+      (c: any[]) => c[0]?.eventType === 'REPLAY_FAILED'
+    );
+    expect(replayCall).toBeDefined();
+    expect(replayCall[0].data).toMatchObject({
+      action_intent_id: 'ai1',
+      status: 'FAILED',
+      replay_reason: 'audit-retry',
+      requested_by: 'admin@test.com',
+    });
+  });
 });

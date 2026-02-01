@@ -101,6 +101,41 @@ describe('MethodologyService', () => {
       expect(result.version).toContain('meth:test');
       expect(result.version).toContain('tenant:test');
     });
+
+    it('should rethrow ConditionalCheckFailedException without logging as error', async () => {
+      const input: CreateMethodologyInput = {
+        methodology_id: 'meth:test',
+        name: 'Test',
+        dimensions: [],
+        scoring_model: meddiccFixture.scoring_model,
+        autonomy_gates: meddiccFixture.autonomy_gates,
+        tenant_id: 'tenant:test',
+      };
+
+      mockS3Client.send.mockResolvedValue({});
+      const err = new Error('Conditional check failed');
+      err.name = 'ConditionalCheckFailedException';
+      mockDynamoDBDocumentClient.send.mockRejectedValueOnce(err);
+
+      await expect(service.createMethodology(input)).rejects.toThrow('Conditional check failed');
+      expect(mockDynamoDBDocumentClient.send).toHaveBeenCalled();
+    });
+
+    it('should log and rethrow on other create errors', async () => {
+      const input: CreateMethodologyInput = {
+        methodology_id: 'meth:test',
+        name: 'Test',
+        dimensions: [],
+        scoring_model: meddiccFixture.scoring_model,
+        autonomy_gates: meddiccFixture.autonomy_gates,
+        tenant_id: 'tenant:test',
+      };
+
+      mockS3Client.send.mockResolvedValue({});
+      mockDynamoDBDocumentClient.send.mockRejectedValueOnce(new Error('DynamoDB error'));
+
+      await expect(service.createMethodology(input)).rejects.toThrow('DynamoDB error');
+    });
   });
 
   describe('getMethodology', () => {
@@ -168,6 +203,51 @@ describe('MethodologyService', () => {
 
       expect(result).toBeNull();
     });
+
+    it('should return null when getSchema throws', async () => {
+      (schemaRegistryService.getSchema as jest.Mock).mockRejectedValueOnce(new Error('Schema error'));
+
+      const result = await service.getMethodology(
+        'meth:meddicc',
+        '2026-01-v1',
+        'tenant:test'
+      );
+
+      expect(result).toBeNull();
+    });
+  });
+
+  describe('updateMethodology', () => {
+    it('should throw when methodology not found', async () => {
+      (schemaRegistryService.getSchema as jest.Mock).mockResolvedValue(null);
+
+      await expect(
+        service.updateMethodology('meth:notfound', 'v1', { name: 'Updated' }, 'tenant:test')
+      ).rejects.toThrow('Methodology not found');
+    });
+
+    it('should create new version with updates', async () => {
+      const current = {
+        ...meddiccFixture,
+        methodology_id: 'meth:meddicc',
+        version: '2026-01-v1',
+        tenantId: 'tenant:global',
+      };
+      (schemaRegistryService.getSchema as jest.Mock).mockResolvedValue(current);
+      mockS3Client.send.mockResolvedValue({});
+      mockDynamoDBDocumentClient.send.mockResolvedValue({});
+
+      const result = await service.updateMethodology(
+        'meth:meddicc',
+        '2026-01-v1',
+        { name: 'Updated Name' },
+        'tenant:global'
+      );
+
+      expect(result.name).toBe('Updated Name');
+      expect(result.version).toBeDefined();
+      expect(schemaRegistryService.registerSchema).toHaveBeenCalled();
+    });
   });
 
   describe('listMethodologies', () => {
@@ -192,9 +272,16 @@ describe('MethodologyService', () => {
     it('should filter by status when provided', async () => {
       mockDynamoDBDocumentClient.send.mockResolvedValue({ Items: [] });
 
-      await service.listMethodologies('tenant:test', 'ACTIVE');
+      const result = await service.listMethodologies('tenant:test', 'ACTIVE');
 
-      expect(mockDynamoDBDocumentClient.send).toHaveBeenCalled();
+      expect(result).toEqual([]);
+      expect(mockDynamoDBDocumentClient.send).toHaveBeenCalledTimes(1);
+    });
+
+    it('should rethrow when Query throws', async () => {
+      mockDynamoDBDocumentClient.send.mockRejectedValueOnce(new Error('DynamoDB error'));
+
+      await expect(service.listMethodologies('tenant:test')).rejects.toThrow('DynamoDB error');
     });
   });
 
@@ -205,6 +292,14 @@ describe('MethodologyService', () => {
       await service.deprecateMethodology('meth:test', '2026-01-v1', 'tenant:test');
 
       expect(mockDynamoDBDocumentClient.send).toHaveBeenCalled();
+    });
+
+    it('should rethrow when UpdateCommand throws', async () => {
+      mockDynamoDBDocumentClient.send.mockRejectedValueOnce(new Error('ConditionalCheckFailedException'));
+
+      await expect(
+        service.deprecateMethodology('meth:test', '2026-01-v1', 'tenant:test')
+      ).rejects.toThrow('ConditionalCheckFailedException');
     });
   });
 });

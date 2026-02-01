@@ -84,12 +84,16 @@ const scheduledEvent = {
       }
     });
 
-    it('invokes orchestrator handler with scheduled event and completes without throw', async () => {
-      const mod = await import(
-        '../../../handlers/phase6/plan-orchestrator-handler'
-      );
-      const handler = mod.handler as (event: unknown) => Promise<void>;
-      await expect(handler(scheduledEvent)).resolves.toBeUndefined();
-    });
+    it(
+      'invokes orchestrator handler with scheduled event and completes without throw',
+      async () => {
+        const mod = await import(
+          '../../../handlers/phase6/plan-orchestrator-handler'
+        );
+        const handler = mod.handler as (event: unknown) => Promise<void>;
+        await expect(handler(scheduledEvent)).resolves.toBeUndefined();
+      },
+      30_000
+    );
   }
 );

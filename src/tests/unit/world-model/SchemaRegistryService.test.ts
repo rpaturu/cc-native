@@ -26,6 +26,7 @@ jest.mock('@aws-sdk/lib-dynamodb', () => ({
   DynamoDBDocumentClient: { from: jest.fn(() => mockDynamoDBDocumentClient) },
   QueryCommand: jest.fn(),
   PutCommand: jest.fn(),
+  GetCommand: jest.fn(),
 }));
 
 import { SchemaRegistryService } from '../../../services/world-model/SchemaRegistryService';
@@ -116,6 +117,103 @@ describe('SchemaRegistryService', () => {
         '1.0'
       );
       expect(result).toBe(false);
+    });
+
+    it('should return false when critical required field is missing', async () => {
+      const schema = { entityType: 'Account', version: '1.0', fields: { name: { required: true } } };
+      const storedHash = computeSchemaHash(schema);
+      mockDynamoDBDocumentClient.send
+        .mockResolvedValueOnce({ Items: [{ s3Key: 'schemas/Account/1.0.json', schemaHash: storedHash }] })
+        .mockResolvedValueOnce({
+          Items: [{ pk: 'Account', sk: 'name', required: true, version: '1.0', updatedAt: new Date().toISOString() }],
+        });
+      mockS3Client.send.mockResolvedValueOnce({
+        Body: { transformToString: () => Promise.resolve(JSON.stringify(schema)) },
+      });
+
+      const result = await service.validateEntityState(
+        { fields: {} },
+        'Account',
+        '1.0'
+      );
+      expect(result).toBe(false);
+    });
+
+    it('should return false when required schema field is missing', async () => {
+      const schema = { entityType: 'Account', version: '1.0', fields: { name: { required: true } } };
+      const storedHash = computeSchemaHash(schema);
+      mockDynamoDBDocumentClient.send
+        .mockResolvedValueOnce({ Items: [{ s3Key: 'schemas/Account/1.0.json', schemaHash: storedHash }] })
+        .mockResolvedValueOnce({ Items: [] });
+      mockS3Client.send.mockResolvedValueOnce({
+        Body: { transformToString: () => Promise.resolve(JSON.stringify(schema)) },
+      });
+
+      const result = await service.validateEntityState(
+        { fields: {} },
+        'Account',
+        '1.0'
+      );
+      expect(result).toBe(false);
+    });
+
+    it('should return true when schema and critical fields pass', async () => {
+      const schema = { entityType: 'Account', version: '1.0', fields: { name: { required: true } } };
+      const storedHash = computeSchemaHash(schema);
+      mockDynamoDBDocumentClient.send
+        .mockResolvedValueOnce({ Items: [{ s3Key: 'schemas/Account/1.0.json', schemaHash: storedHash }] })
+        .mockResolvedValueOnce({ Items: [] });
+      mockS3Client.send.mockResolvedValueOnce({
+        Body: { transformToString: () => Promise.resolve(JSON.stringify(schema)) },
+      });
+
+      const result = await service.validateEntityState(
+        { fields: { name: 'Test Account' } },
+        'Account',
+        '1.0'
+      );
+      expect(result).toBe(true);
+    });
+
+    it('should return false when getSchema throws', async () => {
+      mockDynamoDBDocumentClient.send.mockRejectedValue(new Error('DynamoDB error'));
+
+      const result = await service.validateEntityState(
+        { fields: {} },
+        'Account',
+        '1.0'
+      );
+      expect(result).toBe(false);
+    });
+  });
+
+  describe('registerSchema', () => {
+    it('should register schema and invalidate cache', async () => {
+      mockDynamoDBDocumentClient.send.mockResolvedValue({});
+
+      await service.registerSchema({
+        entityType: 'Account',
+        version: '1.0',
+        schemaHash: 'sha256:abc',
+        s3Key: 'schemas/Account/1.0.json',
+        schema: { entityType: 'Account', version: '1.0', fields: {} },
+      });
+
+      expect(mockDynamoDBDocumentClient.send).toHaveBeenCalledTimes(1);
+    });
+
+    it('should throw when PutCommand fails', async () => {
+      mockDynamoDBDocumentClient.send.mockRejectedValue(new Error('ConditionalCheckFailedException'));
+
+      await expect(
+        service.registerSchema({
+          entityType: 'Account',
+          version: '1.0',
+          schemaHash: 'sha256:abc',
+          s3Key: 'schemas/Account/1.0.json',
+          schema: {},
+        })
+      ).rejects.toThrow('ConditionalCheckFailedException');
     });
   });
 

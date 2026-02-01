@@ -86,6 +86,34 @@ describe('IdentityService', () => {
 
       expect(result).toBeNull();
     });
+
+    it('should use default permissions when item has no permissions', async () => {
+      const mockIdentity = {
+        pk: 'USER#user-123',
+        sk: 'TENANT#tenant-456',
+        userId: 'user-123',
+        tenantId: 'tenant-456',
+        email: 'user@example.com',
+        username: 'user123',
+        firstName: 'John',
+        lastName: 'Doe',
+        roles: ['user'],
+        status: 'ACTIVE',
+        createdAt: '2026-01-01T00:00:00Z',
+        updatedAt: '2026-01-01T00:00:00Z',
+      };
+
+      (mockDynamoDBDocumentClient.send as jest.Mock).mockResolvedValue({
+        Item: mockIdentity,
+      });
+
+      const result = await identityService.getUserIdentity('user-123', 'tenant-456');
+
+      expect(result).toBeDefined();
+      expect(result?.permissions).toBeDefined();
+      expect(result?.permissions.canExecuteTools).toBe(false);
+      expect(result?.permissions.canApproveActions).toBe(true);
+    });
   });
 
   describe('getAgentIdentity', () => {
@@ -133,6 +161,32 @@ describe('IdentityService', () => {
       const result = await identityService.getAgentIdentity('agent-123', 'tenant-456');
 
       expect(result).toBeNull();
+    });
+
+    it('should use default agent permissions when item has no permissions', async () => {
+      const mockIdentity = {
+        pk: 'AGENT#agent-123',
+        sk: 'TENANT#tenant-456',
+        agentId: 'agent-123',
+        tenantId: 'tenant-456',
+        name: 'Test Agent',
+        agentType: 'AUTONOMOUS_DECISION',
+        status: 'ACTIVE',
+        capabilities: [],
+        createdAt: '2026-01-01T00:00:00Z',
+        updatedAt: '2026-01-01T00:00:00Z',
+      };
+
+      (mockDynamoDBDocumentClient.send as jest.Mock).mockResolvedValue({
+        Item: mockIdentity,
+      });
+
+      const result = await identityService.getAgentIdentity('agent-123', 'tenant-456');
+
+      expect(result).toBeDefined();
+      expect(result?.permissions).toBeDefined();
+      expect(result?.permissions.canExecuteTools).toBe(true);
+      expect(result?.permissions.canApproveActions).toBe(false);
     });
   });
 
@@ -205,6 +259,54 @@ describe('IdentityService', () => {
 
       expect(result).toBe(false);
     });
+
+    it('should return false when Cognito returns UserNotFoundException', async () => {
+      const mockIdentity = {
+        pk: 'USER#user-123',
+        sk: 'TENANT#tenant-456',
+        userId: 'user-123',
+        tenantId: 'tenant-456',
+        email: 'user@example.com',
+        status: 'ACTIVE',
+        cognitoUserId: 'cognito-missing',
+        createdAt: '2026-01-01T00:00:00Z',
+        updatedAt: '2026-01-01T00:00:00Z',
+      };
+
+      (mockDynamoDBDocumentClient.send as jest.Mock).mockResolvedValueOnce({
+        Item: mockIdentity,
+      });
+      const err = new Error('User not found');
+      err.name = 'UserNotFoundException';
+      (mockCognitoClient.send as jest.Mock).mockRejectedValueOnce(err);
+
+      const result = await identityService.validateUserIdentity('user-123', 'tenant-456');
+
+      expect(result).toBe(false);
+    });
+
+    it('should return true when Cognito returns other error (non-fatal)', async () => {
+      const mockIdentity = {
+        pk: 'USER#user-123',
+        sk: 'TENANT#tenant-456',
+        userId: 'user-123',
+        tenantId: 'tenant-456',
+        email: 'user@example.com',
+        status: 'ACTIVE',
+        cognitoUserId: 'cognito-user-123',
+        createdAt: '2026-01-01T00:00:00Z',
+        updatedAt: '2026-01-01T00:00:00Z',
+      };
+
+      (mockDynamoDBDocumentClient.send as jest.Mock).mockResolvedValueOnce({
+        Item: mockIdentity,
+      });
+      (mockCognitoClient.send as jest.Mock).mockRejectedValueOnce(new Error('Network error'));
+
+      const result = await identityService.validateUserIdentity('user-123', 'tenant-456');
+
+      expect(result).toBe(true);
+    });
   });
 
   describe('validateAgentIdentity', () => {
@@ -251,6 +353,48 @@ describe('IdentityService', () => {
 
       expect(result).toBe(false);
     });
+
+    it('should return false for tenant mismatch', async () => {
+      const mockIdentity = {
+        pk: 'AGENT#agent-123',
+        sk: 'TENANT#tenant-456',
+        agentId: 'agent-123',
+        tenantId: 'tenant-999',
+        name: 'Test Agent',
+        agentType: 'AUTONOMOUS_DECISION',
+        status: 'ACTIVE',
+        createdAt: '2026-01-01T00:00:00Z',
+        updatedAt: '2026-01-01T00:00:00Z',
+      };
+
+      (mockDynamoDBDocumentClient.send as jest.Mock).mockResolvedValue({
+        Item: mockIdentity,
+      });
+
+      const result = await identityService.validateAgentIdentity('agent-123', 'tenant-456');
+
+      expect(result).toBe(false);
+    });
+  });
+
+  describe('getUserPermissions', () => {
+    it('should return null when getUserIdentity throws', async () => {
+      (mockDynamoDBDocumentClient.send as jest.Mock).mockRejectedValue(new Error('DynamoDB error'));
+
+      const result = await identityService.getUserPermissions('user-123', 'tenant-456');
+
+      expect(result).toBeNull();
+    });
+  });
+
+  describe('getAgentPermissions', () => {
+    it('should return null when getAgentIdentity throws', async () => {
+      (mockDynamoDBDocumentClient.send as jest.Mock).mockRejectedValue(new Error('DynamoDB error'));
+
+      const result = await identityService.getAgentPermissions('agent-123', 'tenant-456');
+
+      expect(result).toBeNull();
+    });
   });
 
   describe('createUserIdentity', () => {
@@ -274,6 +418,22 @@ describe('IdentityService', () => {
       expect(result.email).toBe('user@example.com');
       expect(result.status).toBe('ACTIVE');
       expect(result.permissions.canReadWorldState).toBe(true);
+    });
+
+    it('should throw when DynamoDB PutCommand fails', async () => {
+      const input: CreateUserIdentityInput = {
+        userId: 'user-123',
+        tenantId: 'tenant-456',
+        email: 'user@example.com',
+        username: 'user123',
+        firstName: 'John',
+        lastName: 'Doe',
+        roles: ['admin'],
+      };
+
+      (mockDynamoDBDocumentClient.send as jest.Mock).mockRejectedValue(new Error('ConditionalCheckFailedException'));
+
+      await expect(identityService.createUserIdentity(input)).rejects.toThrow('ConditionalCheckFailedException');
     });
   });
 
@@ -303,6 +463,21 @@ describe('IdentityService', () => {
       expect(result.status).toBe('ACTIVE');
       expect(result.permissions.canReadWorldState).toBe(true);
       expect(result.permissions.canApproveActions).toBe(false); // Agents cannot approve
+    });
+
+    it('should throw when DynamoDB PutCommand fails', async () => {
+      const input: CreateAgentIdentityInput = {
+        agentId: 'agent-123',
+        tenantId: 'tenant-456',
+        name: 'Test Agent',
+        description: 'Test agent',
+        agentType: 'AUTONOMOUS_DECISION',
+        capabilities: [],
+      };
+
+      (mockDynamoDBDocumentClient.send as jest.Mock).mockRejectedValue(new Error('ConditionalCheckFailedException'));
+
+      await expect(identityService.createAgentIdentity(input)).rejects.toThrow('ConditionalCheckFailedException');
     });
   });
 
@@ -352,6 +527,29 @@ describe('IdentityService', () => {
         identityService.updateUserIdentity('user-123', 'tenant-456', { roles: ['admin'] })
       ).rejects.toThrow('User identity not found');
     });
+
+    it('should throw when UpdateCommand fails', async () => {
+      const existing = {
+        pk: 'USER#user-123',
+        sk: 'TENANT#tenant-456',
+        userId: 'user-123',
+        tenantId: 'tenant-456',
+        email: 'user@example.com',
+        roles: ['user'],
+        permissions: { canReadWorldState: true },
+        status: 'ACTIVE',
+        createdAt: '2026-01-01T00:00:00Z',
+        updatedAt: '2026-01-01T00:00:00Z',
+      };
+
+      (mockDynamoDBDocumentClient.send as jest.Mock)
+        .mockResolvedValueOnce({ Item: existing })
+        .mockRejectedValueOnce(new Error('DynamoDB error'));
+
+      await expect(
+        identityService.updateUserIdentity('user-123', 'tenant-456', { roles: ['admin'] })
+      ).rejects.toThrow('DynamoDB error');
+    });
   });
 
   describe('updateAgentIdentity', () => {
@@ -390,6 +588,30 @@ describe('IdentityService', () => {
 
       expect(result).toBeDefined();
       expect(result.name).toBe('Updated Agent');
+    });
+
+    it('should throw when UpdateCommand fails', async () => {
+      const existing = {
+        pk: 'AGENT#agent-123',
+        sk: 'TENANT#tenant-456',
+        agentId: 'agent-123',
+        tenantId: 'tenant-456',
+        name: 'Test Agent',
+        agentType: 'AUTONOMOUS_DECISION',
+        permissions: { canReadWorldState: true },
+        status: 'ACTIVE',
+        capabilities: [],
+        createdAt: '2026-01-01T00:00:00Z',
+        updatedAt: '2026-01-01T00:00:00Z',
+      };
+
+      (mockDynamoDBDocumentClient.send as jest.Mock)
+        .mockResolvedValueOnce({ Item: existing })
+        .mockRejectedValueOnce(new Error('DynamoDB error'));
+
+      await expect(
+        identityService.updateAgentIdentity('agent-123', 'tenant-456', { name: 'Updated' })
+      ).rejects.toThrow('DynamoDB error');
     });
   });
 });

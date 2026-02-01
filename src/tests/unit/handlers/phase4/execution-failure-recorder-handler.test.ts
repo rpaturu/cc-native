@@ -100,4 +100,121 @@ describe('ExecutionFailureRecorderHandler (handler-invoking)', () => {
 
     await expect(handler(validEvent as any, {} as any, jest.fn())).rejects.toThrow(/Execution attempt not found/);
   });
+
+  it('should classify AUTH and record outcome with error_class AUTH', async () => {
+    const eventWithAuth = {
+      ...validEvent,
+      error: { Cause: 'AUTH failed: token expired' },
+    };
+    await handler(eventWithAuth as any, {} as any, jest.fn());
+
+    expect(mockRecordOutcome).toHaveBeenCalledWith(
+      expect.objectContaining({
+        error_class: 'AUTH',
+        error_code: 'EXECUTION_FAILED',
+      })
+    );
+    expect(mockUpdateStatus).toHaveBeenCalledWith('ai1', 't1', 'acc1', 'FAILED', 'AUTH');
+  });
+
+  it('should classify VALIDATION for KILL_SWITCH error', async () => {
+    const eventWithKillSwitch = {
+      ...validEvent,
+      error: { Cause: 'KILL_SWITCH_ACTIVE: Execution disabled' },
+    };
+    await handler(eventWithKillSwitch as any, {} as any, jest.fn());
+
+    expect(mockRecordOutcome).toHaveBeenCalledWith(
+      expect.objectContaining({
+        error_class: 'VALIDATION',
+      })
+    );
+  });
+
+  it('should classify VALIDATION for CONFIGURATION error', async () => {
+    const eventWithConfig = {
+      ...validEvent,
+      error: { Cause: 'CONFIGURATION: Missing config' },
+    };
+    await handler(eventWithConfig as any, {} as any, jest.fn());
+
+    expect(mockRecordOutcome).toHaveBeenCalledWith(
+      expect.objectContaining({
+        error_class: 'VALIDATION',
+      })
+    );
+  });
+
+  it('should classify UNKNOWN when error details empty', async () => {
+    const eventEmptyError = {
+      ...validEvent,
+      error: {},
+    };
+    await handler(eventEmptyError as any, {} as any, jest.fn());
+
+    expect(mockRecordOutcome).toHaveBeenCalledWith(
+      expect.objectContaining({
+        error_class: 'UNKNOWN',
+        error_code: 'EXECUTION_FAILED',
+      })
+    );
+  });
+
+  it('should use VALIDATION and REGISTRY_VERSION_MISSING when registry_version is null', async () => {
+    mockGetIntent.mockResolvedValueOnce({ trace_id: 'dt1', registry_version: null });
+    const eventNoRegistry = {
+      action_intent_id: 'ai1',
+      tenant_id: 't1',
+      account_id: 'acc1',
+      trace_id: 'trace1',
+      error: { Error: 'TaskFailed', Cause: 'Some error' },
+    };
+    await handler(eventNoRegistry as any, {} as any, jest.fn());
+
+    expect(mockRecordOutcome).toHaveBeenCalledWith(
+      expect.objectContaining({
+        error_class: 'VALIDATION',
+        error_code: 'REGISTRY_VERSION_MISSING',
+        error_message: expect.stringContaining('Missing registry_version'),
+        registry_version: 0,
+      })
+    );
+    expect(mockAppend).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          error_class: 'VALIDATION',
+          error_code: 'REGISTRY_VERSION_MISSING',
+        }),
+      })
+    );
+  });
+
+  it('should append REPLAY_FAILED when is_replay and replay_reason and requested_by present', async () => {
+    const eventReplay = {
+      ...validEvent,
+      is_replay: true,
+      replay_reason: 'audit-retry',
+      requested_by: 'admin@test.com',
+    };
+    await handler(eventReplay as any, {} as any, jest.fn());
+
+    expect(mockAppend).toHaveBeenCalledTimes(2);
+    const replayCall = mockAppend.mock.calls.find(
+      (c: any[]) => c[0]?.eventType === 'REPLAY_FAILED'
+    );
+    expect(replayCall).toBeDefined();
+    expect(replayCall[0].data).toMatchObject({
+      action_intent_id: 'ai1',
+      status: 'FAILED',
+      replay_reason: 'audit-retry',
+      requested_by: 'admin@test.com',
+    });
+  });
+
+  it('should rethrow when getIntent throws', async () => {
+    mockGetIntent.mockRejectedValueOnce(new Error('DynamoDB error'));
+
+    await expect(handler(validEvent as any, {} as any, jest.fn())).rejects.toThrow('DynamoDB error');
+    expect(mockRecordOutcome).not.toHaveBeenCalled();
+  });
 });
