@@ -389,6 +389,7 @@ These are **intentionally deferred**.
 ## References
 
 - **Phase 6 outline:** [PHASE_6_OUTLINE.md](PHASE_6_OUTLINE.md)
+- **Phase 6 E2E test plan:** [testing/PHASE_6_E2E_TEST_PLAN.md](testing/PHASE_6_E2E_TEST_PLAN.md)
 - **Phase 5 completion:** [../phase_5/PHASE_5_CODE_LEVEL_PLAN.md](../phase_5/PHASE_5_CODE_LEVEL_PLAN.md)
 - **Phase 4 execution spine:** [../phase_4/PHASE_4_CODE_LEVEL_PLAN.md](../phase_4/PHASE_4_CODE_LEVEL_PLAN.md)
 - **Phase 2 zero trust:** [../phase_2/ZERO_TRUST_IMPLEMENTATION_PLAN.md](../phase_2/ZERO_TRUST_IMPLEMENTATION_PLAN.md)

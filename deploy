@@ -27,6 +27,7 @@ SKIP_UNIT_TESTS=false
 SKIP_INTEGRATION_TESTS=false
 SKIP_E2E=false
 SKIP_PHASE5_E2E=false
+SKIP_PHASE6_E2E=false
 while [[ "$#" -gt 0 ]]; do case $1 in
   --profile) CDK_PROFILE="$2"; shift;;
   --region) AWS_REGION="$2"; shift;;
@@ -35,8 +36,9 @@ while [[ "$#" -gt 0 ]]; do case $1 in
   --skip-integration-tests) SKIP_INTEGRATION_TESTS=true;;
   --skip-e2e) SKIP_E2E=true;;
   --skip-phase5-e2e) SKIP_PHASE5_E2E=true;;
-  --skip-tests) SKIP_UNIT_TESTS=true; SKIP_INTEGRATION_TESTS=true; SKIP_E2E=true; SKIP_PHASE5_E2E=true;;
-  --no-test) SKIP_UNIT_TESTS=true; SKIP_INTEGRATION_TESTS=true; SKIP_E2E=true; SKIP_PHASE5_E2E=true;;
+  --skip-phase6-e2e) SKIP_PHASE6_E2E=true;;
+  --skip-tests) SKIP_UNIT_TESTS=true; SKIP_INTEGRATION_TESTS=true; SKIP_E2E=true; SKIP_PHASE5_E2E=true; SKIP_PHASE6_E2E=true;;
+  --no-test) SKIP_UNIT_TESTS=true; SKIP_INTEGRATION_TESTS=true; SKIP_E2E=true; SKIP_PHASE5_E2E=true; SKIP_PHASE6_E2E=true;;
 esac; shift; done
 
 # Check if region is set
@@ -462,6 +464,23 @@ else
   echo "⏭️  Skipping Phase 5 E2E suite"
 fi
 
+# Run Phase 6 E2E suite (conflict resolution: seed plans, resume -> 409, cleanup)
+if [ "$SKIP_PHASE6_E2E" = false ]; then
+  echo ""
+  echo "🧪 Running Phase 6 E2E suite (conflict resolution)..."
+  chmod +x scripts/phase_6/run-phase6-e2e.sh scripts/phase_6/test-phase6-conflict-resolution.sh scripts/phase_6/seed-phase6-conflict-e2e.sh 2>/dev/null || true
+  if ./scripts/phase_6/run-phase6-e2e.sh; then
+    echo "✅ Phase 6 E2E suite passed"
+  else
+    echo "❌ Phase 6 E2E suite failed - check .env (REVENUE_PLANS_TABLE_NAME, PLAN_LIFECYCLE_API_FUNCTION_NAME or cc-native-plan-lifecycle-api)"
+    echo "   Use --skip-phase6-e2e to complete deploy without running Phase 6 E2E"
+    exit 1
+  fi
+else
+  echo ""
+  echo "⏭️  Skipping Phase 6 E2E suite"
+fi
+
 echo ""
 echo "🎉 Autonomous Revenue Decision Loop deployment complete!"
 echo ""
@@ -502,5 +521,5 @@ echo ""
 echo "📌 Next steps:"
 echo "   1. Review .env for API URLs, table names, and keys"
 echo "   2. Use Decision API, Execution Status API, or Control Center as needed"
-echo "   3. Re-run tests only when needed: npm run test:integration, ./scripts/phase_4/test-phase4-execution.sh, or ./scripts/phase_5/run-phase5-e2e.sh"
+echo "   3. Re-run tests only when needed: npm run test:integration, ./scripts/phase_4/test-phase4-execution.sh, ./scripts/phase_5/run-phase5-e2e.sh, or ./scripts/phase_6/run-phase6-e2e.sh"
 echo ""
