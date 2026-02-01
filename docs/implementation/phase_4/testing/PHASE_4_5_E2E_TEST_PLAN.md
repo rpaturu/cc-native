@@ -7,7 +7,8 @@
 **Parent:** [PHASE_4_5_CODE_LEVEL_PLAN.md](../PHASE_4_5_CODE_LEVEL_PLAN.md) §3  
 **Satisfies:** Phase 4.5A "one deterministic E2E path". **Validates:** 4.4 execution/safety layer (recorder, signals, status API).  
 **Related:** [PHASE_4_4_INTEGRATION_TEST_PLAN.md](PHASE_4_4_INTEGRATION_TEST_PLAN.md)  
-**Prerequisites:** Deployed stack (./deploy); `.env` with `EVENT_BUS_NAME`, `ACTION_INTENT_TABLE_NAME`, `EXECUTION_ATTEMPTS_TABLE_NAME`, `EXECUTION_OUTCOMES_TABLE_NAME`
+**Prerequisites:** Deployed stack (./deploy); `.env` with `EVENT_BUS_NAME`, `ACTION_INTENT_TABLE_NAME`, `EXECUTION_ATTEMPTS_TABLE_NAME`, `EXECUTION_OUTCOMES_TABLE_NAME`  
+**Based on scripts:** `scripts/phase_4/test-phase4-execution.sh`, `scripts/phase_4/seed-phase4-e2e-intent.sh`
 
 ---
 
@@ -23,8 +24,8 @@ Phase 4.5 E2E implements the **one deterministic path** required by 4.5A: seed a
 
 | Item | Status | Notes |
 |------|--------|--------|
-| **test-phase4-execution.sh** | ✅ Implemented | Seed → wait → verify attempt/outcome → (optional; recommended when URL+JWT) Status API → (optional) signal → cleanup. |
-| **seed-phase4-e2e-intent.sh** | ✅ Implemented | Puts action intent (B2) and ACTION_APPROVED to EventBridge. |
+| **test-phase4-execution.sh** | ✅ Implemented | Steps 1–7: seed (or use ACTION_INTENT_ID) → wait → verify attempt → verify outcome → (optional) Status API → (optional) signal → cleanup. |
+| **seed-phase4-e2e-intent.sh** | ✅ Implemented | Writes one action intent to ActionIntent table; puts ACTION_APPROVED to EventBridge. Outputs `ACTION_INTENT_ID`. |
 | **Status API check** | ✅ In script | Step 5 when EXECUTION_STATUS_API_URL + EXECUTION_STATUS_API_AUTH_HEADER set. **Recommended** when deploy pipeline provides URL+JWT. |
 | **Signal check** | ✅ In script | Step 6 when SIGNALS_TABLE_NAME set (e.g. from deploy .env). |
 | **Run in deploy** | ✅ Yes | `./deploy` runs E2E after integration tests unless `--skip-e2e`. |
@@ -52,16 +53,34 @@ Phase 4.5 E2E implements the **one deterministic path** required by 4.5A: seed a
 
 ---
 
-## E2E flow (one path)
+## E2E flow (script steps 1–7)
 
-1. **Seed** — Create action intent (B2) and put ACTION_APPROVED on EventBridge (`scripts/phase_4/seed-phase4-e2e-intent.sh`).
-2. **Wait** — Poll DynamoDB execution attempt until status is not RUNNING or Step Functions reaches terminal (max 90s).
-3. **Verify** — Assert ExecutionAttempt status (e.g. SUCCEEDED) and ActionOutcome present and SUCCEEDED.
-4. **Cleanup** — Remove E2E seed data (attempt, outcome, intent if configured).
+Flow below matches `test-phase4-execution.sh` and `seed-phase4-e2e-intent.sh`.
 
-**Step 5 — Execution Status API (optional; recommended when URL+JWT available):** When `EXECUTION_STATUS_API_URL` and `EXECUTION_STATUS_API_AUTH_HEADER` (JWT) are set, the script calls `GET .../executions/{action_intent_id}/status?account_id=...` and asserts 200 and `status: SUCCEEDED`. If either is unset, the step is skipped. Once your deploy pipeline provides URL and JWT, running Step 5 is **recommended** to validate the Status API path.
+1. **Seed** — If `ACTION_INTENT_ID` is unset and `EVENT_BUS_NAME` + `ACTION_INTENT_TABLE_NAME` are set: run `seed-phase4-e2e-intent.sh`. It writes one action intent (CREATE_INTERNAL_TASK, E2E test) to ActionIntent and puts ACTION_APPROVED to EventBridge. Script captures `ACTION_INTENT_ID` from seed output. Otherwise set `ACTION_INTENT_ID` (or use Phase 3 API with DECISION_API_URL + auth).
+2. **Wait** — Poll DynamoDB ExecutionAttempt (pk/sk = TENANT#…#ACCOUNT#… / EXECUTION#{action_intent_id}) every 10s until status ≠ RUNNING or Step Functions execution reaches SUCCEEDED/FAILED (max 90s). Resolve state machine by name `cc-native-execution-orchestrator` if EXECUTION_STATE_MACHINE_ARN unset. Fail if SFN status is FAILED or timeout.
+3. **Verify ExecutionAttempt** — Assert attempt status is SUCCEEDED (not FAILED from RecordFailure path).
+4. **Verify ActionOutcome** — Get item from ExecutionOutcomes table (sk = OUTCOME#{action_intent_id}); assert Item exists and status = SUCCEEDED.
+5. **Execution Status API (optional)** — If `EXECUTION_STATUS_API_URL` and `EXECUTION_STATUS_API_AUTH_HEADER` are set: GET `{url}/executions/{action_intent_id}/status?account_id=…` with Authorization header; assert HTTP 200 and body `status === 'SUCCEEDED'`. Otherwise step skipped.
+6. **Execution signal (optional)** — If `SIGNALS_TABLE_NAME` is set: get item (tenantId, signalId = `exec-{action_intent_id}-{account_id}-ACTION_EXECUTED`); assert Item exists. Otherwise step skipped.
+7. **Cleanup** — Delete ExecutionAttempt, ActionOutcome, and (if ACTION_INTENT_TABLE_NAME set) ActionIntent rows for the E2E intent.
 
-**Step 6 — Execution signal (optional):** When `SIGNALS_TABLE_NAME` is set (e.g. from deploy `.env`), the script verifies a signal row exists in the signals table for the execution (`signalId = exec-{action_intent_id}-{account_id}-ACTION_EXECUTED`). If unset, the step is skipped.
+---
+
+## Required / optional env (from scripts)
+
+| Variable | Required | Notes |
+|----------|----------|--------|
+| AWS_REGION | Yes | Deployed region. |
+| EVENT_BUS_NAME | Yes (for seed path) | From .env / CDK outputs. |
+| ACTION_INTENT_TABLE_NAME | Yes (for seed path) | From .env / CDK outputs. |
+| EXECUTION_ATTEMPTS_TABLE_NAME | Yes | Or EXECUTION_ATTEMPTS_TABLE. |
+| EXECUTION_OUTCOMES_TABLE_NAME | Yes | Or EXECUTION_OUTCOMES_TABLE. |
+| EXECUTION_STATUS_API_URL | No | Enables Step 5 (Status API check). |
+| EXECUTION_STATUS_API_AUTH_HEADER | No | JWT for Status API (e.g. from deploy .env). |
+| SIGNALS_TABLE_NAME | No | Enables Step 6 (signal check). |
+| EXECUTION_STATE_MACHINE_ARN | No | Else resolved by name cc-native-execution-orchestrator. |
+| TENANT_ID, ACCOUNT_ID | No | Defaults: test-tenant-1, test-account-1. |
 
 ---
 
